@@ -1,3 +1,3 @@
-<img src="https://raw.githubusercontent.com/retty-io/retty/master/res/retty.io.png" alt="Retty">
+<img src="https://raw.githubusercontent.com/retty-io/retty/master/docs/retty.io.png" alt="Retty">
 
 # Retty
