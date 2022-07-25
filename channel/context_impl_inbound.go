@@ -2,7 +2,13 @@ package channel
 
 import "log"
 
-type InboundContextImpl[In any, Out any, Context InboundHandlerContext[Out], H InboundHandler[In, Out], Link InboundLink[Out]] struct {
+type InboundContextImpl[
+	In any,
+	Out any,
+	Context InboundHandlerContext[Out],
+	H InboundHandler[In, Out],
+	Link InboundLink[Out],
+] struct {
 	context Context
 	handler H
 	next    Link

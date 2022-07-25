@@ -2,11 +2,16 @@ package channel
 
 import "log"
 
-type ContextImpl[Rin any, Rout any, Win any, Wout,
+type ContextImpl[
+	Rin any,
+	Rout any,
+	Win any,
+	Wout,
 	Context HandlerContext[Rout, Wout],
 	H Handler[Rin, Rout, Win, Wout],
 	ILink InboundLink[Rout],
-	OLink OutboundLink[Wout]] struct {
+	OLink OutboundLink[Wout],
+] struct {
 	context Context
 	handler H
 	nextIn  ILink
