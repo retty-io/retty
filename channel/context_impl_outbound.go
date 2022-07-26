@@ -79,24 +79,24 @@ func (ic *OutboundContextImpl[In, Out, Context, H, Link]) GetPipeline() *Pipelin
 ///////////////////////////////////////////////////////////////////////////////
 
 func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireWrite(msg Out) {
-	if ic.next != nil {
-		ic.next.(Link).Write(msg)
+	if next, ok := ic.next.(Link); ok {
+		next.Write(msg)
 	} else {
 		log.Println("write reached end of pipeline")
 	}
 }
 
 func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireClose() {
-	if ic.next != nil {
-		ic.next.(Link).Close()
+	if next, ok := ic.next.(Link); ok {
+		next.Close()
 	} else {
 		log.Println("close reached end of pipeline")
 	}
 }
 
 func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireWriteError(err error) {
-	if ic.next != nil {
-		ic.next.(Link).WriteError(err)
+	if next, ok := ic.next.(Link); ok {
+		next.WriteError(err)
 	} else {
 		log.Println("writeError reached end of pipeline")
 	}

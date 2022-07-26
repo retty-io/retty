@@ -79,38 +79,38 @@ func (ic *InboundContextImpl[In, Out, Context, H, Link]) GetPipeline() *Pipeline
 ///////////////////////////////////////////////////////////////////////////////
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireRead(msg Out) {
-	if ic.next != nil {
-		ic.next.(Link).Read(msg)
+	if next, ok := ic.next.(Link); ok {
+		next.Read(msg)
 	} else {
 		log.Println("read reached end of pipeline")
 	}
 }
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireReadEOF() {
-	if ic.next != nil {
-		ic.next.(Link).ReadEOF()
+	if next, ok := ic.next.(Link); ok {
+		next.ReadEOF()
 	} else {
 		log.Println("readEOF reached end of pipeline")
 	}
 }
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireReadError(err error) {
-	if ic.next != nil {
-		ic.next.(Link).ReadError(err)
+	if next, ok := ic.next.(Link); ok {
+		next.ReadError(err)
 	} else {
 		log.Println("readError reached end of pipeline")
 	}
 }
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireTransportActive() {
-	if ic.next != nil {
-		ic.next.(Link).TransportActive()
+	if next, ok := ic.next.(Link); ok {
+		next.TransportActive()
 	}
 }
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireTransportInactive() {
-	if ic.next != nil {
-		ic.next.(Link).TransportInactive()
+	if next, ok := ic.next.(Link); ok {
+		next.TransportInactive()
 	}
 }
 
