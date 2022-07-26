@@ -6,7 +6,7 @@ type ContextImpl[
 	Rin any,
 	Rout any,
 	Win any,
-	Wout,
+	Wout any,
 	Context HandlerContext[Rout, Wout],
 	H Handler[Rin, Rout, Win, Wout],
 	ILink InboundLink[Rout],
@@ -14,8 +14,8 @@ type ContextImpl[
 ] struct {
 	context Context
 	handler H
-	nextIn  ILink
-	nextOut OLink
+	nextIn  any //TODO: ILink ?
+	nextOut any //TODO: OLink?
 
 	pipeline *PipelineBase
 	attached bool
@@ -92,7 +92,7 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetPipeli
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireRead(msg Rout) {
 	if ic.nextIn != nil {
-		ic.nextIn.Read(msg)
+		ic.nextIn.(ILink).Read(msg)
 	} else {
 		log.Println("read reached end of pipeline")
 	}
@@ -100,7 +100,7 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireRead(
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadEOF() {
 	if ic.nextIn != nil {
-		ic.nextIn.ReadEOF()
+		ic.nextIn.(ILink).ReadEOF()
 	} else {
 		log.Println("readEOF reached end of pipeline")
 	}
@@ -108,7 +108,7 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadE
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadError(err error) {
 	if ic.nextIn != nil {
-		ic.nextIn.ReadError(err)
+		ic.nextIn.(ILink).ReadError(err)
 	} else {
 		log.Println("readError reached end of pipeline")
 	}
@@ -116,13 +116,13 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadE
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTransportActive() {
 	if ic.nextIn != nil {
-		ic.nextIn.TransportActive()
+		ic.nextIn.(ILink).TransportActive()
 	}
 }
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTransportInactive() {
 	if ic.nextIn != nil {
-		ic.nextIn.TransportInactive()
+		ic.nextIn.(ILink).TransportInactive()
 	}
 }
 
@@ -156,7 +156,7 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Transport
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWrite(msg Wout) {
 	if ic.nextOut != nil {
-		ic.nextOut.Write(msg)
+		ic.nextOut.(OLink).Write(msg)
 	} else {
 		log.Println("write reached end of pipeline")
 	}
@@ -164,7 +164,7 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWrite
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireClose() {
 	if ic.nextOut != nil {
-		ic.nextOut.Close()
+		ic.nextOut.(OLink).Close()
 	} else {
 		log.Println("close reached end of pipeline")
 	}
@@ -172,7 +172,7 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireClose
 
 func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWriteError(err error) {
 	if ic.nextOut != nil {
-		ic.nextOut.WriteError(err)
+		ic.nextOut.(OLink).WriteError(err)
 	} else {
 		log.Println("writeError reached end of pipeline")
 	}

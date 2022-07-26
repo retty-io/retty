@@ -11,7 +11,7 @@ type InboundContextImpl[
 ] struct {
 	context Context
 	handler H
-	next    Link
+	next    any //TODO: Link
 
 	pipeline *PipelineBase
 	attached bool
@@ -80,7 +80,7 @@ func (ic *InboundContextImpl[In, Out, Context, H, Link]) GetPipeline() *Pipeline
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireRead(msg Out) {
 	if ic.next != nil {
-		ic.next.Read(msg)
+		ic.next.(Link).Read(msg)
 	} else {
 		log.Println("read reached end of pipeline")
 	}
@@ -88,7 +88,7 @@ func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireRead(msg Out) {
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireReadEOF() {
 	if ic.next != nil {
-		ic.next.ReadEOF()
+		ic.next.(Link).ReadEOF()
 	} else {
 		log.Println("readEOF reached end of pipeline")
 	}
@@ -96,7 +96,7 @@ func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireReadEOF() {
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireReadError(err error) {
 	if ic.next != nil {
-		ic.next.ReadError(err)
+		ic.next.(Link).ReadError(err)
 	} else {
 		log.Println("readError reached end of pipeline")
 	}
@@ -104,13 +104,13 @@ func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireReadError(err error
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireTransportActive() {
 	if ic.next != nil {
-		ic.next.TransportActive()
+		ic.next.(Link).TransportActive()
 	}
 }
 
 func (ic *InboundContextImpl[In, Out, Context, H, Link]) FireTransportInactive() {
 	if ic.next != nil {
-		ic.next.TransportInactive()
+		ic.next.(Link).TransportInactive()
 	}
 }
 

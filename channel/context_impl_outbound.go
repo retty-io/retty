@@ -11,7 +11,7 @@ type OutboundContextImpl[
 ] struct {
 	context Context
 	handler H
-	next    Link
+	next    any //TODO: Link
 
 	pipeline *PipelineBase
 	attached bool
@@ -80,7 +80,7 @@ func (ic *OutboundContextImpl[In, Out, Context, H, Link]) GetPipeline() *Pipelin
 
 func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireWrite(msg Out) {
 	if ic.next != nil {
-		ic.next.Write(msg)
+		ic.next.(Link).Write(msg)
 	} else {
 		log.Println("write reached end of pipeline")
 	}
@@ -88,7 +88,7 @@ func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireWrite(msg Out) {
 
 func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireClose() {
 	if ic.next != nil {
-		ic.next.Close()
+		ic.next.(Link).Close()
 	} else {
 		log.Println("close reached end of pipeline")
 	}
@@ -96,7 +96,7 @@ func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireClose() {
 
 func (ic *OutboundContextImpl[In, Out, Context, H, Link]) FireWriteError(err error) {
 	if ic.next != nil {
-		ic.next.WriteError(err)
+		ic.next.(Link).WriteError(err)
 	} else {
 		log.Println("writeError reached end of pipeline")
 	}
