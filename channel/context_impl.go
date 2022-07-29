@@ -17,60 +17,60 @@ type ContextImpl[
 	nextIn  any //TODO: ILink ?
 	nextOut any //TODO: OLink?
 
-	pipeline *PipelineBase
+	pipeline *PipelineBase[H, Context]
 	attached bool
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetHandler() H {
-	return ic.handler
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetHandler() H {
+	return c.handler
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Initialize(pipeline *PipelineBase, handler H) {
-	ic.pipeline = pipeline
-	ic.handler = handler
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Initialize(pipeline *PipelineBase[H, Context], handler H) {
+	c.pipeline = pipeline
+	c.handler = handler
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // impl PipelineContext
 ///////////////////////////////////////////////////////////////////////////////
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) AttachPipeline() {
-	if ic.attached {
-		ic.handler.AttachContext(ic.context)
-		ic.attached = true
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) AttachPipeline() {
+	if c.attached {
+		c.handler.AttachContext(c.context)
+		c.attached = true
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) DetachPipeline() {
-	ic.attached = false
-	ic.handler.DetachContext()
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) DetachPipeline() {
+	c.attached = false
+	c.handler.DetachContext()
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) SetNextIn(ctx PipelineContext[H, Context]) {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) SetNextIn(ctx PipelineContext[H, Context]) {
 	if ctx == nil {
-		ic.nextIn = nil
+		c.nextIn = nil
 	} else {
 		if next, ok := ctx.(ILink); ok {
-			ic.nextIn = next
+			c.nextIn = next
 		} else {
 			panic("inbound type mismatch")
 		}
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) SetNextOut(ctx PipelineContext[H, Context]) {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) SetNextOut(ctx PipelineContext[H, Context]) {
 	if ctx == nil {
-		ic.nextOut = nil
+		c.nextOut = nil
 	} else {
 		if next, ok := ctx.(OLink); ok {
-			ic.nextOut = next
+			c.nextOut = next
 		} else {
 			panic("outbound type mismatch")
 		}
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetDirection() HandlerDir {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetDirection() HandlerDir {
 	return HandlerDirIn
 }
 
@@ -78,50 +78,50 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetDirect
 // impl HandlerContextBase
 ///////////////////////////////////////////////////////////////////////////////
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetPipeline() *PipelineBase {
-	return ic.pipeline
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) GetPipeline() *PipelineBase[H, Context] {
+	return c.pipeline
 }
 
 //TODO:
-//func (ic *ContextImpl[In, Out, Context, Handler, Link]) GetTransport() Transport {
+//func (c *ContextImpl[In, Out, Context, Handler, Link]) GetTransport() Transport {
 //}
 
 ///////////////////////////////////////////////////////////////////////////////
 // impl InboundHandlerContext
 ///////////////////////////////////////////////////////////////////////////////
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireRead(msg Rout) {
-	if next, ok := ic.nextIn.(ILink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireRead(msg Rout) {
+	if next, ok := c.nextIn.(ILink); ok {
 		next.Read(msg)
 	} else {
 		log.Println("read reached end of pipeline")
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadEOF() {
-	if next, ok := ic.nextIn.(ILink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadEOF() {
+	if next, ok := c.nextIn.(ILink); ok {
 		next.ReadEOF()
 	} else {
 		log.Println("readEOF reached end of pipeline")
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadError(err error) {
-	if next, ok := ic.nextIn.(ILink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireReadError(err error) {
+	if next, ok := c.nextIn.(ILink); ok {
 		next.ReadError(err)
 	} else {
 		log.Println("readError reached end of pipeline")
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTransportActive() {
-	if next, ok := ic.nextIn.(ILink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTransportActive() {
+	if next, ok := c.nextIn.(ILink); ok {
 		next.TransportActive()
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTransportInactive() {
-	if next, ok := ic.nextIn.(ILink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTransportInactive() {
+	if next, ok := c.nextIn.(ILink); ok {
 		next.TransportInactive()
 	}
 }
@@ -130,48 +130,48 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireTrans
 // impl InboundLink
 ///////////////////////////////////////////////////////////////////////////////
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Read(msg Rin) {
-	ic.handler.Read(ic, msg)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Read(msg Rin) {
+	c.handler.Read(c, msg)
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) ReadEOF() {
-	ic.handler.ReadEOF(ic)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) ReadEOF() {
+	c.handler.ReadEOF(c)
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) ReadError(err error) {
-	ic.handler.ReadError(ic, err)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) ReadError(err error) {
+	c.handler.ReadError(c, err)
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) TransportActive() {
-	ic.handler.TransportActive(ic)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) TransportActive() {
+	c.handler.TransportActive(c)
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) TransportInactive() {
-	ic.handler.TransportInactive(ic)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) TransportInactive() {
+	c.handler.TransportInactive(c)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // impl OutboundHandlerContext
 ///////////////////////////////////////////////////////////////////////////////
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWrite(msg Wout) {
-	if next, ok := ic.nextOut.(OLink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWrite(msg Wout) {
+	if next, ok := c.nextOut.(OLink); ok {
 		next.Write(msg)
 	} else {
 		log.Println("write reached end of pipeline")
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireClose() {
-	if next, ok := ic.nextOut.(OLink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireClose() {
+	if next, ok := c.nextOut.(OLink); ok {
 		next.Close()
 	} else {
 		log.Println("close reached end of pipeline")
 	}
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWriteError(err error) {
-	if next, ok := ic.nextOut.(OLink); ok {
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWriteError(err error) {
+	if next, ok := c.nextOut.(OLink); ok {
 		next.WriteError(err)
 	} else {
 		log.Println("writeError reached end of pipeline")
@@ -182,14 +182,14 @@ func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) FireWrite
 // impl OutboundLink
 ///////////////////////////////////////////////////////////////////////////////
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Write(msg Win) {
-	ic.handler.Write(ic, msg)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Write(msg Win) {
+	c.handler.Write(c, msg)
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Close() {
-	ic.handler.Close(ic)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) Close() {
+	c.handler.Close(c)
 }
 
-func (ic *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) WriteError(err error) {
-	ic.handler.WriteError(ic, err)
+func (c *ContextImpl[Rin, Rout, Win, Wout, Context, H, ILink, OLink]) WriteError(err error) {
+	c.handler.WriteError(c, err)
 }

@@ -1,7 +1,7 @@
 package channel
 
-type HandlerContextBase interface {
-	GetPipeline() *PipelineBase
+type HandlerContextBase[H any, Context any] interface {
+	GetPipeline() *PipelineBase[H, Context]
 	//TODO: GetTransport() Transport
 }
 
