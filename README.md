@@ -23,7 +23,7 @@
  </a>
 </p>
 <p align="center">
- Retty is an asynchronous Rust networking application framework that makes it easy to build protocols, application clients, and application servers.
+ Retty is an asynchronous Rust networking framework that makes it easy to build protocols, application clients/servers.
 </p>
 <p align="center">
 It's like <a href="https://netty.io">Netty</a> or <a href="https://github.com/facebook/wangle">Wangle</a>, but in Rust.
