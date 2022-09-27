@@ -1,0 +1,24 @@
+[package]
+name = "retty"
+version = "0.1.0"
+authors = ["Rusty Rain <y@liu.mx>"]
+edition = "2021"
+description = "Retty — an asynchronous Rust networking application framework that makes it easy to build protocols, application clients, and application servers."
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/retty"
+repository = "https://github.com/retty-io/retty"
+
+[dependencies]
+bytes = "1"
+tokio = { version = "1", features = ["full"] }
+log = "0.4.17"
+async-trait = "0.1.57"
+
+[dev-dependencies]
+chrono = "0.4.22"
+env_logger = "0.9.1"
+clap = "3"
+
+[[example]]
+name = "echo_server"
+path = "examples/echo_server.rs"

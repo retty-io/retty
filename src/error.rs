@@ -1,0 +1,50 @@
+use std::fmt::{Display, Formatter};
+use std::net::AddrParseError;
+use std::string::FromUtf8Error;
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Error {
+    pub kind: std::io::ErrorKind,
+    pub message: String,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} , {}", self.kind, self.message)
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error {
+            kind: e.kind(),
+            message: e.to_string(),
+        }
+    }
+}
+
+impl From<AddrParseError> for Error {
+    fn from(e: AddrParseError) -> Self {
+        Error {
+            kind: std::io::ErrorKind::AddrNotAvailable,
+            message: e.to_string(),
+        }
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(e: FromUtf8Error) -> Self {
+        Error {
+            kind: std::io::ErrorKind::Other,
+            message: e.to_string(),
+        }
+    }
+}
+
+impl Error {
+    pub fn new(kind: std::io::ErrorKind, message: String) -> Self {
+        Error { kind, message }
+    }
+}
