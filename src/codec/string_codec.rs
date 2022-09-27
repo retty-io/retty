@@ -13,6 +13,12 @@ pub struct StringCodec {
     encoder: StringEncoder,
 }
 
+impl Default for StringCodec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StringCodec {
     pub fn new() -> Self {
         StringCodec {

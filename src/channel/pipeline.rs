@@ -12,6 +12,12 @@ pub struct Pipeline {
     pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandler>>>,
 }
 
+impl Default for Pipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Pipeline {
     pub fn new() -> Self {
         Self {

@@ -48,6 +48,8 @@ pub trait OutboundHandler: Send + Sync {
 
 pub trait Handler: Send + Sync {
     fn id(&self) -> String;
+
+    #[allow(clippy::type_complexity)]
     fn split(
         self,
     ) -> (
@@ -62,6 +64,12 @@ pub struct InboundHandlerContext {
 
     pub(crate) next_out_ctx: Option<Arc<Mutex<OutboundHandlerContext>>>,
     pub(crate) next_out_handler: Option<Arc<Mutex<dyn OutboundHandler>>>,
+}
+
+impl Default for InboundHandlerContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InboundHandlerContext {
@@ -170,6 +178,12 @@ impl InboundHandlerContext {
 pub struct OutboundHandlerContext {
     pub(crate) next_out_ctx: Option<Arc<Mutex<OutboundHandlerContext>>>,
     pub(crate) next_out_handler: Option<Arc<Mutex<dyn OutboundHandler>>>,
+}
+
+impl Default for OutboundHandlerContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OutboundHandlerContext {

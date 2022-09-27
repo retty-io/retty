@@ -2,6 +2,7 @@ use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, Outbound
 
 use async_trait::async_trait;
 use bytes::BytesMut;
+use log::trace;
 use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -40,8 +41,8 @@ impl OutboundHandler for AsyncTcpEncoder {
     ) {
         let buf = message.downcast_mut::<BytesMut>().unwrap();
         if let Some(writer) = &mut self.writer {
-            if let Ok(n) = writer.write(&buf).await {
-                println!(
+            if let Ok(n) = writer.write(buf).await {
+                trace!(
                     "AsyncWriteTcpHandler --> write {} of {} bytes",
                     n,
                     buf.len()
@@ -51,7 +52,7 @@ impl OutboundHandler for AsyncTcpEncoder {
     }
 
     async fn close(&mut self, _ctx: &mut OutboundHandlerContext) {
-        println!("close socket");
+        trace!("close socket");
         self.writer.take();
     }
 }

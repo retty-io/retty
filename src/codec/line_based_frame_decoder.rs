@@ -3,7 +3,7 @@ use crate::error::Error;
 use bytes::BytesMut;
 use std::io::ErrorKind;
 
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Eq)]
 pub enum TerminatorType {
     #[default]
     BOTH,
@@ -35,12 +35,11 @@ impl LineBasedFrameDecoder {
         let mut i = 0usize;
         while i < self.max_length && i < buf.len() {
             let b = buf[i];
-            if b == b'\n' && self.terminator_type != TerminatorType::CarriageNewline {
-                return Some(i);
-            } else if self.terminator_type != TerminatorType::NEWLINE
-                && b == b'\r'
-                && i + 1 < buf.len()
-                && buf[i + 1] == b'\n'
+            if (b == b'\n' && self.terminator_type != TerminatorType::CarriageNewline)
+                || (self.terminator_type != TerminatorType::NEWLINE
+                    && b == b'\r'
+                    && i + 1 < buf.len()
+                    && buf[i + 1] == b'\n')
             {
                 return Some(i);
             }
@@ -78,16 +77,16 @@ impl MessageDecoder for LineBasedFrameDecoder {
                     buf.split_to(eol + delim_length)
                 };
 
-                return Ok(Some(frame));
+                Ok(Some(frame))
             } else {
                 let len = buf.len();
                 if len > self.max_length {
                     self.discarded_bytes = len;
                     let _ = buf.split_to(len);
                     self.discarding = true;
-                    return Err(Error::new(ErrorKind::Other, format!("over {}", len)));
+                    Err(Error::new(ErrorKind::Other, format!("over {}", len)))
                 } else {
-                    return Ok(None);
+                    Ok(None)
                 }
             }
         } else {
@@ -102,7 +101,7 @@ impl MessageDecoder for LineBasedFrameDecoder {
                 let _ = buf.split_to(buf.len());
             }
 
-            return Ok(None);
+            Ok(None)
         }
     }
 }
