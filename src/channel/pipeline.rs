@@ -185,7 +185,7 @@ impl PipelineContext {
         self.outbound_handlers.last().unwrap().clone()
     }
 
-    pub(crate) async fn transport_active(&self) {
+    pub async fn transport_active(&self) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -193,7 +193,7 @@ impl PipelineContext {
         handler.transport_active(&mut ctx).await;
     }
 
-    pub(crate) async fn transport_inactive(&self) {
+    pub async fn transport_inactive(&self) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -201,7 +201,7 @@ impl PipelineContext {
         handler.transport_inactive(&mut ctx).await;
     }
 
-    pub(crate) async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
+    pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -209,7 +209,7 @@ impl PipelineContext {
         handler.read(&mut ctx, msg).await;
     }
 
-    pub(crate) async fn read_exception(&self, error: Error) {
+    pub async fn read_exception(&self, error: Error) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -217,7 +217,7 @@ impl PipelineContext {
         handler.read_exception(&mut ctx, error).await;
     }
 
-    pub(crate) async fn read_eof(&self) {
+    pub async fn read_eof(&self) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -225,7 +225,7 @@ impl PipelineContext {
         handler.read_eof(&mut ctx).await;
     }
 
-    pub(crate) async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
+    pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
@@ -233,7 +233,7 @@ impl PipelineContext {
         handler.write(&mut ctx, msg).await;
     }
 
-    pub(crate) async fn write_exception(&self, error: Error) {
+    pub async fn write_exception(&self, error: Error) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
@@ -241,7 +241,7 @@ impl PipelineContext {
         handler.write_exception(&mut ctx, error).await;
     }
 
-    pub(crate) async fn close(&self) {
+    pub async fn close(&self) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,

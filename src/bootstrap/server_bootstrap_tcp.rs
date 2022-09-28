@@ -1,25 +1,13 @@
 use bytes::BytesMut;
 use log::trace;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWrite};
+use tokio::io::AsyncReadExt;
 
-use crate::channel::pipeline::PipelineContext;
+use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
-
-pub type PipelineFactoryFn = Box<
-    dyn (Fn(
-            Pin<Box<dyn AsyncWrite + Send + Sync>>,
-        ) -> Pin<Box<dyn Future<Output = PipelineContext> + Send + 'static>>)
-        + Send
-        + Sync,
->;
 
 pub struct ServerBootstrapTcp {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
-    stopped: Arc<AtomicBool>,
 }
 
 impl Default for ServerBootstrapTcp {
@@ -29,10 +17,9 @@ impl Default for ServerBootstrapTcp {
 }
 
 impl ServerBootstrapTcp {
-    pub fn new() -> ServerBootstrapTcp {
-        ServerBootstrapTcp {
+    pub fn new() -> Self {
+        Self {
             pipeline_factory_fn: None,
-            stopped: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -60,10 +47,6 @@ impl ServerBootstrapTcp {
         });
 
         Ok(())
-    }
-
-    pub fn stop(&mut self) {
-        self.stopped.store(true, Ordering::Relaxed);
     }
 
     async fn process_pipeline(
