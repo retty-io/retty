@@ -13,13 +13,13 @@ use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
 };
-use retty::codec::async_write_tcp_handler::AsyncWriteTcpHandler;
 use retty::codec::{
     byte_to_message_decoder::ByteToMessageCodec,
     line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
     string_codec::StringCodec,
 };
 use retty::error::Error;
+use retty::transport::async_transport_tcp::AsyncTransportTcp;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,14 +148,14 @@ async fn main() -> Result<(), Error> {
         move |sock: Pin<Box<dyn AsyncWrite + Send + Sync>>| {
             let mut pipeline = Pipeline::new();
 
-            let async_write_handler = AsyncWriteTcpHandler::new(sock);
+            let async_transport_handler = AsyncTransportTcp::new(sock);
             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = StringCodec::new();
             let echo_handler = EchoHandler::new();
 
-            pipeline.add_back(async_write_handler);
+            pipeline.add_back(async_transport_handler);
             pipeline.add_back(line_based_frame_decoder_handler);
             pipeline.add_back(string_codec_handler);
             pipeline.add_back(echo_handler);

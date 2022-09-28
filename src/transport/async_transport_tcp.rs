@@ -9,31 +9,31 @@ use std::sync::Arc;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 
-struct AsyncTcpDecoder;
-struct AsyncTcpEncoder {
+struct AsyncTransportTcpDecoder;
+struct AsyncTransportTcpEncoder {
     writer: Option<Pin<Box<dyn AsyncWrite + Send + Sync>>>,
 }
 
-pub struct AsyncWriteTcpHandler {
-    decoder: AsyncTcpDecoder,
-    encoder: AsyncTcpEncoder,
+pub struct AsyncTransportTcp {
+    decoder: AsyncTransportTcpDecoder,
+    encoder: AsyncTransportTcpEncoder,
 }
 
-impl AsyncWriteTcpHandler {
+impl AsyncTransportTcp {
     pub fn new(writer: Pin<Box<dyn AsyncWrite + Send + Sync>>) -> Self {
-        AsyncWriteTcpHandler {
-            decoder: AsyncTcpDecoder {},
-            encoder: AsyncTcpEncoder {
+        AsyncTransportTcp {
+            decoder: AsyncTransportTcpDecoder {},
+            encoder: AsyncTransportTcpEncoder {
                 writer: Some(writer),
             },
         }
     }
 }
 
-impl InboundHandler for AsyncTcpDecoder {}
+impl InboundHandler for AsyncTransportTcpDecoder {}
 
 #[async_trait]
-impl OutboundHandler for AsyncTcpEncoder {
+impl OutboundHandler for AsyncTransportTcpEncoder {
     async fn write(
         &mut self,
         _ctx: &mut OutboundHandlerContext,
@@ -57,7 +57,7 @@ impl OutboundHandler for AsyncTcpEncoder {
     }
 }
 
-impl Handler for AsyncWriteTcpHandler {
+impl Handler for AsyncTransportTcp {
     fn id(&self) -> String {
         "AsyncWriteTcpHandler".to_string()
     }
