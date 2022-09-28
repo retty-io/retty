@@ -4,7 +4,9 @@ use std::pin::Pin;
 use tokio::io::AsyncWrite;
 
 pub mod client_bootstrap_tcp;
+pub mod client_bootstrap_udp;
 pub mod server_bootstrap_tcp;
+pub mod server_bootstrap_udp;
 
 pub type PipelineFactoryFn = Box<
     dyn (Fn(

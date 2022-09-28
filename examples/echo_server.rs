@@ -169,7 +169,7 @@ async fn main() -> Result<(), Error> {
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
-            println!("");
+            bootstrap.stop().await;
         }
     };
 

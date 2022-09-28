@@ -1,23 +1,22 @@
 use bytes::BytesMut;
-use log::trace;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::net::{TcpStream, ToSocketAddrs, UdpSocket};
 
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
 
-pub struct ServerBootstrapTcp {
+pub struct ServerBootstrapUdp {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
 }
 
-impl Default for ServerBootstrapTcp {
+impl Default for ServerBootstrapUdp {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ServerBootstrapTcp {
+impl ServerBootstrapUdp {
     pub fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -30,23 +29,22 @@ impl ServerBootstrapTcp {
     }
 
     /// bind address and port
-    pub async fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), Error> {
-        let listener = TcpListener::bind(addr).await?;
-        let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+        let _socket = UdpSocket::bind(addr).await?;
+        let _pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        tokio::spawn(async move {
+        /*tokio::spawn(async move {
             while let Ok((socket, remote_addr)) = listener.accept().await {
-                //TODO: add cancellation handling
                 trace!("remote_addr {} connected", remote_addr);
 
                 // A new task is spawned for each inbound socket. The socket is
                 // moved to the new task and processed there.
                 let child_pipeline_factory_fn = Arc::clone(&pipeline_factory_fn);
                 tokio::spawn(async move {
-                    ServerBootstrapTcp::process_pipeline(socket, child_pipeline_factory_fn).await;
+                    ServerBootstrapUdp::process_pipeline(socket, child_pipeline_factory_fn).await;
                 });
             }
-        });
+        });*/
 
         Ok(())
     }
