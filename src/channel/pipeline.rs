@@ -48,8 +48,8 @@ impl Pipeline {
             .into_iter()
             .zip(outbound_handlers.into_iter())
         {
-            let inbound_context = Arc::new(Mutex::new(InboundHandlerContext::new()));
-            let outbound_context = Arc::new(Mutex::new(OutboundHandlerContext::new()));
+            let inbound_context = Arc::new(Mutex::new(InboundHandlerContext::default()));
+            let outbound_context = Arc::new(Mutex::new(OutboundHandlerContext::default()));
 
             pipeline_context.add_back(
                 inbound_context,
