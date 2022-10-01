@@ -8,31 +8,31 @@ use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-struct AsyncTransportUdpDecoder;
-struct AsyncTransportUdpEncoder {
+struct AsyncTransportTcpDecoder;
+struct AsyncTransportTcpEncoder {
     writer: Option<Box<dyn AsyncTransportWrite + Send + Sync>>,
 }
 
-pub struct AsyncTransportUdp {
-    decoder: AsyncTransportUdpDecoder,
-    encoder: AsyncTransportUdpEncoder,
+pub struct AsyncTransportTcp {
+    decoder: AsyncTransportTcpDecoder,
+    encoder: AsyncTransportTcpEncoder,
 }
 
-impl AsyncTransportUdp {
+impl AsyncTransportTcp {
     pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>) -> Self {
-        AsyncTransportUdp {
-            decoder: AsyncTransportUdpDecoder {},
-            encoder: AsyncTransportUdpEncoder {
+        AsyncTransportTcp {
+            decoder: AsyncTransportTcpDecoder {},
+            encoder: AsyncTransportTcpEncoder {
                 writer: Some(writer),
             },
         }
     }
 }
 
-impl InboundHandler for AsyncTransportUdpDecoder {}
+impl InboundHandler for AsyncTransportTcpDecoder {}
 
 #[async_trait]
-impl OutboundHandler for AsyncTransportUdpEncoder {
+impl OutboundHandler for AsyncTransportTcpEncoder {
     async fn write(
         &mut self,
         _ctx: &mut OutboundHandlerContext,
@@ -40,10 +40,9 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
     ) {
         let buf = message.downcast_mut::<BytesMut>().unwrap();
         if let Some(writer) = &mut self.writer {
-            //TODO: add TransportContext
             if let Ok(n) = writer.write(buf, None).await {
                 trace!(
-                    "AsyncWriteTcpHandler --> write {} of {} bytes",
+                    "AsyncTransportTcpEncoder --> write {} of {} bytes",
                     n,
                     buf.len()
                 );
@@ -57,9 +56,9 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
     }
 }
 
-impl Handler for AsyncTransportUdp {
+impl Handler for AsyncTransportTcp {
     fn id(&self) -> String {
-        "AsyncWriteUdpHandler".to_string()
+        "AsyncTransportTcp".to_string()
     }
 
     fn split(

@@ -7,11 +7,11 @@ use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
 
 #[derive(Default)]
-pub struct ServerBootstrapTcp {
+pub struct BootstrapTcpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
 }
 
-impl ServerBootstrapTcp {
+impl BootstrapTcpServer {
     pub fn new() -> Self {
         Self::default()
     }
@@ -32,7 +32,7 @@ impl ServerBootstrapTcp {
                 // moved to the new task and processed there.
                 let child_pipeline_factory_fn = Arc::clone(&pipeline_factory_fn);
                 tokio::spawn(async move {
-                    ServerBootstrapTcp::process_pipeline(socket, child_pipeline_factory_fn).await;
+                    BootstrapTcpServer::process_pipeline(socket, child_pipeline_factory_fn).await;
                 });
             }
         });

@@ -6,7 +6,7 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use retty::bootstrap::client_bootstrap_tcp::ClientBootstrapTcp;
+use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -17,7 +17,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::error::Error;
-use retty::transport::tcp::async_transport_tcp::AsyncTransportTcp;
+use retty::transport::async_transport_tcp::AsyncTransportTcp;
 use retty::transport::AsyncTransportWrite;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,10 +81,10 @@ impl Handler for EchoHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut app = Command::new("Echo Client")
+    let mut app = Command::new("Echo TCP Client")
         .version("0.1.0")
         .author("Rusty Rain <y@liu.mx>")
-        .about("An example of echo client")
+        .about("An example of echo tcp client")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
@@ -110,7 +110,7 @@ async fn main() -> Result<(), Error> {
                 .long("port")
                 .short('p')
                 .default_value("8080")
-                .help("Echo server Port"),
+                .help("Echo server port"),
         );
 
     let matches = app.clone().get_matches();
@@ -142,7 +142,7 @@ async fn main() -> Result<(), Error> {
 
     println!("Connecting {}:{}...", host, port);
 
-    let mut client = ClientBootstrapTcp::new();
+    let mut client = BootstrapTcpClient::new();
     client.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let mut pipeline = Pipeline::new();

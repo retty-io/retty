@@ -1,8 +1,11 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::UdpSocket;
 
-pub mod tcp;
-pub mod udp;
+pub mod async_transport_tcp;
+pub mod async_transport_udp;
 
 #[async_trait]
 pub trait AsyncTransportAddress {
@@ -11,11 +14,84 @@ pub trait AsyncTransportAddress {
 }
 
 #[async_trait]
-pub trait AsyncTransportRead {
+pub trait AsyncTransportRead: AsyncTransportAddress {
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)>;
 }
 
 #[async_trait]
-pub trait AsyncTransportWrite {
+pub trait AsyncTransportWrite: AsyncTransportAddress {
     async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize>;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[async_trait]
+impl AsyncTransportAddress for OwnedReadHalf {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.local_addr()
+    }
+
+    fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+        self.peer_addr()
+    }
+}
+
+#[async_trait]
+impl AsyncTransportAddress for OwnedWriteHalf {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.local_addr()
+    }
+
+    fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+        self.peer_addr()
+    }
+}
+
+#[async_trait]
+impl AsyncTransportRead for OwnedReadHalf {
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
+        let n = tokio::io::AsyncReadExt::read(&mut self, buf).await?;
+        Ok((n, None))
+    }
+}
+
+#[async_trait]
+impl AsyncTransportWrite for OwnedWriteHalf {
+    async fn write(&mut self, buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
+        tokio::io::AsyncWriteExt::write(&mut self, buf).await
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[async_trait]
+impl AsyncTransportAddress for Arc<UdpSocket> {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        UdpSocket::local_addr(self)
+    }
+
+    fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+        UdpSocket::peer_addr(self)
+    }
+}
+
+#[async_trait]
+impl AsyncTransportRead for Arc<UdpSocket> {
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
+        let (len, addr) = self.recv_from(buf).await?;
+        Ok((len, Some(addr)))
+    }
+}
+
+#[async_trait]
+impl AsyncTransportWrite for Arc<UdpSocket> {
+    async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize> {
+        let target = target.ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::AddrNotAvailable,
+                "SocketAddr is required for UdpSocket write".to_string(),
+            )
+        })?;
+        self.send_to(buf, target).await
+    }
 }

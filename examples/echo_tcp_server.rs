@@ -5,7 +5,7 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use retty::bootstrap::server_bootstrap_tcp::ServerBootstrapTcp;
+use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -16,7 +16,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::error::Error;
-use retty::transport::tcp::async_transport_tcp::AsyncTransportTcp;
+use retty::transport::async_transport_tcp::AsyncTransportTcp;
 use retty::transport::AsyncTransportWrite;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,10 +79,10 @@ impl Handler for EchoHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut app = Command::new("Echo Server")
+    let mut app = Command::new("Echo UDP Server")
         .version("0.1.0")
         .author("Rusty Rain <y@liu.mx>")
-        .about("An example of echo server")
+        .about("An example of echo udp server")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
@@ -101,14 +101,14 @@ async fn main() -> Result<(), Error> {
                 .long("host")
                 .short('h')
                 .default_value("0.0.0.0")
-                .help("Host Address"),
+                .help("Echo server address"),
         )
         .arg(
             Arg::new("port")
                 .long("port")
                 .short('p')
                 .default_value("8080")
-                .help("Host Port"),
+                .help("Echo server port"),
         );
 
     let matches = app.clone().get_matches();
@@ -140,7 +140,7 @@ async fn main() -> Result<(), Error> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = ServerBootstrapTcp::new();
+    let mut bootstrap = BootstrapTcpServer::new();
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
