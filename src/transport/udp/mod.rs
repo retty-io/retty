@@ -5,6 +5,8 @@ use tokio::net::UdpSocket;
 
 use crate::transport::{AsyncTransportAddress, AsyncTransportRead, AsyncTransportWrite};
 
+pub mod async_transport_udp;
+
 #[async_trait]
 impl AsyncTransportAddress for Arc<UdpSocket> {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
@@ -30,7 +32,7 @@ impl AsyncTransportWrite for Arc<UdpSocket> {
         let target = target.ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::AddrNotAvailable,
-                "Address Not Available".to_string(),
+                "SocketAddr is required for UdpSocket write".to_string(),
             )
         })?;
         self.send_to(buf, target).await

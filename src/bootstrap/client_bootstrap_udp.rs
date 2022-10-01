@@ -47,7 +47,7 @@ impl ClientBootstrapUdp {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-            while let Ok(n) = socket_rd.recv(&mut buf).await {
+            while let Ok((n, _remote_addr)) = socket_rd.recv_from(&mut buf).await {
                 if n == 0 {
                     pipeline.read_eof().await;
                     break;
