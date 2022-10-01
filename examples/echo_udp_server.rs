@@ -5,7 +5,7 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
+use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -16,7 +16,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::error::Error;
-use retty::transport::async_transport_tcp::AsyncTransportTcp;
+use retty::transport::async_transport_udp::AsyncTransportUdp;
 use retty::transport::AsyncTransportWrite;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,10 +79,10 @@ impl Handler for EchoHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut app = Command::new("Echo TCP Server")
+    let mut app = Command::new("Echo UDP Server")
         .version("0.1.0")
         .author("Rusty Rain <y@liu.mx>")
-        .about("An example of echo tcp server")
+        .about("An example of echo udp server")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
@@ -140,13 +140,13 @@ async fn main() -> Result<(), Error> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapTcpServer::new();
+    let mut bootstrap = BootstrapUdpServer::new();
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
                 let mut pipeline = Pipeline::new();
 
-                let async_transport_handler = AsyncTransportTcp::new(sock);
+                let async_transport_handler = AsyncTransportUdp::new(sock, true);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));

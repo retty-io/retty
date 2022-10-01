@@ -28,5 +28,9 @@ name = "echo_tcp_client"
 path = "examples/echo_tcp_client.rs"
 
 [[example]]
+name = "echo_udp_server"
+path = "examples/echo_udp_server.rs"
+
+[[example]]
 name = "echo_udp_client"
 path = "examples/echo_udp_client.rs"
