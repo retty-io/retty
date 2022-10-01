@@ -8,11 +8,11 @@ use crate::transport::{AsyncTransportAddress, AsyncTransportRead, AsyncTransport
 #[async_trait]
 impl AsyncTransportAddress for Arc<UdpSocket> {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
-        UdpSocket::local_addr(&self)
+        UdpSocket::local_addr(self)
     }
 
     fn peer_addr(&self) -> std::io::Result<SocketAddr> {
-        UdpSocket::peer_addr(&self)
+        UdpSocket::peer_addr(self)
     }
 }
 

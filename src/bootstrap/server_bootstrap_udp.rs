@@ -5,21 +5,14 @@ use tokio::net::{ToSocketAddrs, UdpSocket};
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
 
+#[derive(Default)]
 pub struct ServerBootstrapUdp {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
 }
 
-impl Default for ServerBootstrapUdp {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ServerBootstrapUdp {
     pub fn new() -> Self {
-        Self {
-            pipeline_factory_fn: None,
-        }
+        Self::default()
     }
 
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {

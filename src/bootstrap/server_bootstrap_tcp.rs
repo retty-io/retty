@@ -6,21 +6,14 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
 
+#[derive(Default)]
 pub struct ServerBootstrapTcp {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
 }
 
-impl Default for ServerBootstrapTcp {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ServerBootstrapTcp {
     pub fn new() -> Self {
-        Self {
-            pipeline_factory_fn: None,
-        }
+        Self::default()
     }
 
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {

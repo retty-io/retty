@@ -7,21 +7,14 @@ use crate::bootstrap::PipelineFactoryFn;
 use crate::channel::pipeline::PipelineContext;
 use crate::error::Error;
 
+#[derive(Default)]
 pub struct ClientBootstrapTcp {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
 }
 
-impl Default for ClientBootstrapTcp {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ClientBootstrapTcp {
     pub fn new() -> Self {
-        Self {
-            pipeline_factory_fn: None,
-        }
+        Self::default()
     }
 
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
