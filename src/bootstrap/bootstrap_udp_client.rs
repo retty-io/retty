@@ -22,11 +22,10 @@ impl BootstrapUdpClient {
         self
     }
 
-    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> &mut Self {
-        if let Ok(socket) = UdpSocket::bind(addr).await {
-            self.socket = Some(Arc::new(socket));
-        }
-        self
+    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+        let socket = UdpSocket::bind(addr).await?;
+        self.socket = Some(Arc::new(socket));
+        Ok(())
     }
 
     /// connect host:port

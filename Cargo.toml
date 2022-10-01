@@ -20,9 +20,13 @@ env_logger = "0.9.1"
 clap = "3.2.22"
 
 [[example]]
-name = "echo_server"
+name = "echo_tcp_server"
 path = "examples/echo_tcp_server.rs"
 
 [[example]]
-name = "echo_client"
+name = "echo_tcp_client"
 path = "examples/echo_tcp_client.rs"
+
+[[example]]
+name = "echo_udp_client"
+path = "examples/echo_udp_client.rs"
