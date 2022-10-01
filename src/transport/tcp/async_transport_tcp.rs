@@ -1,17 +1,16 @@
 use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
+use crate::transport::AsyncTransportWrite;
 
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::trace;
 use std::any::Any;
-use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 struct AsyncTransportTcpDecoder;
 struct AsyncTransportTcpEncoder {
-    writer: Option<Pin<Box<dyn AsyncWrite + Send + Sync>>>,
+    writer: Option<Box<dyn AsyncTransportWrite + Send + Sync>>,
 }
 
 pub struct AsyncTransportTcp {
@@ -20,7 +19,7 @@ pub struct AsyncTransportTcp {
 }
 
 impl AsyncTransportTcp {
-    pub fn new(writer: Pin<Box<dyn AsyncWrite + Send + Sync>>) -> Self {
+    pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>) -> Self {
         AsyncTransportTcp {
             decoder: AsyncTransportTcpDecoder {},
             encoder: AsyncTransportTcpEncoder {
@@ -41,7 +40,7 @@ impl OutboundHandler for AsyncTransportTcpEncoder {
     ) {
         let buf = message.downcast_mut::<BytesMut>().unwrap();
         if let Some(writer) = &mut self.writer {
-            if let Ok(n) = writer.write(buf).await {
+            if let Ok(n) = writer.write(buf, None).await {
                 trace!(
                     "AsyncWriteTcpHandler --> write {} of {} bytes",
                     n,

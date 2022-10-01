@@ -3,9 +3,7 @@ use clap::{AppSettings, Arg, Command};
 use std::any::Any;
 use std::io::stdin;
 use std::io::Write;
-use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::AsyncWrite;
 use tokio::sync::Mutex;
 
 use retty::bootstrap::client_bootstrap_tcp::ClientBootstrapTcp;
@@ -20,6 +18,7 @@ use retty::codec::{
 };
 use retty::error::Error;
 use retty::transport::tcp::async_transport_tcp::AsyncTransportTcp;
+use retty::transport::AsyncTransportWrite;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -145,7 +144,7 @@ async fn main() -> Result<(), Error> {
 
     let mut client = ClientBootstrapTcp::new();
     client.pipeline(Box::new(
-        move |sock: Pin<Box<dyn AsyncWrite + Send + Sync>>| {
+        move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let mut pipeline = Pipeline::new();
 
             let async_transport_handler = AsyncTransportTcp::new(sock);

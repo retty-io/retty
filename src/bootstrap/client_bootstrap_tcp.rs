@@ -38,7 +38,7 @@ impl ClientBootstrapTcp {
         let (mut socket_rd, socket_wr) = socket.into_split();
 
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
-        let async_writer = Box::pin(socket_wr);
+        let async_writer = Box::new(socket_wr);
         let pipeline_wr = Arc::new((pipeline_factory_fn)(async_writer).await);
 
         let pipeline = Arc::clone(&pipeline_wr);

@@ -58,7 +58,7 @@ impl ServerBootstrapTcp {
     async fn process_pipeline(socket: TcpStream, pipeline_factory_fn: Arc<PipelineFactoryFn>) {
         let mut buf = vec![0u8; 8196];
         let (mut socket_rd, socket_wr) = socket.into_split();
-        let async_writer = Box::pin(socket_wr);
+        let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
         pipeline.transport_active().await;

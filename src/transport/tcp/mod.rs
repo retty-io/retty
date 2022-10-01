@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::net::ToSocketAddrs;
 
 use crate::transport::{AsyncTransportAddress, AsyncTransportRead, AsyncTransportWrite};
 
@@ -39,11 +38,7 @@ impl AsyncTransportRead for OwnedReadHalf {
 
 #[async_trait]
 impl AsyncTransportWrite for OwnedWriteHalf {
-    async fn write<A: ToSocketAddrs + std::marker::Send>(
-        &mut self,
-        buf: &[u8],
-        _target: Option<A>,
-    ) -> std::io::Result<usize> {
+    async fn write(&mut self, buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
         tokio::io::AsyncWriteExt::write(&mut self, buf).await
     }
 }

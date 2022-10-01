@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
-use tokio::net::{ToSocketAddrs, UdpSocket};
+use tokio::net::UdpSocket;
 
 use crate::transport::{AsyncTransportAddress, AsyncTransportRead, AsyncTransportWrite};
 
@@ -25,11 +25,7 @@ impl AsyncTransportRead for UdpSocket {
 
 #[async_trait]
 impl AsyncTransportWrite for UdpSocket {
-    async fn write<A: ToSocketAddrs + std::marker::Send>(
-        &mut self,
-        buf: &[u8],
-        target: Option<A>,
-    ) -> std::io::Result<usize> {
+    async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize> {
         let target = target.ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::AddrNotAvailable,

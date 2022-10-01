@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
-use tokio::net::ToSocketAddrs;
 
 pub mod tcp;
 pub mod udp;
@@ -18,9 +17,5 @@ pub trait AsyncTransportRead {
 
 #[async_trait]
 pub trait AsyncTransportWrite {
-    async fn write<A: ToSocketAddrs + std::marker::Send>(
-        &mut self,
-        buf: &[u8],
-        target: Option<A>,
-    ) -> std::io::Result<usize>;
+    async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize>;
 }
