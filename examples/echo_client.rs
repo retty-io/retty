@@ -19,7 +19,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::error::Error;
-use retty::transport::async_transport_tcp::AsyncTransportTcp;
+use retty::transport::tcp::async_transport_tcp::AsyncTransportTcp;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
