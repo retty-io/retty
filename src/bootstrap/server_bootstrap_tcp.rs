@@ -1,5 +1,4 @@
 use bytes::BytesMut;
-use log::trace;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -35,10 +34,7 @@ impl ServerBootstrapTcp {
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         tokio::spawn(async move {
-            while let Ok((socket, remote_addr)) = listener.accept().await {
-                //TODO: add cancellation handling
-                trace!("remote_addr {} connected", remote_addr);
-
+            while let Ok((socket, _remote_addr)) = listener.accept().await {
                 // A new task is spawned for each inbound socket. The socket is
                 // moved to the new task and processed there.
                 let child_pipeline_factory_fn = Arc::clone(&pipeline_factory_fn);
