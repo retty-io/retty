@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use clap::{AppSettings, Arg, Command};
-use std::any::Any;
 use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -18,6 +17,7 @@ use retty::codec::{
 use retty::error::Error;
 use retty::transport::async_transport_udp::AsyncTransportUdp;
 use retty::transport::AsyncTransportWrite;
+use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,17 +39,17 @@ impl EchoHandler {
 
 #[async_trait]
 impl InboundHandler for EchoDecoder {
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
-        let msg = message.downcast_ref::<String>().unwrap();
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
+        let msg = message.body.downcast_ref::<String>().unwrap();
         println!("handling {}", msg);
         if msg == "close" {
             ctx.fire_close().await;
         } else {
-            ctx.fire_write(&mut format!("{}\r\n", msg)).await;
+            ctx.fire_write(Message {
+                transport: message.transport,
+                body: Box::new(format!("{}\r\n", msg)),
+            })
+            .await;
         }
     }
 
@@ -146,7 +146,7 @@ async fn main() -> Result<(), Error> {
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
                 let mut pipeline = Pipeline::new();
 
-                let async_transport_handler = AsyncTransportUdp::new(sock, true);
+                let async_transport_handler = AsyncTransportUdp::new(sock);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));

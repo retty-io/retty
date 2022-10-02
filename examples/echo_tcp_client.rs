@@ -140,6 +140,11 @@ async fn main() -> Result<(), Error> {
 
     println!("Connecting {}:{}...", host, port);
 
+    let transport = TransportContext {
+        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
+        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
+    };
+
     let mut client = BootstrapTcpClient::new();
     client.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
@@ -161,10 +166,6 @@ async fn main() -> Result<(), Error> {
         },
     ));
 
-    let transport = TransportContext {
-        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
-    };
     let pipeline = client.connect(transport.peer_addr).await?;
 
     println!("Enter bye to stop");
