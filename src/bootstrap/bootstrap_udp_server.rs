@@ -1,14 +1,20 @@
 use bytes::BytesMut;
+use log::{trace, warn};
 use std::sync::Arc;
 
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
-use crate::runtime::net::{ToSocketAddrs, UdpSocket};
+use crate::runtime::{
+    mpsc::{bounded, Sender},
+    net::{ToSocketAddrs, UdpSocket},
+    sync::Mutex,
+};
 use crate::{Message, Runtime, TransportContext};
 
 pub struct BootstrapUdpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
     runtime: Arc<dyn Runtime>,
+    close_tx: Arc<Mutex<Option<Sender<()>>>>,
 }
 
 impl BootstrapUdpServer {
@@ -16,6 +22,7 @@ impl BootstrapUdpServer {
         Self {
             pipeline_factory_fn: None,
             runtime,
+            close_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -34,26 +41,49 @@ impl BootstrapUdpServer {
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
         let local_addr = socket_rd.local_addr()?;
+
+        let (close_tx, mut close_rx) = bounded(1);
+        {
+            let mut tx = self.close_tx.lock().await;
+            *tx = Some(close_tx);
+        }
+
         self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-            while let Ok((n, peer_addr)) = socket_rd.recv_from(&mut buf).await {
-                //TODO: add cancellation handling
-                if n == 0 {
-                    pipeline.read_eof().await;
-                    break;
-                }
 
-                pipeline
-                    .read(Message {
-                        transport: TransportContext {
-                            local_addr,
-                            peer_addr,
-                        },
-                        body: Box::new(BytesMut::from(&buf[..n])),
-                    })
-                    .await;
+            loop {
+                tokio::select! {
+                    _ = close_rx.recv() => {
+                        trace!("UdpSocket read exit loop");
+                        break;
+                    }
+                    res = socket_rd.recv_from(&mut buf) => {
+                        match res {
+                            Ok((n, peer_addr)) => {
+                                if n == 0 {
+                                    pipeline.read_eof().await;
+                                    break;
+                                }
+
+                                pipeline
+                                    .read(Message {
+                                        transport: TransportContext {
+                                            local_addr,
+                                            peer_addr,
+                                        },
+                                        body: Box::new(BytesMut::from(&buf[..n])),
+                                    })
+                                    .await;
+                            }
+                            Err(err) => {
+                                warn!("UdpSocket read error {}", err);
+                                break;
+                            }
+                        };
+                    }
+                }
             }
             pipeline.transport_inactive().await;
         }));
@@ -62,6 +92,7 @@ impl BootstrapUdpServer {
     }
 
     pub async fn stop(&self) {
-        //TODO: add cancellation handling
+        let mut tx = self.close_tx.lock().await;
+        tx.take();
     }
 }

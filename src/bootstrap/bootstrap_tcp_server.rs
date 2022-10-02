@@ -137,7 +137,7 @@ impl BootstrapTcpServer {
                             warn!("TcpStream read error {}", err);
                             break;
                         }
-                    }
+                    };
                 }
             }
         }
