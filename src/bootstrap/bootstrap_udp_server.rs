@@ -30,16 +30,12 @@ impl BootstrapUdpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
-        let transport = TransportContext {
-            local_addr: socket_rd.local_addr()?,
-            peer_addr: socket_rd.peer_addr()?,
-        };
-
+        let local_addr = socket_rd.local_addr()?;
         tokio::spawn(async move {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-            while let Ok((n, _remote_addr)) = socket_rd.recv_from(&mut buf).await {
+            while let Ok((n, peer_addr)) = socket_rd.recv_from(&mut buf).await {
                 //TODO: add cancellation handling
                 if n == 0 {
                     pipeline.read_eof().await;
@@ -48,7 +44,10 @@ impl BootstrapUdpServer {
 
                 pipeline
                     .read(Message {
-                        transport,
+                        transport: TransportContext {
+                            local_addr,
+                            peer_addr,
+                        },
                         body: Box::new(BytesMut::from(&buf[..n])),
                     })
                     .await;

@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use clap::{AppSettings, Arg, Command};
-use std::any::Any;
 use std::io::stdin;
 use std::io::Write;
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -18,7 +19,8 @@ use retty::codec::{
 };
 use retty::error::Error;
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
-use retty::transport::AsyncTransportWrite;
+use retty::transport::{AsyncTransportWrite, TransportContext};
+use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,12 +42,8 @@ impl EchoHandler {
 
 #[async_trait]
 impl InboundHandler for EchoDecoder {
-    async fn read(
-        &mut self,
-        _ctx: &mut InboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
-        let msg = message.downcast_ref::<String>().unwrap();
+    async fn read(&mut self, _ctx: &mut InboundHandlerContext, message: Message) {
+        let msg = message.body.downcast_ref::<String>().unwrap();
         println!("received back: {}", msg);
     }
 
@@ -163,7 +161,11 @@ async fn main() -> Result<(), Error> {
         },
     ));
 
-    let pipeline = client.connect(format!("{}:{}", host, port)).await?;
+    let transport = TransportContext {
+        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
+        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
+    };
+    let pipeline = client.connect(transport.peer_addr).await?;
 
     println!("Enter bye to stop");
     let mut buffer = String::new();
@@ -171,7 +173,12 @@ async fn main() -> Result<(), Error> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline.write(&mut format!("{}\r\n", line)).await;
+                pipeline
+                    .write(Message {
+                        transport,
+                        body: Box::new(format!("{}\r\n", line)),
+                    })
+                    .await;
                 if line == "bye" {
                     pipeline.close().await;
                     break;

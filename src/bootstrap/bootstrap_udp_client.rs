@@ -42,16 +42,13 @@ impl BootstrapUdpClient {
         let async_writer = Box::new(socket_wr);
         let pipeline_wr = Arc::new((pipeline_factory_fn)(async_writer).await);
 
-        let transport = TransportContext {
-            local_addr: socket_rd.local_addr()?,
-            peer_addr: socket_rd.peer_addr()?,
-        };
+        let local_addr = socket_rd.local_addr()?;
         let pipeline = Arc::clone(&pipeline_wr);
         tokio::spawn(async move {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-            while let Ok((n, _remote_addr)) = socket_rd.recv_from(&mut buf).await {
+            while let Ok((n, peer_addr)) = socket_rd.recv_from(&mut buf).await {
                 if n == 0 {
                     pipeline.read_eof().await;
                     break;
@@ -59,7 +56,10 @@ impl BootstrapUdpClient {
 
                 pipeline
                     .read(Message {
-                        transport,
+                        transport: TransportContext {
+                            local_addr,
+                            peer_addr,
+                        },
                         body: Box::new(BytesMut::from(&buf[..n])),
                     })
                     .await;
