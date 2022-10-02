@@ -33,6 +33,8 @@ mod tokio;
 #[cfg(feature = "runtime-tokio")]
 pub use self::tokio::io;
 #[cfg(feature = "runtime-tokio")]
+pub use self::tokio::mpsc;
+#[cfg(feature = "runtime-tokio")]
 pub use self::tokio::net;
 #[cfg(feature = "runtime-tokio")]
 pub use self::tokio::sync;
@@ -43,6 +45,8 @@ pub use self::tokio::TokioRuntime;
 mod async_std;
 #[cfg(feature = "runtime-async-std")]
 pub use self::async_std::io;
+#[cfg(feature = "runtime-async-std")]
+pub use self::async_std::mpsc;
 #[cfg(feature = "runtime-async-std")]
 pub use self::async_std::net;
 #[cfg(feature = "runtime-async-std")]

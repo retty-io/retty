@@ -26,3 +26,7 @@ pub mod io {
     pub use async_std::io::{Read, Write};
     pub use futures_lite::io::{AsyncReadExt, AsyncWriteExt};
 }
+
+pub mod mpsc {
+    pub use async_std::channel::{bounded, Receiver, Sender};
+}

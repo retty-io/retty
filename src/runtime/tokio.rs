@@ -26,3 +26,10 @@ pub mod net {
 pub mod io {
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
+
+pub mod mpsc {
+    pub use tokio::sync::broadcast::{Receiver, Sender};
+    pub fn bounded<T: Clone>(cap: usize) -> (Sender<T>, Receiver<T>) {
+        tokio::sync::broadcast::channel(cap)
+    }
+}
