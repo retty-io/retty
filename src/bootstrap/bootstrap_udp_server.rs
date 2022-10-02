@@ -42,7 +42,11 @@ impl BootstrapUdpServer {
 
         let local_addr = socket_rd.local_addr()?;
 
+        #[cfg(feature = "runtime-tokio")]
         let (close_tx, mut close_rx) = bounded(1);
+        #[cfg(feature = "runtime-async-std")]
+        let (close_tx, close_rx) = bounded(1);
+
         {
             let mut tx = self.close_tx.lock().await;
             *tx = Some(close_tx);

@@ -37,13 +37,19 @@ impl BootstrapTcpServer {
         let listener = TcpListener::bind(addr).await?;
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
+        #[cfg(feature = "runtime-tokio")]
         let (close_tx, mut close_rx) = bounded(1);
+        #[cfg(feature = "runtime-async-std")]
+        let (close_tx, close_rx) = bounded(1);
+
         {
             let mut tx = self.close_tx.lock().await;
             *tx = Some(close_tx);
         }
 
+        #[cfg(feature = "runtime-tokio")]
         let close_tx = Arc::clone(&self.close_tx);
+
         let runtime = Arc::clone(&self.runtime);
         self.runtime.spawn(Box::pin(async move {
             loop {
@@ -59,6 +65,8 @@ impl BootstrapTcpServer {
                                 // A new task is spawned for each inbound socket. The socket is
                                 // moved to the new task and processed there.
                                 let child_pipeline_factory_fn = Arc::clone(&pipeline_factory_fn);
+
+                                #[cfg(feature = "runtime-tokio")]
                                 let child_close_rx = {
                                     let tx = close_tx.lock().await;
                                     if let Some(t) = &*tx {
@@ -68,6 +76,11 @@ impl BootstrapTcpServer {
                                         break
                                     }
                                 };
+                                #[cfg(feature = "runtime-async-std")]
+                                let child_close_rx = {
+                                    close_rx.clone()
+                                };
+
                                 runtime.spawn(Box::pin(async move {
                                     BootstrapTcpServer::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx)
                                         .await;
@@ -94,7 +107,8 @@ impl BootstrapTcpServer {
     async fn process_pipeline(
         socket: TcpStream,
         pipeline_factory_fn: Arc<PipelineFactoryFn>,
-        mut close_rx: Receiver<()>,
+        #[cfg(feature = "runtime-tokio")] mut close_rx: Receiver<()>,
+        #[cfg(feature = "runtime-async-std")] close_rx: Receiver<()>,
     ) {
         let mut buf = vec![0u8; 8196];
 
