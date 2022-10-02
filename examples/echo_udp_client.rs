@@ -5,7 +5,6 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use retty::bootstrap::bootstrap_udp_client::BootstrapUdpClient;
 use retty::channel::{
@@ -20,6 +19,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::error::Error;
+use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_udp::AsyncTransportUdp;
 use retty::transport::{AsyncTransportWrite, TransportContext};
 use retty::Message;
@@ -147,7 +147,7 @@ async fn main() -> Result<(), Error> {
         peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
     };
 
-    let mut client = BootstrapUdpClient::new();
+    let mut client = BootstrapUdpClient::new(default_runtime().unwrap());
     client.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let mut pipeline = Pipeline::new();

@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
 use retty::channel::{
@@ -17,6 +16,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::error::Error;
+use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_udp::AsyncTransportUdp;
 use retty::transport::AsyncTransportWrite;
 use retty::Message;
@@ -142,7 +142,7 @@ async fn main() -> Result<(), Error> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapUdpServer::new();
+    let mut bootstrap = BootstrapUdpServer::new(default_runtime().unwrap());
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {

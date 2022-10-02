@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::channel::handler::{
     Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
 };
 use crate::error::Error;
+use crate::runtime::sync::Mutex;
 use crate::Message;
 
 pub struct Pipeline {

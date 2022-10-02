@@ -7,9 +7,17 @@ pub mod bootstrap;
 pub mod channel;
 pub mod codec;
 pub mod error;
+pub mod runtime;
 pub mod transport;
 
-use crate::transport::TransportContext;
+#[cfg(feature = "runtime-async-std")]
+pub use crate::runtime::AsyncStdRuntime;
+
+#[cfg(feature = "runtime-tokio")]
+pub use crate::runtime::TokioRuntime;
+
+pub use crate::runtime::{default_runtime, Runtime};
+pub use crate::transport::TransportContext;
 
 pub struct Message {
     pub transport: TransportContext,

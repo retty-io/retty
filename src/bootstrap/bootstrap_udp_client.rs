@@ -1,21 +1,25 @@
 use bytes::BytesMut;
 use std::sync::Arc;
-use tokio::net::{ToSocketAddrs, UdpSocket};
 
 use crate::bootstrap::PipelineFactoryFn;
 use crate::channel::pipeline::PipelineContext;
 use crate::error::Error;
-use crate::{Message, TransportContext};
+use crate::runtime::net::{ToSocketAddrs, UdpSocket};
+use crate::{Message, Runtime, TransportContext};
 
-#[derive(Default)]
 pub struct BootstrapUdpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
+    runtime: Arc<dyn Runtime>,
     socket: Option<Arc<UdpSocket>>,
 }
 
 impl BootstrapUdpClient {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(runtime: Arc<dyn Runtime>) -> Self {
+        Self {
+            pipeline_factory_fn: None,
+            runtime,
+            socket: None,
+        }
     }
 
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
@@ -44,7 +48,7 @@ impl BootstrapUdpClient {
 
         let local_addr = socket_rd.local_addr()?;
         let pipeline = Arc::clone(&pipeline_wr);
-        tokio::spawn(async move {
+        self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
@@ -65,7 +69,7 @@ impl BootstrapUdpClient {
                     .await;
             }
             pipeline.transport_inactive().await;
-        });
+        }));
 
         Ok(pipeline_wr)
     }

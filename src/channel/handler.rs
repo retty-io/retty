@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use log::warn;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::error::Error;
+use crate::runtime::sync::Mutex;
 use crate::Message;
 
 #[async_trait]

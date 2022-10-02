@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::net::UdpSocket;
+
+use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
+use crate::runtime::net::{OwnedReadHalf, OwnedWriteHalf, UdpSocket};
 
 pub mod async_transport_tcp;
 pub mod async_transport_udp;
@@ -42,6 +43,7 @@ impl AsyncTransportAddress for OwnedReadHalf {
     }
 }
 
+#[cfg(not(feature = "runtime-async-std"))]
 #[async_trait]
 impl AsyncTransportAddress for OwnedWriteHalf {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
@@ -56,7 +58,7 @@ impl AsyncTransportAddress for OwnedWriteHalf {
 #[async_trait]
 impl AsyncTransportRead for OwnedReadHalf {
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
-        let n = tokio::io::AsyncReadExt::read(&mut self, buf).await?;
+        let n = AsyncReadExt::read(&mut self, buf).await?;
         Ok((n, None))
     }
 }
@@ -64,7 +66,7 @@ impl AsyncTransportRead for OwnedReadHalf {
 #[async_trait]
 impl AsyncTransportWrite for OwnedWriteHalf {
     async fn write(&mut self, buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
-        tokio::io::AsyncWriteExt::write(&mut self, buf).await
+        AsyncWriteExt::write(&mut self, buf).await
     }
 }
 

@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use bytes::BytesMut;
 use std::io::ErrorKind;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::channel::handler::*;
 use crate::error::Error;
+use crate::runtime::sync::Mutex;
 use crate::Message;
 
 pub mod line_based_frame_decoder;
