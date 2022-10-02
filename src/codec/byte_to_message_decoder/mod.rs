@@ -8,6 +8,8 @@ use crate::channel::handler::*;
 use crate::error::Error;
 use crate::Message;
 
+pub mod line_based_frame_decoder;
+
 pub trait MessageDecoder {
     fn id(&self) -> String;
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, Error>;

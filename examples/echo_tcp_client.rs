@@ -13,8 +13,10 @@ use retty::channel::{
     pipeline::Pipeline,
 };
 use retty::codec::{
-    byte_to_message_decoder::ByteToMessageCodec,
-    line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
+    byte_to_message_decoder::{
+        line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
+        ByteToMessageCodec,
+    },
     string_codec::StringCodec,
 };
 use retty::error::Error;

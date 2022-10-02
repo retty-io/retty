@@ -33,10 +33,6 @@ impl StringCodec {
 
 #[async_trait]
 impl InboundHandler for StringDecoder {
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
-        ctx.fire_transport_active().await;
-    }
-
     async fn read(&mut self, ctx: &mut InboundHandlerContext, mut message: Message) {
         if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
             match String::from_utf8(buf.to_vec()) {
