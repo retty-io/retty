@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -6,6 +5,7 @@ use crate::channel::handler::{
     Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
 };
 use crate::error::Error;
+use crate::Message;
 
 pub struct Pipeline {
     pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandler>>>,
@@ -201,7 +201,7 @@ impl PipelineContext {
         handler.transport_inactive(&mut ctx).await;
     }
 
-    pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
+    pub async fn read(&self, msg: Message) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -225,7 +225,7 @@ impl PipelineContext {
         handler.read_eof(&mut ctx).await;
     }
 
-    pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
+    pub async fn write(&self, msg: Message) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,

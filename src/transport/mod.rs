@@ -7,6 +7,12 @@ use tokio::net::UdpSocket;
 pub mod async_transport_tcp;
 pub mod async_transport_udp;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TransportContext {
+    pub local_addr: SocketAddr,
+    pub peer_addr: SocketAddr,
+}
+
 #[async_trait]
 pub trait AsyncTransportAddress {
     fn local_addr(&self) -> std::io::Result<SocketAddr>;

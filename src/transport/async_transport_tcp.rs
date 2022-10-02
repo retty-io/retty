@@ -1,12 +1,14 @@
-use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
-use crate::transport::AsyncTransportWrite;
-
 use async_trait::async_trait;
 use bytes::BytesMut;
-use log::trace;
-use std::any::Any;
+use log::{trace, warn};
+use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
+use crate::error::Error;
+use crate::transport::AsyncTransportWrite;
+use crate::Message;
 
 struct AsyncTransportTcpDecoder;
 struct AsyncTransportTcpEncoder {
@@ -33,20 +35,29 @@ impl InboundHandler for AsyncTransportTcpDecoder {}
 
 #[async_trait]
 impl OutboundHandler for AsyncTransportTcpEncoder {
-    async fn write(
-        &mut self,
-        _ctx: &mut OutboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
-        let buf = message.downcast_mut::<BytesMut>().unwrap();
-        if let Some(writer) = &mut self.writer {
-            if let Ok(n) = writer.write(buf, None).await {
-                trace!(
-                    "AsyncTransportTcpEncoder --> write {} of {} bytes",
-                    n,
-                    buf.len()
-                );
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, mut message: Message) {
+        if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
+            if let Some(writer) = &mut self.writer {
+                match writer.write(buf, None).await {
+                    Ok(n) => {
+                        trace!(
+                            "AsyncTransportTcpEncoder --> write {} of {} bytes",
+                            n,
+                            buf.len()
+                        );
+                    }
+                    Err(err) => {
+                        warn!("AsyncTransportTcpEncoder write error: {}", err);
+                        ctx.fire_write_exception(err.into()).await;
+                    }
+                };
             }
+        } else {
+            let err = Error::new(
+                ErrorKind::Other,
+                String::from("message.body.downcast_mut::<BytesMut> error"),
+            );
+            ctx.fire_write_exception(err).await;
         }
     }
 

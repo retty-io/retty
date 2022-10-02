@@ -1,9 +1,12 @@
-use crate::channel::handler::*;
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
-use std::any::Any;
+use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::channel::handler::*;
+use crate::error::Error;
+use crate::Message;
 
 struct StringDecoder;
 struct StringEncoder;
@@ -34,33 +37,40 @@ impl InboundHandler for StringDecoder {
         ctx.fire_transport_active().await;
     }
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
-        let buf = message.downcast_mut::<BytesMut>().unwrap();
-
-        match String::from_utf8(buf.to_vec()) {
-            Ok(mut msg) => {
-                ctx.fire_read(&mut msg).await;
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, mut message: Message) {
+        if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
+            match String::from_utf8(buf.to_vec()) {
+                Ok(msg) => {
+                    message.body = Box::new(msg);
+                    ctx.fire_read(message).await;
+                }
+                Err(err) => ctx.fire_read_exception(err.into()).await,
             }
-            Err(err) => ctx.fire_read_exception(err.into()).await,
+        } else {
+            let err = Error::new(
+                ErrorKind::Other,
+                String::from("message.body.downcast_mut::<BytesMut> error"),
+            );
+            ctx.fire_read_exception(err).await;
         }
     }
 }
 
 #[async_trait]
 impl OutboundHandler for StringEncoder {
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
-        let msg = message.downcast_ref::<String>().unwrap();
-        let mut buf = BytesMut::new();
-        buf.put(msg.as_bytes());
-        ctx.fire_write(&mut buf).await;
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, mut message: Message) {
+        if let Some(msg) = message.body.downcast_mut::<String>() {
+            let mut buf = BytesMut::new();
+            buf.put(msg.as_bytes());
+            message.body = Box::new(buf);
+            ctx.fire_write(message).await;
+        } else {
+            let err = Error::new(
+                ErrorKind::Other,
+                String::from("message.body.downcast_mut::<String> error"),
+            );
+            ctx.fire_write_exception(err).await;
+        }
     }
 }
 

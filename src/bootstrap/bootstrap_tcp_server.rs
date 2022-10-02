@@ -5,6 +5,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
+use crate::{Message, TransportContext};
 
 #[derive(Default)]
 pub struct BootstrapTcpServer {
@@ -50,6 +51,11 @@ impl BootstrapTcpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
+        let transport = TransportContext {
+            local_addr: socket_rd.local_addr().unwrap(),
+            peer_addr: socket_rd.peer_addr().unwrap(),
+        };
+
         pipeline.transport_active().await;
         while let Ok(n) = socket_rd.read(&mut buf).await {
             //TODO: add cancellation handling
@@ -57,8 +63,13 @@ impl BootstrapTcpServer {
                 pipeline.read_eof().await;
                 break;
             }
-            let mut b = BytesMut::from(&buf[..n]);
-            pipeline.read(&mut b).await;
+
+            pipeline
+                .read(Message {
+                    transport,
+                    body: Box::new(BytesMut::from(&buf[..n])),
+                })
+                .await;
         }
         pipeline.transport_inactive().await;
     }

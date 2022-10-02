@@ -4,6 +4,7 @@ use tokio::net::{ToSocketAddrs, UdpSocket};
 
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
+use crate::{Message, TransportContext};
 
 #[derive(Default)]
 pub struct BootstrapUdpServer {
@@ -29,6 +30,11 @@ impl BootstrapUdpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
+        let transport = TransportContext {
+            local_addr: socket_rd.local_addr()?,
+            peer_addr: socket_rd.peer_addr()?,
+        };
+
         tokio::spawn(async move {
             let mut buf = vec![0u8; 8196];
 
@@ -39,8 +45,13 @@ impl BootstrapUdpServer {
                     pipeline.read_eof().await;
                     break;
                 }
-                let mut b = BytesMut::from(&buf[..n]);
-                pipeline.read(&mut b).await;
+
+                pipeline
+                    .read(Message {
+                        transport,
+                        body: Box::new(BytesMut::from(&buf[..n])),
+                    })
+                    .await;
             }
             pipeline.transport_inactive().await;
         });

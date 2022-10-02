@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use log::warn;
-use std::any::Any;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::error::Error;
+use crate::Message;
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
@@ -15,11 +15,7 @@ pub trait InboundHandler: Send + Sync {
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_inactive().await;
     }
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
         ctx.fire_read(message).await;
     }
     async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
@@ -32,11 +28,7 @@ pub trait InboundHandler: Send + Sync {
 
 #[async_trait]
 pub trait OutboundHandler: Send + Sync {
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: Message) {
         ctx.fire_write(message).await;
     }
     async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
@@ -88,7 +80,7 @@ impl InboundHandlerContext {
         }
     }
 
-    pub async fn fire_read(&mut self, message: &mut (dyn Any + Send + Sync)) {
+    pub async fn fire_read(&mut self, message: Message) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
@@ -145,7 +137,7 @@ pub struct OutboundHandlerContext {
 }
 
 impl OutboundHandlerContext {
-    pub async fn fire_write(&mut self, message: &mut (dyn Any + Send + Sync)) {
+    pub async fn fire_write(&mut self, message: Message) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {

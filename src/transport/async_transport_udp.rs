@@ -1,17 +1,18 @@
-use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
-use crate::transport::AsyncTransportWrite;
-
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::any::Any;
+use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
+use crate::error::Error;
+use crate::transport::AsyncTransportWrite;
+use crate::Message;
 
 struct AsyncTransportUdpDecoder;
 struct AsyncTransportUdpEncoder {
     writer: Option<Box<dyn AsyncTransportWrite + Send + Sync>>,
-    is_server: bool,
 }
 
 pub struct AsyncTransportUdp {
@@ -20,12 +21,11 @@ pub struct AsyncTransportUdp {
 }
 
 impl AsyncTransportUdp {
-    pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>, is_server: bool) -> Self {
+    pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>) -> Self {
         AsyncTransportUdp {
             decoder: AsyncTransportUdpDecoder {},
             encoder: AsyncTransportUdpEncoder {
                 writer: Some(writer),
-                is_server,
             },
         }
     }
@@ -35,30 +35,29 @@ impl InboundHandler for AsyncTransportUdpDecoder {}
 
 #[async_trait]
 impl OutboundHandler for AsyncTransportUdpEncoder {
-    async fn write(
-        &mut self,
-        _ctx: &mut OutboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, mut message: Message) {
         if let Some(writer) = &mut self.writer {
-            let (buf, target) = if self.is_server {
-                //TODO: add TransportContext
-                let buf = message.downcast_mut::<BytesMut>().unwrap();
-                (buf, None)
-            } else if let Ok(target) = writer.peer_addr() {
-                let buf = message.downcast_mut::<BytesMut>().unwrap();
-                (buf, Some(target))
+            let target = message.transport.peer_addr;
+            if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
+                match writer.write(buf, Some(target)).await {
+                    Ok(n) => {
+                        trace!(
+                            "AsyncTransportUdpEncoder --> write {} of {} bytes",
+                            n,
+                            buf.len()
+                        );
+                    }
+                    Err(err) => {
+                        warn!("AsyncTransportUdpEncoder write error: {}", err);
+                        ctx.fire_write_exception(err.into()).await;
+                    }
+                };
             } else {
-                warn!("AsyncTransportUdpEncoderClient can't get peer_addr");
-                return;
-            };
-
-            if let Ok(n) = writer.write(buf, target).await {
-                trace!(
-                    "AsyncTransportUdpEncoder --> write {} of {} bytes",
-                    n,
-                    buf.len()
+                let err = Error::new(
+                    ErrorKind::Other,
+                    String::from("message.body.downcast_mut::<BytesMut> error"),
                 );
+                ctx.fire_write_exception(err).await;
             }
         }
     }

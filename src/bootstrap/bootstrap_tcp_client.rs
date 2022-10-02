@@ -6,6 +6,7 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 use crate::bootstrap::PipelineFactoryFn;
 use crate::channel::pipeline::PipelineContext;
 use crate::error::Error;
+use crate::{Message, TransportContext};
 
 #[derive(Default)]
 pub struct BootstrapTcpClient {
@@ -34,6 +35,10 @@ impl BootstrapTcpClient {
         let async_writer = Box::new(socket_wr);
         let pipeline_wr = Arc::new((pipeline_factory_fn)(async_writer).await);
 
+        let transport = TransportContext {
+            local_addr: socket_rd.local_addr()?,
+            peer_addr: socket_rd.peer_addr()?,
+        };
         let pipeline = Arc::clone(&pipeline_wr);
         tokio::spawn(async move {
             let mut buf = vec![0u8; 8196];
@@ -44,8 +49,13 @@ impl BootstrapTcpClient {
                     pipeline.read_eof().await;
                     break;
                 }
-                let mut b = BytesMut::from(&buf[..n]);
-                pipeline.read(&mut b).await;
+
+                pipeline
+                    .read(Message {
+                        transport,
+                        body: Box::new(BytesMut::from(&buf[..n])),
+                    })
+                    .await;
             }
             pipeline.transport_inactive().await;
         });

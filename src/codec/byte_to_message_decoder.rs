@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
-use std::any::Any;
 use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::channel::handler::*;
 use crate::error::Error;
+use crate::Message;
 
 pub trait MessageDecoder {
     fn id(&self) -> String;
@@ -48,17 +48,17 @@ impl InboundHandler for ByteToMessageDecoder {
         ctx.fire_transport_inactive().await;
     }
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext,
-        message: &mut (dyn Any + Send + Sync),
-    ) {
-        if let Some(buf) = message.downcast_mut::<BytesMut>() {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, mut message: Message) {
+        if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
             while self.transport_active {
                 match self.message_decoder.decode(buf) {
                     Ok(msg) => {
-                        if let Some(mut msg) = msg {
-                            ctx.fire_read(&mut msg).await;
+                        if let Some(msg) = msg {
+                            ctx.fire_read(Message {
+                                transport: message.transport,
+                                body: Box::new(msg),
+                            })
+                            .await;
                         } else {
                             return;
                         }
@@ -70,7 +70,10 @@ impl InboundHandler for ByteToMessageDecoder {
                 }
             }
         } else {
-            let err = Error::new(ErrorKind::Other, String::from("decoding error"));
+            let err = Error::new(
+                ErrorKind::Other,
+                String::from("message.body.downcast_mut::<BytesMut> error"),
+            );
             ctx.fire_read_exception(err).await;
         }
     }
