@@ -7,6 +7,9 @@ description = "Retty — an asynchronous Rust networking framework that makes it
 license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/retty"
 repository = "https://github.com/retty-io/retty"
+homepage = "https://retty.io"
+keywords = ["networking", "protocols"]
+categories = [ "network-programming", "asynchronous" ]
 
 [dependencies]
 bytes = "1.2.1"
