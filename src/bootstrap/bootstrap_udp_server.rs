@@ -8,8 +8,10 @@ use crate::runtime::{
     mpsc::{bounded, Sender},
     net::{ToSocketAddrs, UdpSocket},
     sync::Mutex,
+    Runtime,
 };
-use crate::{Message, Runtime, TransportContext};
+use crate::transport::TransportContext;
+use crate::Message;
 
 pub struct BootstrapUdpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,

@@ -4,9 +4,13 @@ use std::sync::Arc;
 use crate::bootstrap::PipelineFactoryFn;
 use crate::channel::pipeline::PipelineContext;
 use crate::error::Error;
-use crate::runtime::io::AsyncReadExt;
-use crate::runtime::net::{TcpStream, ToSocketAddrs};
-use crate::{Message, Runtime, TransportContext};
+use crate::runtime::{
+    io::AsyncReadExt,
+    net::{TcpStream, ToSocketAddrs},
+    Runtime,
+};
+use crate::transport::TransportContext;
+use crate::Message;
 
 pub struct BootstrapTcpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,

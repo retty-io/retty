@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::{Message, TransportContext};
+use crate::transport::TransportContext;
+use crate::Message;
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {

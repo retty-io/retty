@@ -4,8 +4,12 @@ use std::sync::Arc;
 use crate::bootstrap::PipelineFactoryFn;
 use crate::channel::pipeline::PipelineContext;
 use crate::error::Error;
-use crate::runtime::net::{ToSocketAddrs, UdpSocket};
-use crate::{Message, Runtime, TransportContext};
+use crate::runtime::{
+    net::{ToSocketAddrs, UdpSocket},
+    Runtime,
+};
+use crate::transport::TransportContext;
+use crate::Message;
 
 pub struct BootstrapUdpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,

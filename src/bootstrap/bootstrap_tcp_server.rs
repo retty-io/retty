@@ -9,8 +9,10 @@ use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
     net::{TcpListener, TcpStream, ToSocketAddrs},
     sync::Mutex,
+    Runtime,
 };
-use crate::{Message, Runtime, TransportContext};
+use crate::transport::TransportContext;
+use crate::Message;
 
 pub struct BootstrapTcpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,

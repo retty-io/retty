@@ -5,7 +5,8 @@ use crate::channel::handler::{
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::{Message, TransportContext};
+use crate::transport::TransportContext;
+use crate::Message;
 
 pub struct Pipeline {
     pub(crate) transport_ctx: TransportContext,
