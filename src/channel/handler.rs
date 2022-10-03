@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::Message;
+use crate::{Message, TransportContext};
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
@@ -132,11 +132,17 @@ impl DerefMut for InboundHandlerContext {
 
 #[derive(Default)]
 pub struct OutboundHandlerContext {
+    pub(crate) transport_ctx: Option<TransportContext>,
+
     pub(crate) next_out_ctx: Option<Arc<Mutex<OutboundHandlerContext>>>,
     pub(crate) next_out_handler: Option<Arc<Mutex<dyn OutboundHandler>>>,
 }
 
 impl OutboundHandlerContext {
+    pub fn get_transport(&self) -> TransportContext {
+        *self.transport_ctx.as_ref().unwrap()
+    }
+
     pub async fn fire_write(&mut self, message: Message) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)

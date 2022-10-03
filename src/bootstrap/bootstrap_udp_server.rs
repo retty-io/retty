@@ -75,7 +75,7 @@ impl BootstrapUdpServer {
                                     .read(Message {
                                         transport: TransportContext {
                                             local_addr,
-                                            peer_addr,
+                                            peer_addr: Some(peer_addr),
                                         },
                                         body: Box::new(BytesMut::from(&buf[..n])),
                                     })

@@ -37,25 +37,32 @@ impl InboundHandler for AsyncTransportUdpDecoder {}
 impl OutboundHandler for AsyncTransportUdpEncoder {
     async fn write(&mut self, ctx: &mut OutboundHandlerContext, mut message: Message) {
         if let Some(writer) = &mut self.writer {
-            let target = message.transport.peer_addr;
-            if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
-                match writer.write(buf, Some(target)).await {
-                    Ok(n) => {
-                        trace!(
-                            "AsyncTransportUdpEncoder --> write {} of {} bytes",
-                            n,
-                            buf.len()
-                        );
-                    }
-                    Err(err) => {
-                        warn!("AsyncTransportUdpEncoder write error: {}", err);
-                        ctx.fire_write_exception(err.into()).await;
-                    }
-                };
+            if let Some(target) = message.transport.peer_addr {
+                if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
+                    match writer.write(buf, Some(target)).await {
+                        Ok(n) => {
+                            trace!(
+                                "AsyncTransportUdpEncoder --> write {} of {} bytes",
+                                n,
+                                buf.len()
+                            );
+                        }
+                        Err(err) => {
+                            warn!("AsyncTransportUdpEncoder write error: {}", err);
+                            ctx.fire_write_exception(err.into()).await;
+                        }
+                    };
+                } else {
+                    let err = Error::new(
+                        ErrorKind::Other,
+                        String::from("message.body.downcast_mut::<BytesMut> error"),
+                    );
+                    ctx.fire_write_exception(err).await;
+                }
             } else {
                 let err = Error::new(
-                    ErrorKind::Other,
-                    String::from("message.body.downcast_mut::<BytesMut> error"),
+                    ErrorKind::NotConnected,
+                    String::from("Transport endpoint is not connected"),
                 );
                 ctx.fire_write_exception(err).await;
             }

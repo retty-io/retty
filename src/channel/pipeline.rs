@@ -5,22 +5,18 @@ use crate::channel::handler::{
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::Message;
+use crate::{Message, TransportContext};
 
 pub struct Pipeline {
+    pub(crate) transport_ctx: TransportContext,
     pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandler>>>,
     pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandler>>>,
 }
 
-impl Default for Pipeline {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Pipeline {
-    pub fn new() -> Self {
+    pub fn new(transport_ctx: TransportContext) -> Self {
         Self {
+            transport_ctx,
             inbound_handlers: Vec::new(),
             outbound_handlers: Vec::new(),
         }
@@ -48,8 +44,17 @@ impl Pipeline {
             .into_iter()
             .zip(outbound_handlers.into_iter())
         {
-            let inbound_context = Arc::new(Mutex::new(InboundHandlerContext::default()));
-            let outbound_context = Arc::new(Mutex::new(OutboundHandlerContext::default()));
+            let inbound_context = Arc::new(Mutex::new(InboundHandlerContext {
+                next_out: OutboundHandlerContext {
+                    transport_ctx: Some(self.transport_ctx),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }));
+            let outbound_context = Arc::new(Mutex::new(OutboundHandlerContext {
+                transport_ctx: Some(self.transport_ctx),
+                ..Default::default()
+            }));
 
             pipeline_context.add_back(
                 inbound_context,

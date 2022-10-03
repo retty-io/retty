@@ -44,7 +44,7 @@ impl BootstrapTcpClient {
 
         let transport = TransportContext {
             local_addr: socket_rd.local_addr()?,
-            peer_addr: socket_rd.peer_addr()?,
+            peer_addr: Some(socket_rd.peer_addr()?),
         };
         let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {

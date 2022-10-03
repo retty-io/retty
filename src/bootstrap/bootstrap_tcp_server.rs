@@ -122,7 +122,7 @@ impl BootstrapTcpServer {
 
         let transport = TransportContext {
             local_addr: socket_rd.local_addr().unwrap(),
-            peer_addr: socket_rd.peer_addr().unwrap(),
+            peer_addr: Some(socket_rd.peer_addr().unwrap()),
         };
 
         pipeline.transport_active().await;

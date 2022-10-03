@@ -11,7 +11,7 @@ pub mod async_transport_udp;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TransportContext {
     pub local_addr: SocketAddr,
-    pub peer_addr: SocketAddr,
+    pub peer_addr: Option<SocketAddr>,
 }
 
 #[async_trait]

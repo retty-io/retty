@@ -3,7 +3,7 @@ use clap::{AppSettings, Arg, Command};
 use std::io::Write;
 use std::sync::Arc;
 
-use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
+use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -17,8 +17,8 @@ use retty::codec::{
 };
 use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
-use retty::transport::async_transport_tcp::AsyncTransportTcp;
-use retty::transport::AsyncTransportWrite;
+use retty::transport::async_transport_udp::AsyncTransportUdp;
+use retty::transport::{AsyncTransportWrite, TransportContext};
 use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,10 +81,10 @@ impl Handler for EchoHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut app = Command::new("Echo TCP Server")
+    let mut app = Command::new("Echo UDP Server")
         .version("0.1.0")
         .author("Rusty Rain <y@liu.mx>")
-        .about("An example of echo tcp server")
+        .about("An example of echo udp server")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
@@ -142,13 +142,16 @@ async fn main() -> Result<(), Error> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapUdpServer::new(default_runtime().unwrap());
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-                let mut pipeline = Pipeline::new();
+                let mut pipeline = Pipeline::new(TransportContext {
+                    local_addr: sock.local_addr().unwrap(),
+                    peer_addr: sock.peer_addr().ok(),
+                });
 
-                let async_transport_handler = AsyncTransportTcp::new(sock);
+                let async_transport_handler = AsyncTransportUdp::new(sock);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));

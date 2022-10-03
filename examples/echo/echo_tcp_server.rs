@@ -1,12 +1,9 @@
 use async_trait::async_trait;
 use clap::{AppSettings, Arg, Command};
-use std::io::stdin;
 use std::io::Write;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
-use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
+use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -44,18 +41,21 @@ impl EchoHandler {
 
 #[async_trait]
 impl InboundHandler for EchoDecoder {
-    async fn read(&mut self, _ctx: &mut InboundHandlerContext, message: Message) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
         let msg = message.body.downcast_ref::<String>().unwrap();
-        println!("received back: {}", msg);
-    }
-
-    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
-        println!("received exception: {}", error);
-        ctx.fire_close().await;
+        println!("handling {}", msg);
+        if msg == "close" {
+            ctx.fire_close().await;
+        } else {
+            ctx.fire_write(Message {
+                transport: message.transport,
+                body: Box::new(format!("{}\r\n", msg)),
+            })
+            .await;
+        }
     }
 
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
-        println!("EOF received :(");
         ctx.fire_close().await;
     }
 }
@@ -81,10 +81,10 @@ impl Handler for EchoHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut app = Command::new("Echo TCP Client")
+    let mut app = Command::new("Echo TCP Server")
         .version("0.1.0")
         .author("Rusty Rain <y@liu.mx>")
-        .about("An example of echo tcp client")
+        .about("An example of echo tcp server")
         .setting(AppSettings::DeriveDisplayOrder)
         .subcommand_negates_reqs(true)
         .arg(
@@ -140,56 +140,42 @@ async fn main() -> Result<(), Error> {
             .init();
     }
 
-    println!("Connecting {}:{}...", host, port);
+    println!("listening {}:{}...", host, port);
 
-    let transport = TransportContext {
-        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
+    let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
+    bootstrap
+        .pipeline(Box::new(
+            move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+                let mut pipeline = Pipeline::new(TransportContext {
+                    local_addr: sock.local_addr().unwrap(),
+                    peer_addr: sock.peer_addr().ok(),
+                });
+
+                let async_transport_handler = AsyncTransportTcp::new(sock);
+                let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = StringCodec::new();
+                let echo_handler = EchoHandler::new();
+
+                pipeline.add_back(async_transport_handler);
+                pipeline.add_back(line_based_frame_decoder_handler);
+                pipeline.add_back(string_codec_handler);
+                pipeline.add_back(echo_handler);
+
+                Box::pin(async move { pipeline.finalize().await })
+            },
+        ))
+        .bind(format!("{}:{}", host, port))
+        .await?;
+
+    println!("Press ctrl-c to stop");
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            bootstrap.stop().await;
+        }
     };
-
-    let mut client = BootstrapTcpClient::new(default_runtime().unwrap());
-    client.pipeline(Box::new(
-        move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-            let mut pipeline = Pipeline::new();
-
-            let async_transport_handler = AsyncTransportTcp::new(sock);
-            let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-            ));
-            let string_codec_handler = StringCodec::new();
-            let echo_handler = EchoHandler::new();
-
-            pipeline.add_back(async_transport_handler);
-            pipeline.add_back(line_based_frame_decoder_handler);
-            pipeline.add_back(string_codec_handler);
-            pipeline.add_back(echo_handler);
-
-            Box::pin(async move { pipeline.finalize().await })
-        },
-    ));
-
-    let pipeline = client.connect(transport.peer_addr).await?;
-
-    println!("Enter bye to stop");
-    let mut buffer = String::new();
-    while stdin().read_line(&mut buffer).is_ok() {
-        match buffer.trim_end() {
-            "" => break,
-            line => {
-                pipeline
-                    .write(Message {
-                        transport,
-                        body: Box::new(format!("{}\r\n", line)),
-                    })
-                    .await;
-                if line == "bye" {
-                    pipeline.close().await;
-                    break;
-                }
-            }
-        };
-        buffer.clear();
-    }
 
     Ok(())
 }
