@@ -33,7 +33,7 @@ impl Pipeline {
         self.outbound_handlers.insert(0, outbound);
     }
 
-    pub async fn finalize(&mut self) -> PipelineContext {
+    pub async fn finalize(mut self) -> PipelineContext {
         let mut pipeline_context = PipelineContext::new();
 
         let (inbound_handlers, outbound_handlers) = (
