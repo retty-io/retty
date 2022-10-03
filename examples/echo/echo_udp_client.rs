@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use clap::{AppSettings, Arg, Command};
+use clap::Parser;
 use std::io::stdin;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -79,51 +79,26 @@ impl Handler for EchoHandler {
     }
 }
 
+#[derive(Parser)]
+#[command(name = "Echo UDP Client")]
+#[command(author = "Rusty Rain <y@liu.mx>")]
+#[command(version = "0.1.0")]
+#[command(about = "An example of echo udp client", long_about = None)]
+struct Cli {
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(long, default_value_t = format!("0.0.0.0"))]
+    host: String,
+    #[arg(long, default_value_t = 8080)]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut app = Command::new("Echo UDP Client")
-        .version("0.1.0")
-        .author("Rusty Rain <y@liu.mx>")
-        .about("An example of echo udp client")
-        .setting(AppSettings::DeriveDisplayOrder)
-        .subcommand_negates_reqs(true)
-        .arg(
-            Arg::new("FULLHELP")
-                .help("Prints more detailed help information")
-                .long("fullhelp"),
-        )
-        .arg(
-            Arg::new("debug")
-                .long("debug")
-                .short('d')
-                .help("Prints debug log information"),
-        )
-        .arg(
-            Arg::new("host")
-                .long("host")
-                .short('h')
-                .default_value("0.0.0.0")
-                .help("Echo server address"),
-        )
-        .arg(
-            Arg::new("port")
-                .long("port")
-                .short('p')
-                .default_value("8080")
-                .help("Echo server port"),
-        );
-
-    let matches = app.clone().get_matches();
-
-    if matches.is_present("FULLHELP") {
-        app.print_long_help().unwrap();
-        std::process::exit(0);
-    }
-
-    let host = matches.value_of("host").unwrap().to_owned();
-    let port = matches.value_of("port").unwrap().to_owned();
-    let debug = matches.is_present("debug");
-    if debug {
+    let cli = Cli::parse();
+    let host = cli.host;
+    let port = cli.port;
+    if cli.debug {
         env_logger::Builder::new()
             .format(|buf, record| {
                 writeln!(
