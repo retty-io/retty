@@ -1,14 +1,13 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::io::ErrorKind;
 use std::sync::Arc;
 
-use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
-use crate::error::Error;
+use crate::channel::handler::{
+    Handler, InboundHandler, OutboundHandler, OutboundHandlerAdapter, OutboundHandlerContext,
+};
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
-use crate::Message;
 
 struct AsyncTransportTcpDecoder;
 struct AsyncTransportTcpEncoder {
@@ -35,35 +34,30 @@ impl InboundHandler for AsyncTransportTcpDecoder {}
 
 #[async_trait]
 impl OutboundHandler for AsyncTransportTcpEncoder {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, mut message: Message) {
-        if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
-            if let Some(writer) = &mut self.writer {
-                match writer.write(buf, None).await {
-                    Ok(n) => {
-                        trace!(
-                            "AsyncTransportTcpEncoder --> write {} of {} bytes",
-                            n,
-                            buf.len()
-                        );
-                    }
-                    Err(err) => {
-                        warn!("AsyncTransportTcpEncoder write error: {}", err);
-                        ctx.fire_write_exception(err.into()).await;
-                    }
-                };
-            }
-        } else {
-            let err = Error::new(
-                ErrorKind::Other,
-                String::from("message.body.downcast_mut::<BytesMut> error"),
-            );
-            ctx.fire_write_exception(err).await;
-        }
-    }
-
     async fn close(&mut self, _ctx: &mut OutboundHandlerContext) {
         trace!("close socket");
         self.writer.take();
+    }
+}
+
+#[async_trait]
+impl OutboundHandlerAdapter<BytesMut> for AsyncTransportTcpEncoder {
+    async fn write_type(&mut self, ctx: &mut OutboundHandlerContext, message: &mut BytesMut) {
+        if let Some(writer) = &mut self.writer {
+            match writer.write(message, None).await {
+                Ok(n) => {
+                    trace!(
+                        "AsyncTransportTcpEncoder --> write {} of {} bytes",
+                        n,
+                        message.len()
+                    );
+                }
+                Err(err) => {
+                    warn!("AsyncTransportTcpEncoder write error: {}", err);
+                    ctx.fire_write_exception(err.into()).await;
+                }
+            };
+        }
     }
 }
 

@@ -8,8 +8,6 @@ use crate::runtime::{
     net::{ToSocketAddrs, UdpSocket},
     Runtime,
 };
-use crate::transport::TransportContext;
-use crate::Message;
 
 pub struct BootstrapUdpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
@@ -50,27 +48,19 @@ impl BootstrapUdpClient {
         let async_writer = Box::new(socket_wr);
         let pipeline_wr = Arc::new((pipeline_factory_fn)(async_writer).await);
 
-        let local_addr = socket_rd.local_addr()?;
+        let _local_addr = socket_rd.local_addr()?;
         let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-            while let Ok((n, peer_addr)) = socket_rd.recv_from(&mut buf).await {
+            while let Ok((n, _peer_addr)) = socket_rd.recv_from(&mut buf).await {
                 if n == 0 {
                     pipeline.read_eof().await;
                     break;
                 }
 
-                pipeline
-                    .read(Message {
-                        transport: TransportContext {
-                            local_addr,
-                            peer_addr: Some(peer_addr),
-                        },
-                        body: Box::new(BytesMut::from(&buf[..n])),
-                    })
-                    .await;
+                pipeline.read(&mut BytesMut::from(&buf[..n])).await;
             }
             pipeline.transport_inactive().await;
         }));

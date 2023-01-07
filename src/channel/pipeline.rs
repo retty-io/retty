@@ -207,7 +207,7 @@ impl PipelineContext {
         handler.transport_inactive(&mut ctx).await;
     }
 
-    pub async fn read(&self, msg: Message) {
+    pub async fn read(&self, msg: &mut Message) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -231,7 +231,7 @@ impl PipelineContext {
         handler.read_eof(&mut ctx).await;
     }
 
-    pub async fn write(&self, msg: Message) {
+    pub async fn write(&self, msg: &mut Message) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,

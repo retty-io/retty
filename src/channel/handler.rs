@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use log::warn;
+use std::io::ErrorKind;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ pub trait InboundHandler: Send + Sync {
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_inactive().await;
     }
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
         ctx.fire_read(message).await;
     }
     async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
@@ -28,8 +29,25 @@ pub trait InboundHandler: Send + Sync {
 }
 
 #[async_trait]
+pub trait InboundHandlerAdapter<T: Send + Sync + 'static>: InboundHandler {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
+        if let Some(msg) = message.downcast_mut::<T>() {
+            self.read_type(ctx, msg).await;
+        } else {
+            ctx.fire_read_exception(Error::new(
+                ErrorKind::Other,
+                String::from("message.downcast_mut error"),
+            ))
+            .await;
+        }
+    }
+
+    async fn read_type(&mut self, ctx: &mut InboundHandlerContext, message: &mut T);
+}
+
+#[async_trait]
 pub trait OutboundHandler: Send + Sync {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: Message) {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message) {
         ctx.fire_write(message).await;
     }
     async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
@@ -37,6 +55,25 @@ pub trait OutboundHandler: Send + Sync {
     }
     async fn close(&mut self, ctx: &mut OutboundHandlerContext) {
         ctx.fire_close().await;
+    }
+}
+
+#[async_trait]
+pub trait OutboundHandlerAdapter<T: Send + Sync + 'static>: OutboundHandler {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message) {
+        if let Some(msg) = message.downcast_mut::<T>() {
+            self.write_type(ctx, msg).await;
+        } else {
+            ctx.fire_write_exception(Error::new(
+                ErrorKind::Other,
+                String::from("message.downcast_mut error"),
+            ))
+            .await;
+        }
+    }
+
+    async fn write_type(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
+        ctx.fire_write(message).await;
     }
 }
 
@@ -81,7 +118,7 @@ impl InboundHandlerContext {
         }
     }
 
-    pub async fn fire_read(&mut self, message: Message) {
+    pub async fn fire_read(&mut self, message: &mut Message) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
@@ -144,7 +181,7 @@ impl OutboundHandlerContext {
         *self.transport_ctx.as_ref().unwrap()
     }
 
-    pub async fn fire_write(&mut self, message: Message) {
+    pub async fn fire_write(&mut self, message: &mut Message) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {
