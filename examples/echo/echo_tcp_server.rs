@@ -4,6 +4,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
+use retty::channel::handler::InboundHandlerAdapter;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -19,7 +20,6 @@ use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
 use retty::transport::{AsyncTransportWrite, TransportContext};
-use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,22 +41,20 @@ impl EchoHandler {
 
 #[async_trait]
 impl InboundHandler for EchoDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
-        let msg = message.body.downcast_ref::<String>().unwrap();
-        println!("handling {}", msg);
-        if msg == "close" {
-            ctx.fire_close().await;
-        } else {
-            ctx.fire_write(Message {
-                transport: message.transport,
-                body: Box::new(format!("{}\r\n", msg)),
-            })
-            .await;
-        }
-    }
-
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_close().await;
+    }
+}
+
+#[async_trait]
+impl InboundHandlerAdapter<String> for EchoDecoder {
+    async fn read_type(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
+        println!("handling {}", message);
+        if message == "close" {
+            ctx.fire_close().await;
+        } else {
+            ctx.fire_write(message).await;
+        }
     }
 }
 

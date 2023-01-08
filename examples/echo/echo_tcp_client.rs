@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
+use retty::channel::handler::InboundHandlerAdapter;
 use retty::channel::{
     handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
@@ -22,7 +23,6 @@ use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
 use retty::transport::{AsyncTransportWrite, TransportContext};
-use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,11 +44,6 @@ impl EchoHandler {
 
 #[async_trait]
 impl InboundHandler for EchoDecoder {
-    async fn read(&mut self, _ctx: &mut InboundHandlerContext, message: Message) {
-        let msg = message.body.downcast_ref::<String>().unwrap();
-        print!("received back: {}", msg);
-    }
-
     async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         println!("received exception: {}", error);
         ctx.fire_close().await;
@@ -57,6 +52,13 @@ impl InboundHandler for EchoDecoder {
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
         println!("EOF received :(");
         ctx.fire_close().await;
+    }
+}
+
+#[async_trait]
+impl InboundHandlerAdapter<String> for EchoDecoder {
+    async fn read_type(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
+        print!("received back: {}", message);
     }
 }
 
@@ -156,12 +158,7 @@ async fn main() -> Result<(), Error> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline
-                    .write(Message {
-                        transport,
-                        body: Box::new(format!("{}\r\n", line)),
-                    })
-                    .await;
+                pipeline.write(&mut format!("{}\r\n", line)).await;
                 if line == "bye" {
                     pipeline.close().await;
                     break;
