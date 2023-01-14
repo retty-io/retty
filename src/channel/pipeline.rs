@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+    Handler, InboundHandler, InboundHandlerContext, Message, OutboundHandler,
+    OutboundHandlerContext,
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::TransportContext;
-use crate::Message;
 
 pub struct Pipeline {
     pub(crate) transport_ctx: TransportContext,

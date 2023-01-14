@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use log::warn;
+use std::any::Any;
 use std::io::ErrorKind;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -7,7 +8,8 @@ use std::sync::Arc;
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::TransportContext;
-use crate::Message;
+
+pub type Message = dyn Any + Send + Sync;
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
