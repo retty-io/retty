@@ -4,7 +4,7 @@ use log::{trace, warn};
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, OutboundHandler, OutboundHandlerAdapter, OutboundHandlerContext,
+    Handler, InboundHandler, OutboundHandler, OutboundHandlerContext, OutboundHandlerGeneric,
 };
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
@@ -41,8 +41,8 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
 }
 
 #[async_trait]
-impl OutboundHandlerAdapter<BytesMut> for AsyncTransportUdpEncoder {
-    async fn write_type(&mut self, ctx: &mut OutboundHandlerContext, message: &mut BytesMut) {
+impl OutboundHandlerGeneric<BytesMut> for AsyncTransportUdpEncoder {
+    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut BytesMut) {
         if let Some(writer) = &mut self.writer {
             //TODO: if let Some(target) = message.transport.peer_addr {
             match writer.write(message, None /*Some(target)*/).await {
@@ -80,7 +80,8 @@ impl Handler for AsyncTransportUdp {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder = self.decoder;
+        let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

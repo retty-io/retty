@@ -50,8 +50,8 @@ impl InboundHandler for ByteToMessageDecoder {
 }
 
 #[async_trait]
-impl InboundHandlerAdapter<BytesMut> for ByteToMessageDecoder {
-    async fn read_type(&mut self, ctx: &mut InboundHandlerContext, message: &mut BytesMut) {
+impl InboundHandlerGeneric<BytesMut> for ByteToMessageDecoder {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut BytesMut) {
         while self.transport_active {
             match self.message_decoder.decode(message) {
                 Ok(msg) => {
@@ -83,7 +83,8 @@ impl Handler for ByteToMessageCodec {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
+        let encoder = self.encoder;
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

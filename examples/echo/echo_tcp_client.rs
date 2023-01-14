@@ -7,9 +7,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
-use retty::channel::handler::InboundHandlerAdapter;
 use retty::channel::{
-    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
+    handler::{
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
+    },
     pipeline::Pipeline,
 };
 use retty::codec::{
@@ -56,8 +57,8 @@ impl InboundHandler for EchoDecoder {
 }
 
 #[async_trait]
-impl InboundHandlerAdapter<String> for EchoDecoder {
-    async fn read_type(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
+impl InboundHandlerGeneric<String> for EchoDecoder {
+    async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
         print!("received back: {}", message);
     }
 }
@@ -76,7 +77,8 @@ impl Handler for EchoHandler {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
+        let encoder = self.encoder;
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

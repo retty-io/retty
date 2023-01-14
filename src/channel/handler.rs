@@ -31,10 +31,17 @@ pub trait InboundHandler: Send + Sync {
 }
 
 #[async_trait]
-pub trait InboundHandlerAdapter<T: Send + Sync + 'static>: InboundHandler {
+pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
+        ctx.fire_read(message).await;
+    }
+}
+
+#[async_trait]
+impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<T>> {
     async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
         if let Some(msg) = message.downcast_mut::<T>() {
-            self.read_type(ctx, msg).await;
+            self.read_generic(ctx, msg).await;
         } else {
             ctx.fire_read_exception(Error::new(
                 ErrorKind::Other,
@@ -43,8 +50,6 @@ pub trait InboundHandlerAdapter<T: Send + Sync + 'static>: InboundHandler {
             .await;
         }
     }
-
-    async fn read_type(&mut self, ctx: &mut InboundHandlerContext, message: &mut T);
 }
 
 #[async_trait]
@@ -61,10 +66,17 @@ pub trait OutboundHandler: Send + Sync {
 }
 
 #[async_trait]
-pub trait OutboundHandlerAdapter<T: Send + Sync + 'static>: OutboundHandler {
+pub trait OutboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
+    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
+        ctx.fire_write(message).await;
+    }
+}
+
+#[async_trait]
+impl<T: Send + Sync + 'static> OutboundHandler for Box<dyn OutboundHandlerGeneric<T>> {
     async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message) {
         if let Some(msg) = message.downcast_mut::<T>() {
-            self.write_type(ctx, msg).await;
+            self.write_generic(ctx, msg).await;
         } else {
             ctx.fire_write_exception(Error::new(
                 ErrorKind::Other,
@@ -73,16 +85,11 @@ pub trait OutboundHandlerAdapter<T: Send + Sync + 'static>: OutboundHandler {
             .await;
         }
     }
-
-    async fn write_type(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
-        ctx.fire_write(message).await;
-    }
 }
 
 pub trait Handler: Send + Sync {
     fn id(&self) -> String;
 
-    #[allow(clippy::type_complexity)]
     fn split(
         self,
     ) -> (

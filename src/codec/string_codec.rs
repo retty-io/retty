@@ -28,11 +28,9 @@ impl StringCodec {
     }
 }
 
-impl InboundHandler for StringDecoder {}
-
 #[async_trait]
-impl InboundHandlerAdapter<BytesMut> for StringDecoder {
-    async fn read_type(&mut self, ctx: &mut InboundHandlerContext, message: &mut BytesMut) {
+impl InboundHandlerGeneric<BytesMut> for StringDecoder {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut BytesMut) {
         match String::from_utf8(message.to_vec()) {
             Ok(mut msg) => {
                 ctx.fire_read(&mut msg).await;
@@ -42,11 +40,9 @@ impl InboundHandlerAdapter<BytesMut> for StringDecoder {
     }
 }
 
-impl OutboundHandler for StringEncoder {}
-
 #[async_trait]
-impl OutboundHandlerAdapter<String> for StringEncoder {
-    async fn write_type(&mut self, ctx: &mut OutboundHandlerContext, message: &mut String) {
+impl OutboundHandlerGeneric<String> for StringEncoder {
+    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut String) {
         let mut buf = BytesMut::new();
         buf.put(message.as_bytes());
         let mut bytes = buf.freeze();
@@ -65,7 +61,8 @@ impl Handler for StringCodec {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }
