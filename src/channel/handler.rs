@@ -45,7 +45,7 @@ impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<
         } else {
             ctx.fire_read_exception(Error::new(
                 ErrorKind::Other,
-                String::from("message.downcast_mut error"),
+                format!("message.downcast_mut error for {}", ctx.id),
             ))
             .await;
         }
@@ -80,7 +80,7 @@ impl<T: Send + Sync + 'static> OutboundHandler for Box<dyn OutboundHandlerGeneri
         } else {
             ctx.fire_write_exception(Error::new(
                 ErrorKind::Other,
-                String::from("message.downcast_mut error"),
+                format!("message.downcast_mut error for {}", ctx.id),
             ))
             .await;
         }

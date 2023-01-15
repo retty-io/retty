@@ -45,8 +45,7 @@ impl OutboundHandlerGeneric<String> for StringEncoder {
     async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut String) {
         let mut buf = BytesMut::new();
         buf.put(message.as_bytes());
-        let mut bytes = buf.freeze();
-        ctx.fire_write(&mut bytes).await;
+        ctx.fire_write(&mut buf).await;
     }
 }
 
