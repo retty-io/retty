@@ -100,6 +100,8 @@ pub trait Handler: Send + Sync {
 
 #[derive(Default)]
 pub struct InboundHandlerContext {
+    pub(crate) id: String,
+
     pub(crate) next_in_ctx: Option<Arc<Mutex<InboundHandlerContext>>>,
     pub(crate) next_in_handler: Option<Arc<Mutex<dyn InboundHandler>>>,
 
@@ -179,6 +181,7 @@ impl DerefMut for InboundHandlerContext {
 
 #[derive(Default)]
 pub struct OutboundHandlerContext {
+    pub(crate) id: String,
     pub(crate) transport_ctx: Option<TransportContext>,
 
     pub(crate) next_out_ctx: Option<Arc<Mutex<OutboundHandlerContext>>>,
