@@ -13,9 +13,9 @@ use retty::channel::{
 };
 use retty::codec::byte_to_message_decoder::{
     line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
-    TaggedByteToMessageCodec,
+    tagged::TaggedByteToMessageCodec,
 };
-use retty::codec::string_codec::{TaggedString, TaggedStringCodec};
+use retty::codec::string_codec::tagged::{TaggedString, TaggedStringCodec};
 use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_udp::AsyncTransportUdp;
@@ -46,7 +46,7 @@ impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
             "handling {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
-        if msg.message == "close" {
+        if msg.message == "bye" {
             ctx.fire_close().await;
         } else {
             ctx.fire_write(&mut TaggedString {

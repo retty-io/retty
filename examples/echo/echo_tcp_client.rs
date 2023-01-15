@@ -47,7 +47,7 @@ impl EchoHandler {
 #[async_trait]
 impl InboundHandlerGeneric<String> for EchoDecoder {
     async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
-        print!("received back: {}", message);
+        println!("received back: {}", message);
     }
     async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         println!("received exception: {}", error);
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Error> {
 
             let async_transport_handler = AsyncTransportTcp::new(sock);
             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, false, TerminatorType::BOTH),
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = StringCodec::new();
             let echo_handler = EchoHandler::new();
@@ -155,11 +155,11 @@ async fn main() -> Result<(), Error> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline.write(&mut format!("{}\r\n", line)).await;
                 if line == "bye" {
                     pipeline.close().await;
                     break;
                 }
+                pipeline.write(&mut format!("{}\r\n", line)).await;
             }
         };
         buffer.clear();

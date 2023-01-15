@@ -45,11 +45,7 @@ impl EchoHandler {
 impl InboundHandlerGeneric<String> for EchoDecoder {
     async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
         println!("handling {}", message);
-        if message == "close" {
-            ctx.fire_close().await;
-        } else {
-            ctx.fire_write(&mut format!("{}\r\n", message)).await;
-        }
+        ctx.fire_write(&mut format!("{}\r\n", message)).await;
     }
     async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_close().await;

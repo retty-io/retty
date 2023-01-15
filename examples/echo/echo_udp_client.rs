@@ -16,9 +16,9 @@ use retty::channel::{
 };
 use retty::codec::byte_to_message_decoder::{
     line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
-    TaggedByteToMessageCodec,
+    tagged::TaggedByteToMessageCodec,
 };
-use retty::codec::string_codec::{TaggedString, TaggedStringCodec};
+use retty::codec::string_codec::tagged::{TaggedString, TaggedStringCodec};
 use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_udp::AsyncTransportUdp;
@@ -45,7 +45,7 @@ impl TaggedEchoHandler {
 #[async_trait]
 impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
     async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, msg: &mut TaggedString) {
-        print!(
+        println!(
             "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
@@ -132,7 +132,7 @@ async fn main() -> Result<(), Error> {
 
             let async_transport_handler = AsyncTransportUdp::new(sock);
             let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, false, TerminatorType::BOTH),
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = TaggedStringCodec::new();
             let echo_handler = TaggedEchoHandler::new();

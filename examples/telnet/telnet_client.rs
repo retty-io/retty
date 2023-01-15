@@ -131,7 +131,7 @@ async fn main() -> Result<(), Error> {
 
             let async_transport_handler = AsyncTransportTcp::new(sock);
             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, false, TerminatorType::BOTH),
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = StringCodec::new();
             let telnet_handler = TelnetHandler::new();
