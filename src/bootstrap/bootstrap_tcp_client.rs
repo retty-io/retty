@@ -1,4 +1,5 @@
 use bytes::BytesMut;
+use log::debug;
 use std::sync::Arc;
 
 use crate::bootstrap::PipelineFactoryFn;
@@ -58,6 +59,7 @@ impl BootstrapTcpClient {
                     pipeline.read_eof().await;
                     break;
                 }
+                debug!("pipeline recv {} bytes", n);
                 pipeline.read(&mut BytesMut::from(&buf[..n])).await;
             }
             pipeline.transport_inactive().await;

@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use log::{trace, warn};
+use log::{debug, trace, warn};
 use std::sync::Arc;
 
 use crate::bootstrap::PipelineFactoryFn;
@@ -139,6 +139,7 @@ impl BootstrapTcpServer {
                                 break;
                             }
 
+                            debug!("pipeline recv {} bytes", n);
                             pipeline.read(&mut BytesMut::from(&buf[..n])).await;
                         }
                         Err(err) => {
