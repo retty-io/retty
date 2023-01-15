@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+    Handler, InboundHandler, InboundHandlerContext, Message, OutboundHandler,
+    OutboundHandlerContext,
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::TransportContext;
-use crate::Message;
 
 pub struct Pipeline {
     pub(crate) transport_ctx: TransportContext,
+    pub(crate) handler_ids: Vec<String>,
     pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandler>>>,
     pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandler>>>,
 }
@@ -18,17 +19,20 @@ impl Pipeline {
     pub fn new(transport_ctx: TransportContext) -> Self {
         Self {
             transport_ctx,
+            handler_ids: Vec::new(),
             inbound_handlers: Vec::new(),
             outbound_handlers: Vec::new(),
         }
     }
     pub fn add_back(&mut self, handler: impl Handler) {
+        self.handler_ids.push(handler.id());
         let (inbound, outbound) = handler.split();
         self.inbound_handlers.push(inbound);
         self.outbound_handlers.push(outbound);
     }
 
     pub fn add_front(&mut self, handler: impl Handler) {
+        self.handler_ids.insert(0, handler.id());
         let (inbound, outbound) = handler.split();
         self.inbound_handlers.insert(0, inbound);
         self.outbound_handlers.insert(0, outbound);
@@ -37,15 +41,18 @@ impl Pipeline {
     pub async fn finalize(mut self) -> PipelineContext {
         let mut pipeline_context = PipelineContext::new();
 
-        let (inbound_handlers, outbound_handlers) = (
+        let (handler_ids, inbound_handlers, outbound_handlers) = (
+            self.handler_ids.drain(..),
             self.inbound_handlers.drain(..),
             self.outbound_handlers.drain(..),
         );
-        for (inbound_handler, outbound_handler) in inbound_handlers
-            .into_iter()
-            .zip(outbound_handlers.into_iter())
-        {
+        for (handler_id, (inbound_handler, outbound_handler)) in handler_ids.into_iter().zip(
+            inbound_handlers
+                .into_iter()
+                .zip(outbound_handlers.into_iter()),
+        ) {
             let inbound_context = Arc::new(Mutex::new(InboundHandlerContext {
+                id: handler_id.clone(),
                 next_out: OutboundHandlerContext {
                     transport_ctx: Some(self.transport_ctx),
                     ..Default::default()
@@ -53,6 +60,7 @@ impl Pipeline {
                 ..Default::default()
             }));
             let outbound_context = Arc::new(Mutex::new(OutboundHandlerContext {
+                id: handler_id,
                 transport_ctx: Some(self.transport_ctx),
                 ..Default::default()
             }));
@@ -207,7 +215,7 @@ impl PipelineContext {
         handler.transport_inactive(&mut ctx).await;
     }
 
-    pub async fn read(&self, msg: Message) {
+    pub async fn read(&self, msg: &mut Message) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -231,7 +239,7 @@ impl PipelineContext {
         handler.read_eof(&mut ctx).await;
     }
 
-    pub async fn write(&self, msg: Message) {
+    pub async fn write(&self, msg: &mut Message) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,

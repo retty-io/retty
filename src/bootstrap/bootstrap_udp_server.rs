@@ -10,8 +10,6 @@ use crate::runtime::{
     sync::Mutex,
     Runtime,
 };
-use crate::transport::TransportContext;
-use crate::Message;
 
 pub struct BootstrapUdpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
@@ -42,7 +40,7 @@ impl BootstrapUdpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
-        let local_addr = socket_rd.local_addr()?;
+        let _local_addr = socket_rd.local_addr()?;
 
         #[cfg(feature = "runtime-tokio")]
         let (close_tx, mut close_rx) = bounded(1);
@@ -67,20 +65,14 @@ impl BootstrapUdpServer {
                     }
                     res = socket_rd.recv_from(&mut buf) => {
                         match res {
-                            Ok((n, peer_addr)) => {
+                            Ok((n, _peer_addr)) => {
                                 if n == 0 {
                                     pipeline.read_eof().await;
                                     break;
                                 }
 
                                 pipeline
-                                    .read(Message {
-                                        transport: TransportContext {
-                                            local_addr,
-                                            peer_addr: Some(peer_addr),
-                                        },
-                                        body: Box::new(BytesMut::from(&buf[..n])),
-                                    })
+                                    .read(&mut BytesMut::from(&buf[..n]))
                                     .await;
                             }
                             Err(err) => {

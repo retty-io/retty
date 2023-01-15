@@ -1,49 +1,115 @@
 use async_trait::async_trait;
 use log::warn;
+use std::any::Any;
+use std::io::ErrorKind;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::TransportContext;
-use crate::Message;
+
+pub type Message = dyn Any + Send + Sync;
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext);
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext);
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message);
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error);
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext);
+}
+
+#[async_trait]
+pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
+    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_inactive_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_inactive().await;
     }
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
         ctx.fire_read(message).await;
     }
-    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         ctx.fire_read_exception(error).await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_read_eof().await;
     }
 }
 
 #[async_trait]
+impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<T>> {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+        self.transport_active_generic(ctx).await;
+    }
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
+        self.transport_inactive_generic(ctx).await;
+    }
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
+        if let Some(msg) = message.downcast_mut::<T>() {
+            self.read_generic(ctx, msg).await;
+        } else {
+            ctx.fire_read_exception(Error::new(
+                ErrorKind::Other,
+                format!("message.downcast_mut error for {}", ctx.id),
+            ))
+            .await;
+        }
+    }
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+        self.read_exception_generic(ctx, error).await;
+    }
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+        self.read_eof_generic(ctx).await;
+    }
+}
+
+#[async_trait]
 pub trait OutboundHandler: Send + Sync {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: Message) {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message);
+    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error);
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext);
+}
+
+#[async_trait]
+pub trait OutboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
+    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
         ctx.fire_write(message).await;
     }
-    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
+    async fn write_exception_generic(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
         ctx.fire_write_exception(error).await;
     }
-    async fn close(&mut self, ctx: &mut OutboundHandlerContext) {
+    async fn close_generic(&mut self, ctx: &mut OutboundHandlerContext) {
         ctx.fire_close().await;
+    }
+}
+
+#[async_trait]
+impl<T: Send + Sync + 'static> OutboundHandler for Box<dyn OutboundHandlerGeneric<T>> {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message) {
+        if let Some(msg) = message.downcast_mut::<T>() {
+            self.write_generic(ctx, msg).await;
+        } else {
+            ctx.fire_write_exception(Error::new(
+                ErrorKind::Other,
+                format!("message.downcast_mut error for {}", ctx.id),
+            ))
+            .await;
+        }
+    }
+    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
+        self.write_exception_generic(ctx, error).await;
+    }
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext) {
+        self.close_generic(ctx).await;
     }
 }
 
 pub trait Handler: Send + Sync {
     fn id(&self) -> String;
 
-    #[allow(clippy::type_complexity)]
     fn split(
         self,
     ) -> (
@@ -54,6 +120,8 @@ pub trait Handler: Send + Sync {
 
 #[derive(Default)]
 pub struct InboundHandlerContext {
+    pub(crate) id: String,
+
     pub(crate) next_in_ctx: Option<Arc<Mutex<InboundHandlerContext>>>,
     pub(crate) next_in_handler: Option<Arc<Mutex<dyn InboundHandler>>>,
 
@@ -81,7 +149,7 @@ impl InboundHandlerContext {
         }
     }
 
-    pub async fn fire_read(&mut self, message: Message) {
+    pub async fn fire_read(&mut self, message: &mut Message) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
@@ -133,6 +201,7 @@ impl DerefMut for InboundHandlerContext {
 
 #[derive(Default)]
 pub struct OutboundHandlerContext {
+    pub(crate) id: String,
     pub(crate) transport_ctx: Option<TransportContext>,
 
     pub(crate) next_out_ctx: Option<Arc<Mutex<OutboundHandlerContext>>>,
@@ -144,7 +213,7 @@ impl OutboundHandlerContext {
         *self.transport_ctx.as_ref().unwrap()
     }
 
-    pub async fn fire_write(&mut self, message: Message) {
+    pub async fn fire_write(&mut self, message: &mut Message) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {

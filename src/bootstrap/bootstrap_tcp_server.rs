@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use log::{trace, warn};
+use log::{debug, trace, warn};
 use std::sync::Arc;
 
 use crate::bootstrap::PipelineFactoryFn;
@@ -11,8 +11,6 @@ use crate::runtime::{
     sync::Mutex,
     Runtime,
 };
-use crate::transport::TransportContext;
-use crate::Message;
 
 pub struct BootstrapTcpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
@@ -122,11 +120,10 @@ impl BootstrapTcpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
-        let transport = TransportContext {
+        /*let transport = TransportContext {
             local_addr: socket_rd.local_addr().unwrap(),
             peer_addr: Some(socket_rd.peer_addr().unwrap()),
-        };
-
+        };*/
         pipeline.transport_active().await;
         loop {
             tokio::select! {
@@ -142,12 +139,8 @@ impl BootstrapTcpServer {
                                 break;
                             }
 
-                            pipeline
-                                .read(Message {
-                                    transport,
-                                    body: Box::new(BytesMut::from(&buf[..n])),
-                                })
-                                .await;
+                            debug!("pipeline recv {} bytes", n);
+                            pipeline.read(&mut BytesMut::from(&buf[..n])).await;
                         }
                         Err(err) => {
                             warn!("TcpStream read error {}", err);

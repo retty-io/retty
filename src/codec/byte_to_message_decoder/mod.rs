@@ -1,12 +1,10 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
-use std::io::ErrorKind;
 use std::sync::Arc;
 
 use crate::channel::handler::*;
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::Message;
 
 pub mod line_based_frame_decoder;
 
@@ -40,49 +38,35 @@ impl ByteToMessageCodec {
 }
 
 #[async_trait]
-impl InboundHandler for ByteToMessageDecoder {
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+impl InboundHandlerGeneric<BytesMut> for ByteToMessageDecoder {
+    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
         self.transport_active = true;
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_inactive_generic(&mut self, ctx: &mut InboundHandlerContext) {
         self.transport_active = false;
         ctx.fire_transport_inactive().await;
     }
-
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, mut message: Message) {
-        if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
-            while self.transport_active {
-                match self.message_decoder.decode(buf) {
-                    Ok(msg) => {
-                        if let Some(msg) = msg {
-                            ctx.fire_read(Message {
-                                transport: message.transport,
-                                body: Box::new(msg),
-                            })
-                            .await;
-                        } else {
-                            return;
-                        }
-                    }
-                    Err(err) => {
-                        ctx.fire_read_exception(err).await;
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut BytesMut) {
+        while self.transport_active {
+            match self.message_decoder.decode(message) {
+                Ok(msg) => {
+                    if let Some(mut msg) = msg {
+                        ctx.fire_read(&mut msg).await;
+                    } else {
                         return;
                     }
                 }
+                Err(err) => {
+                    ctx.fire_read_exception(err).await;
+                    return;
+                }
             }
-        } else {
-            let err = Error::new(
-                ErrorKind::Other,
-                String::from("message.body.downcast_mut::<BytesMut> error"),
-            );
-            ctx.fire_read_exception(err).await;
         }
     }
 }
 
-#[async_trait]
-impl OutboundHandler for ByteToMessageEncoder {}
+impl OutboundHandlerGeneric<BytesMut> for ByteToMessageEncoder {}
 
 impl Handler for ByteToMessageCodec {
     fn id(&self) -> String {
@@ -95,7 +79,8 @@ impl Handler for ByteToMessageCodec {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

@@ -1,4 +1,5 @@
 use bytes::BytesMut;
+use log::debug;
 use std::sync::Arc;
 
 use crate::bootstrap::PipelineFactoryFn;
@@ -9,8 +10,6 @@ use crate::runtime::{
     net::{TcpStream, ToSocketAddrs},
     Runtime,
 };
-use crate::transport::TransportContext;
-use crate::Message;
 
 pub struct BootstrapTcpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
@@ -46,10 +45,10 @@ impl BootstrapTcpClient {
         let async_writer = Box::new(socket_wr);
         let pipeline_wr = Arc::new((pipeline_factory_fn)(async_writer).await);
 
-        let transport = TransportContext {
+        /*let transport = TransportContext {
             local_addr: socket_rd.local_addr()?,
             peer_addr: Some(socket_rd.peer_addr()?),
-        };
+        };*/
         let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];
@@ -60,13 +59,8 @@ impl BootstrapTcpClient {
                     pipeline.read_eof().await;
                     break;
                 }
-
-                pipeline
-                    .read(Message {
-                        transport,
-                        body: Box::new(BytesMut::from(&buf[..n])),
-                    })
-                    .await;
+                debug!("pipeline recv {} bytes", n);
+                pipeline.read(&mut BytesMut::from(&buf[..n])).await;
             }
             pipeline.transport_inactive().await;
         }));

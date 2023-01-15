@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::io::ErrorKind;
 use std::sync::Arc;
 
-use crate::channel::handler::{Handler, InboundHandler, OutboundHandler, OutboundHandlerContext};
-use crate::error::Error;
+use crate::channel::handler::{
+    Handler, InboundHandler, InboundHandlerGeneric, OutboundHandler, OutboundHandlerContext,
+    OutboundHandlerGeneric,
+};
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
-use crate::Message;
 
 struct AsyncTransportTcpDecoder;
 struct AsyncTransportTcpEncoder {
@@ -31,37 +31,28 @@ impl AsyncTransportTcp {
     }
 }
 
-impl InboundHandler for AsyncTransportTcpDecoder {}
+impl InboundHandlerGeneric<BytesMut> for AsyncTransportTcpDecoder {}
 
 #[async_trait]
-impl OutboundHandler for AsyncTransportTcpEncoder {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, mut message: Message) {
-        if let Some(buf) = message.body.downcast_mut::<BytesMut>() {
-            if let Some(writer) = &mut self.writer {
-                match writer.write(buf, None).await {
-                    Ok(n) => {
-                        trace!(
-                            "AsyncTransportTcpEncoder --> write {} of {} bytes",
-                            n,
-                            buf.len()
-                        );
-                    }
-                    Err(err) => {
-                        warn!("AsyncTransportTcpEncoder write error: {}", err);
-                        ctx.fire_write_exception(err.into()).await;
-                    }
-                };
-            }
-        } else {
-            let err = Error::new(
-                ErrorKind::Other,
-                String::from("message.body.downcast_mut::<BytesMut> error"),
-            );
-            ctx.fire_write_exception(err).await;
+impl OutboundHandlerGeneric<BytesMut> for AsyncTransportTcpEncoder {
+    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut BytesMut) {
+        if let Some(writer) = &mut self.writer {
+            match writer.write(message, None).await {
+                Ok(n) => {
+                    trace!(
+                        "AsyncTransportTcpEncoder --> write {} of {} bytes",
+                        n,
+                        message.len()
+                    );
+                }
+                Err(err) => {
+                    warn!("AsyncTransportTcpEncoder write error: {}", err);
+                    ctx.fire_write_exception(err.into()).await;
+                }
+            };
         }
     }
-
-    async fn close(&mut self, _ctx: &mut OutboundHandlerContext) {
+    async fn close_generic(&mut self, _ctx: &mut OutboundHandlerContext) {
         trace!("close socket");
         self.writer.take();
     }
@@ -78,7 +69,8 @@ impl Handler for AsyncTransportTcp {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }
