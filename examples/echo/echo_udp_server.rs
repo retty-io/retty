@@ -5,67 +5,67 @@ use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
 use retty::channel::{
-    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
+    handler::{
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
+        OutboundHandlerGeneric,
+    },
     pipeline::Pipeline,
 };
-use retty::codec::{
-    byte_to_message_decoder::{
-        line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
-        ByteToMessageCodec,
-    },
-    string_codec::StringCodec,
+use retty::codec::byte_to_message_decoder::{
+    line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
+    TaggedByteToMessageCodec,
 };
+use retty::codec::string_codec::{TaggedString, TaggedStringCodec};
 use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_udp::AsyncTransportUdp;
 use retty::transport::{AsyncTransportWrite, TransportContext};
-use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct EchoDecoder;
-struct EchoEncoder;
-struct EchoHandler {
-    decoder: EchoDecoder,
-    encoder: EchoEncoder,
+struct TaggedEchoDecoder;
+struct TaggedEchoEncoder;
+struct TaggedEchoHandler {
+    decoder: TaggedEchoDecoder,
+    encoder: TaggedEchoEncoder,
 }
 
-impl EchoHandler {
+impl TaggedEchoHandler {
     fn new() -> Self {
-        EchoHandler {
-            decoder: EchoDecoder,
-            encoder: EchoEncoder,
+        TaggedEchoHandler {
+            decoder: TaggedEchoDecoder,
+            encoder: TaggedEchoEncoder,
         }
     }
 }
 
 #[async_trait]
-impl InboundHandler for EchoDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
-        let msg = message.body.downcast_ref::<String>().unwrap();
-        println!("handling {}", msg);
-        if msg == "close" {
+impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, msg: &mut TaggedString) {
+        println!(
+            "handling {} from {:?}",
+            msg.message, msg.transport.peer_addr
+        );
+        if msg.message == "close" {
             ctx.fire_close().await;
         } else {
-            ctx.fire_write(Message {
-                transport: message.transport,
-                body: Box::new(format!("{}\r\n", msg)),
+            ctx.fire_write(&mut TaggedString {
+                transport: msg.transport,
+                message: format!("{}\r\n", msg.message),
             })
             .await;
         }
     }
-
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_close().await;
     }
 }
 
-#[async_trait]
-impl OutboundHandler for EchoEncoder {}
+impl OutboundHandlerGeneric<TaggedString> for TaggedEchoEncoder {}
 
-impl Handler for EchoHandler {
+impl Handler for TaggedEchoHandler {
     fn id(&self) -> String {
-        "Echo Handler".to_string()
+        "TaggedEcho Handler".to_string()
     }
 
     fn split(
@@ -74,7 +74,8 @@ impl Handler for EchoHandler {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<TaggedString>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<TaggedString>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }
@@ -127,11 +128,11 @@ async fn main() -> Result<(), Error> {
                 });
 
                 let async_transport_handler = AsyncTransportUdp::new(sock);
-                let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
-                let string_codec_handler = StringCodec::new();
-                let echo_handler = EchoHandler::new();
+                let string_codec_handler = TaggedStringCodec::new();
+                let echo_handler = TaggedEchoHandler::new();
 
                 pipeline.add_back(async_transport_handler);
                 pipeline.add_back(line_based_frame_decoder_handler);

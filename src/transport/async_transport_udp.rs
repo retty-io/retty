@@ -1,14 +1,16 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::{trace, warn};
+use std::io::ErrorKind;
 use std::sync::Arc;
 
 use crate::channel::handler::{
     Handler, InboundHandler, InboundHandlerGeneric, OutboundHandler, OutboundHandlerContext,
     OutboundHandlerGeneric,
 };
+use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::transport::AsyncTransportWrite;
+use crate::transport::{AsyncTransportWrite, TransportContext};
 
 struct AsyncTransportUdpDecoder;
 struct AsyncTransportUdpEncoder {
@@ -31,33 +33,38 @@ impl AsyncTransportUdp {
     }
 }
 
-impl InboundHandlerGeneric<BytesMut> for AsyncTransportUdpDecoder {}
+pub struct TaggedBytesMut {
+    pub transport: TransportContext,
+    pub message: BytesMut,
+}
+
+impl InboundHandlerGeneric<TaggedBytesMut> for AsyncTransportUdpDecoder {}
 
 #[async_trait]
-impl OutboundHandlerGeneric<BytesMut> for AsyncTransportUdpEncoder {
-    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut BytesMut) {
+impl OutboundHandlerGeneric<TaggedBytesMut> for AsyncTransportUdpEncoder {
+    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedBytesMut) {
         if let Some(writer) = &mut self.writer {
-            //TODO: if let Some(target) = message.transport.peer_addr {
-            match writer.write(message, None /*Some(target)*/).await {
-                Ok(n) => {
-                    trace!(
-                        "AsyncTransportUdpEncoder --> write {} of {} bytes",
-                        n,
-                        message.len()
-                    );
+            if let Some(target) = msg.transport.peer_addr {
+                match writer.write(&msg.message, Some(target)).await {
+                    Ok(n) => {
+                        trace!(
+                            "AsyncTransportUdpEncoder --> write {} of {} bytes",
+                            n,
+                            msg.message.len()
+                        );
+                    }
+                    Err(err) => {
+                        warn!("AsyncTransportUdpEncoder write error: {}", err);
+                        ctx.fire_write_exception(err.into()).await;
+                    }
                 }
-                Err(err) => {
-                    warn!("AsyncTransportUdpEncoder write error: {}", err);
-                    ctx.fire_write_exception(err.into()).await;
-                }
-            };
-            /*} else {
+            } else {
                 let err = Error::new(
                     ErrorKind::NotConnected,
                     String::from("Transport endpoint is not connected"),
                 );
                 ctx.fire_write_exception(err).await;
-            }*/
+            }
         }
     }
     async fn close_generic(&mut self, _ctx: &mut OutboundHandlerContext) {
@@ -77,8 +84,8 @@ impl Handler for AsyncTransportUdp {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

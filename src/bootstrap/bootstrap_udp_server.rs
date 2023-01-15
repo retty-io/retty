@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use log::{trace, warn};
+use log::{debug, trace, warn};
 use std::sync::Arc;
 
 use crate::bootstrap::PipelineFactoryFn;
@@ -10,6 +10,8 @@ use crate::runtime::{
     sync::Mutex,
     Runtime,
 };
+use crate::transport::async_transport_udp::TaggedBytesMut;
+use crate::transport::TransportContext;
 
 pub struct BootstrapUdpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
@@ -40,7 +42,7 @@ impl BootstrapUdpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
-        let _local_addr = socket_rd.local_addr()?;
+        let local_addr = socket_rd.local_addr()?;
 
         #[cfg(feature = "runtime-tokio")]
         let (close_tx, mut close_rx) = bounded(1);
@@ -56,7 +58,6 @@ impl BootstrapUdpServer {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-
             loop {
                 tokio::select! {
                     _ = close_rx.recv() => {
@@ -65,14 +66,21 @@ impl BootstrapUdpServer {
                     }
                     res = socket_rd.recv_from(&mut buf) => {
                         match res {
-                            Ok((n, _peer_addr)) => {
+                            Ok((n, peer_addr)) => {
                                 if n == 0 {
                                     pipeline.read_eof().await;
                                     break;
                                 }
 
+                                debug!("pipeline recv {} bytes", n);
                                 pipeline
-                                    .read(&mut BytesMut::from(&buf[..n]))
+                                    .read(&mut TaggedBytesMut{
+                                        transport: TransportContext {
+                                            local_addr,
+                                            peer_addr: Some(peer_addr),
+                                        },
+                                        message: BytesMut::from(&buf[..n]),
+                                    })
                                     .await;
                             }
                             Err(err) => {

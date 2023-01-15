@@ -39,13 +39,13 @@ path = "examples/echo/echo_tcp_server.rs"
 name = "echo_tcp_client"
 path = "examples/echo/echo_tcp_client.rs"
 
-#[[example]]
-#name = "echo_udp_server"
-#path = "examples/echo/echo_udp_server.rs"
+[[example]]
+name = "echo_udp_server"
+path = "examples/echo/echo_udp_server.rs"
 
-#[[example]]
-#name = "echo_udp_client"
-#path = "examples/echo/echo_udp_client.rs"
+[[example]]
+name = "echo_udp_client"
+path = "examples/echo/echo_udp_client.rs"
 
 [[example]]
 name = "telnet_server"
