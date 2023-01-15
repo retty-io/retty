@@ -13,32 +13,40 @@ pub type Message = dyn Any + Send + Sync;
 
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext);
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext);
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message);
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error);
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext);
+}
+
+#[async_trait]
+pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
+    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_inactive_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_inactive().await;
     }
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
         ctx.fire_read(message).await;
     }
-    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         ctx.fire_read_exception(error).await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_read_eof().await;
     }
 }
 
 #[async_trait]
-pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
-    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
-        ctx.fire_read(message).await;
-    }
-}
-
-#[async_trait]
 impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<T>> {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+        self.transport_active_generic(ctx).await;
+    }
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
+        self.transport_inactive_generic(ctx).await;
+    }
     async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
         if let Some(msg) = message.downcast_mut::<T>() {
             self.read_generic(ctx, msg).await;
@@ -50,25 +58,31 @@ impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<
             .await;
         }
     }
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+        self.read_exception_generic(ctx, error).await;
+    }
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+        self.read_eof_generic(ctx).await;
+    }
 }
 
 #[async_trait]
 pub trait OutboundHandler: Send + Sync {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message) {
-        ctx.fire_write(message).await;
-    }
-    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
-        ctx.fire_write_exception(error).await;
-    }
-    async fn close(&mut self, ctx: &mut OutboundHandlerContext) {
-        ctx.fire_close().await;
-    }
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message);
+    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error);
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext);
 }
 
 #[async_trait]
 pub trait OutboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
     async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
         ctx.fire_write(message).await;
+    }
+    async fn write_exception_generic(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
+        ctx.fire_write_exception(error).await;
+    }
+    async fn close_generic(&mut self, ctx: &mut OutboundHandlerContext) {
+        ctx.fire_close().await;
     }
 }
 
@@ -84,6 +98,12 @@ impl<T: Send + Sync + 'static> OutboundHandler for Box<dyn OutboundHandlerGeneri
             ))
             .await;
         }
+    }
+    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
+        self.write_exception_generic(ctx, error).await;
+    }
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext) {
+        self.close_generic(ctx).await;
     }
 }
 

@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
+use retty::channel::handler::OutboundHandlerGeneric;
 use retty::channel::{
     handler::{
         Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
@@ -44,27 +45,21 @@ impl EchoHandler {
 }
 
 #[async_trait]
-impl InboundHandler for EchoDecoder {
-    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+impl InboundHandlerGeneric<String> for EchoDecoder {
+    async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
+        print!("received back: {}", message);
+    }
+    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         println!("received exception: {}", error);
         ctx.fire_close().await;
     }
-
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
 }
 
-#[async_trait]
-impl InboundHandlerGeneric<String> for EchoDecoder {
-    async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
-        print!("received back: {}", message);
-    }
-}
-
-#[async_trait]
-impl OutboundHandler for EchoEncoder {}
+impl OutboundHandlerGeneric<String> for EchoEncoder {}
 
 impl Handler for EchoHandler {
     fn id(&self) -> String {
@@ -78,7 +73,7 @@ impl Handler for EchoHandler {
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
-        let encoder = self.encoder;
+        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

@@ -4,7 +4,8 @@ use log::{trace, warn};
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, OutboundHandler, OutboundHandlerContext, OutboundHandlerGeneric,
+    Handler, InboundHandler, InboundHandlerGeneric, OutboundHandler, OutboundHandlerContext,
+    OutboundHandlerGeneric,
 };
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
@@ -30,15 +31,7 @@ impl AsyncTransportTcp {
     }
 }
 
-impl InboundHandler for AsyncTransportTcpDecoder {}
-
-#[async_trait]
-impl OutboundHandler for AsyncTransportTcpEncoder {
-    async fn close(&mut self, _ctx: &mut OutboundHandlerContext) {
-        trace!("close socket");
-        self.writer.take();
-    }
-}
+impl InboundHandlerGeneric<BytesMut> for AsyncTransportTcpDecoder {}
 
 #[async_trait]
 impl OutboundHandlerGeneric<BytesMut> for AsyncTransportTcpEncoder {
@@ -59,6 +52,10 @@ impl OutboundHandlerGeneric<BytesMut> for AsyncTransportTcpEncoder {
             };
         }
     }
+    async fn close_generic(&mut self, _ctx: &mut OutboundHandlerContext) {
+        trace!("close socket");
+        self.writer.take();
+    }
 }
 
 impl Handler for AsyncTransportTcp {
@@ -72,7 +69,7 @@ impl Handler for AsyncTransportTcp {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let decoder = self.decoder;
+        let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
         let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }

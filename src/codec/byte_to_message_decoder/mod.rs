@@ -38,19 +38,15 @@ impl ByteToMessageCodec {
 }
 
 #[async_trait]
-impl InboundHandler for ByteToMessageDecoder {
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+impl InboundHandlerGeneric<BytesMut> for ByteToMessageDecoder {
+    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
         self.transport_active = true;
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_inactive_generic(&mut self, ctx: &mut InboundHandlerContext) {
         self.transport_active = false;
         ctx.fire_transport_inactive().await;
     }
-}
-
-#[async_trait]
-impl InboundHandlerGeneric<BytesMut> for ByteToMessageDecoder {
     async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut BytesMut) {
         while self.transport_active {
             match self.message_decoder.decode(message) {
@@ -70,7 +66,7 @@ impl InboundHandlerGeneric<BytesMut> for ByteToMessageDecoder {
     }
 }
 
-impl OutboundHandler for ByteToMessageEncoder {}
+impl OutboundHandlerGeneric<BytesMut> for ByteToMessageEncoder {}
 
 impl Handler for ByteToMessageCodec {
     fn id(&self) -> String {
@@ -84,7 +80,7 @@ impl Handler for ByteToMessageCodec {
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
-        let encoder = self.encoder;
+        let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }
