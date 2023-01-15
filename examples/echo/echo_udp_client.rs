@@ -158,7 +158,12 @@ async fn main() -> Result<(), Error> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline.write(&mut format!("{}\r\n", line)).await;
+                pipeline
+                    .write(&mut TaggedString {
+                        transport,
+                        message: format!("{}\r\n", line),
+                    })
+                    .await;
                 if line == "bye" {
                     pipeline.close().await;
                     break;
