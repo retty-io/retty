@@ -7,10 +7,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
-use retty::channel::handler::OutboundHandlerGeneric;
 use retty::channel::{
     handler::{
         Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
+        OutboundHandlerGeneric,
     },
     pipeline::Pipeline,
 };

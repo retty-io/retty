@@ -110,6 +110,7 @@ impl<T: Send + Sync + 'static> OutboundHandler for Box<dyn OutboundHandlerGeneri
 pub trait Handler: Send + Sync {
     fn id(&self) -> String;
 
+    #[allow(clippy::type_complexity)]
     fn split(
         self,
     ) -> (

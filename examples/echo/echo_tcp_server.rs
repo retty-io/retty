@@ -4,10 +4,10 @@ use std::io::Write;
 use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
-use retty::channel::handler::OutboundHandlerGeneric;
 use retty::channel::{
     handler::{
         Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
+        OutboundHandlerGeneric,
     },
     pipeline::Pipeline,
 };

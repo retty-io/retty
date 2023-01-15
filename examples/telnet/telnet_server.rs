@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
-    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
+    handler::{
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
+        OutboundHandlerGeneric,
+    },
     pipeline::Pipeline,
 };
 use retty::codec::{
@@ -19,7 +22,6 @@ use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
 use retty::transport::{AsyncTransportWrite, TransportContext};
-use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,46 +42,32 @@ impl TelnetHandler {
 }
 
 #[async_trait]
-impl InboundHandler for TelnetDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: Message) {
-        let msg = message.body.downcast_ref::<String>().unwrap();
-        if msg.is_empty() {
-            ctx.fire_write(Message {
-                transport: message.transport,
-                body: Box::new("Please type something.\r\n".to_string()),
-            })
-            .await;
-        } else if msg == "bye" {
-            ctx.fire_write(Message {
-                transport: message.transport,
-                body: Box::new("Have a fabulous day!\r\n".to_string()),
-            })
-            .await;
+impl InboundHandlerGeneric<String> for TelnetDecoder {
+    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
+        if message.is_empty() {
+            ctx.fire_write(&mut "Please type something.\r\n".to_string())
+                .await;
+        } else if message == "bye" {
+            ctx.fire_write(&mut "Have a fabulous day!\r\n".to_string())
+                .await;
             ctx.fire_close().await;
         } else {
-            ctx.fire_write(Message {
-                transport: message.transport,
-                body: Box::new(format!("Did you say '{}'?\r\n", msg)),
-            })
-            .await;
+            ctx.fire_write(&mut format!("Did you say '{}'?\r\n", message))
+                .await;
         }
     }
 
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
         let transport = ctx.get_transport();
-        ctx.fire_write(Message {
-            transport,
-            body: Box::new(format!(
-                "Welcome to {}!?\r\nType 'bye' to disconnect.\r\n",
-                transport.local_addr
-            )),
-        })
+        ctx.fire_write(&mut format!(
+            "Welcome to {}!\r\nType 'bye' to disconnect.\r\n",
+            transport.local_addr
+        ))
         .await;
     }
 }
 
-#[async_trait]
-impl OutboundHandler for TelnetEncoder {}
+impl OutboundHandlerGeneric<String> for TelnetEncoder {}
 
 impl Handler for TelnetHandler {
     fn id(&self) -> String {
@@ -92,7 +80,8 @@ impl Handler for TelnetHandler {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

@@ -8,7 +8,10 @@ use std::sync::Arc;
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
 use retty::channel::{
-    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
+    handler::{
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
+        OutboundHandlerGeneric,
+    },
     pipeline::Pipeline,
 };
 use retty::codec::{
@@ -22,7 +25,6 @@ use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
 use retty::transport::{AsyncTransportWrite, TransportContext};
-use retty::Message;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -43,25 +45,21 @@ impl TelnetHandler {
 }
 
 #[async_trait]
-impl InboundHandler for TelnetDecoder {
-    async fn read(&mut self, _ctx: &mut InboundHandlerContext, message: Message) {
-        let msg = message.body.downcast_ref::<String>().unwrap();
-        print!("{}", msg);
+impl InboundHandlerGeneric<String> for TelnetDecoder {
+    async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
+        print!("{}", message);
     }
-
-    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         println!("received exception: {}", error);
         ctx.fire_close().await;
     }
-
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
 }
 
-#[async_trait]
-impl OutboundHandler for TelnetEncoder {}
+impl OutboundHandlerGeneric<String> for TelnetEncoder {}
 
 impl Handler for TelnetHandler {
     fn id(&self) -> String {
@@ -74,7 +72,8 @@ impl Handler for TelnetHandler {
         Arc<Mutex<dyn InboundHandler>>,
         Arc<Mutex<dyn OutboundHandler>>,
     ) {
-        let (decoder, encoder) = (self.decoder, self.encoder);
+        let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }
@@ -156,12 +155,7 @@ async fn main() -> Result<(), Error> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline
-                    .write(Message {
-                        transport,
-                        body: Box::new(format!("{}\r\n", line)),
-                    })
-                    .await;
+                pipeline.write(&mut format!("{}\r\n", line)).await;
                 if line == "bye" {
                     pipeline.close().await;
                     break;
