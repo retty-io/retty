@@ -45,10 +45,6 @@ impl BootstrapTcpClient {
         let async_writer = Box::new(socket_wr);
         let pipeline_wr = Arc::new((pipeline_factory_fn)(async_writer).await);
 
-        /*let transport = TransportContext {
-            local_addr: socket_rd.local_addr()?,
-            peer_addr: Some(socket_rd.peer_addr()?),
-        };*/
         let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];

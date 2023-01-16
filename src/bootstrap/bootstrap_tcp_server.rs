@@ -37,11 +37,8 @@ impl BootstrapTcpServer {
         let listener = TcpListener::bind(addr).await?;
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        #[cfg(feature = "runtime-tokio")]
+        #[allow(unused_mut)]
         let (close_tx, mut close_rx) = bounded(1);
-        #[cfg(feature = "runtime-async-std")]
-        let (close_tx, close_rx) = bounded(1);
-
         {
             let mut tx = self.close_tx.lock().await;
             *tx = Some(close_tx);
@@ -99,16 +96,10 @@ impl BootstrapTcpServer {
         Ok(())
     }
 
-    pub async fn stop(&mut self) {
-        let mut tx = self.close_tx.lock().await;
-        tx.take();
-    }
-
     async fn process_pipeline(
         socket: TcpStream,
         pipeline_factory_fn: Arc<PipelineFactoryFn>,
-        #[cfg(feature = "runtime-tokio")] mut close_rx: Receiver<()>,
-        #[cfg(feature = "runtime-async-std")] close_rx: Receiver<()>,
+        #[allow(unused_mut)] mut close_rx: Receiver<()>,
     ) {
         let mut buf = vec![0u8; 8196];
 
@@ -120,10 +111,6 @@ impl BootstrapTcpServer {
         let async_writer = Box::new(socket_wr);
         let pipeline = (pipeline_factory_fn)(async_writer).await;
 
-        /*let transport = TransportContext {
-            local_addr: socket_rd.local_addr().unwrap(),
-            peer_addr: Some(socket_rd.peer_addr().unwrap()),
-        };*/
         pipeline.transport_active().await;
         loop {
             tokio::select! {
@@ -151,5 +138,10 @@ impl BootstrapTcpServer {
             }
         }
         pipeline.transport_inactive().await;
+    }
+
+    pub async fn stop(&mut self) {
+        let mut tx = self.close_tx.lock().await;
+        tx.take();
     }
 }
