@@ -1,6 +1,7 @@
 use bytes::BytesMut;
 use log::{debug, trace, warn};
 use std::sync::Arc;
+use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::PipelineFactoryFn;
 use crate::error::Error;
@@ -16,6 +17,7 @@ pub struct BootstrapTcpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
     runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
+    wg: Arc<Mutex<Option<WaitGroup>>>,
 }
 
 impl BootstrapTcpServer {
@@ -24,6 +26,7 @@ impl BootstrapTcpServer {
             pipeline_factory_fn: None,
             runtime,
             close_tx: Arc::new(Mutex::new(None)),
+            wg: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -47,8 +50,21 @@ impl BootstrapTcpServer {
         #[cfg(feature = "runtime-tokio")]
         let close_tx = Arc::clone(&self.close_tx);
 
+        let worker = {
+            let workgroup = WaitGroup::new();
+            let worker = workgroup.worker();
+            {
+                let mut wg = self.wg.lock().await;
+                *wg = Some(workgroup);
+            }
+            worker
+        };
+
         let runtime = Arc::clone(&self.runtime);
         self.runtime.spawn(Box::pin(async move {
+            let _w = worker;
+            let child_wg = WaitGroup::new();
+
             loop {
                 tokio::select! {
                     _ = close_rx.recv() => {
@@ -78,8 +94,9 @@ impl BootstrapTcpServer {
                                     close_rx.clone()
                                 };
 
+                                let child_worker = child_wg.worker();
                                 runtime.spawn(Box::pin(async move {
-                                    BootstrapTcpServer::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx)
+                                    BootstrapTcpServer::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx, child_worker)
                                         .await;
                                 }));
                             }
@@ -91,6 +108,7 @@ impl BootstrapTcpServer {
                     }
                 }
             }
+            child_wg.wait().await;
         }));
 
         Ok(())
@@ -100,7 +118,9 @@ impl BootstrapTcpServer {
         socket: TcpStream,
         pipeline_factory_fn: Arc<PipelineFactoryFn>,
         #[allow(unused_mut)] mut close_rx: Receiver<()>,
+        worker: Worker,
     ) {
+        let _w = worker;
         let mut buf = vec![0u8; 8196];
 
         #[cfg(feature = "runtime-tokio")]
@@ -141,7 +161,15 @@ impl BootstrapTcpServer {
     }
 
     pub async fn stop(&mut self) {
-        let mut tx = self.close_tx.lock().await;
-        tx.take();
+        {
+            let mut tx = self.close_tx.lock().await;
+            tx.take();
+        }
+        {
+            let mut wg = self.wg.lock().await;
+            if let Some(wg) = wg.take() {
+                wg.wait().await;
+            }
+        }
     }
 }
