@@ -13,7 +13,7 @@ categories = [ "network-programming", "asynchronous" ]
 
 [features]
 default = ["runtime-tokio"] #["runtime-async-std"] #
-runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util"]
+runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util", "tokio/time"]
 runtime-async-std = ["async-io", "async-std", "futures-lite"]
 
 [dependencies]

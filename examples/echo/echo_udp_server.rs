@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use clap::Parser;
 use std::io::Write;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
 use retty::channel::{
@@ -23,7 +24,11 @@ use retty::transport::{AsyncTransportWrite, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedEchoDecoder;
+struct TaggedEchoDecoder {
+    interval: Duration,
+    timeout: Instant,
+    last_transport: Option<TransportContext>,
+}
 struct TaggedEchoEncoder;
 struct TaggedEchoHandler {
     decoder: TaggedEchoDecoder,
@@ -31,9 +36,13 @@ struct TaggedEchoHandler {
 }
 
 impl TaggedEchoHandler {
-    fn new() -> Self {
+    fn new(interval: Duration) -> Self {
         TaggedEchoHandler {
-            decoder: TaggedEchoDecoder,
+            decoder: TaggedEchoDecoder {
+                timeout: Instant::now() + interval,
+                interval,
+                last_transport: None,
+            },
             encoder: TaggedEchoEncoder,
         }
     }
@@ -47,8 +56,9 @@ impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
             msg.message, msg.transport.peer_addr
         );
         if msg.message == "bye" {
-            ctx.fire_close().await;
+            self.last_transport.take();
         } else {
+            self.last_transport = Some(msg.transport);
             ctx.fire_write(&mut TaggedString {
                 transport: msg.transport,
                 message: format!("{}\r\n", msg.message),
@@ -56,8 +66,32 @@ impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
             .await;
         }
     }
-    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
-        ctx.fire_close().await;
+
+    async fn read_timeout_generic(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+        if self.last_transport.is_some() && self.timeout <= timeout {
+            println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
+            self.timeout = Instant::now() + self.interval;
+            if let Some(transport) = &self.last_transport {
+                ctx.fire_write(&mut TaggedString {
+                    transport: *transport,
+                    message: format!("Keep-alive message: next one at {:?}\r\n", self.timeout),
+                })
+                .await;
+            }
+        }
+    }
+    async fn poll_timeout_generic(
+        &mut self,
+        ctx: &mut InboundHandlerContext,
+        timeout: &mut Instant,
+    ) {
+        *timeout = if self.last_transport.is_some() && self.timeout <= *timeout {
+            self.timeout
+        } else {
+            *timeout
+        };
+
+        ctx.fire_poll_timeout(timeout).await;
     }
 }
 
@@ -132,7 +166,7 @@ async fn main() -> Result<(), Error> {
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
                 let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = TaggedEchoHandler::new();
+                let echo_handler = TaggedEchoHandler::new(Duration::from_secs(5));
 
                 pipeline.add_back(async_transport_handler);
                 pipeline.add_back(line_based_frame_decoder_handler);

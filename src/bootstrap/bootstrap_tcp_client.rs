@@ -1,14 +1,15 @@
 use bytes::BytesMut;
-use log::debug;
+use log::{trace, warn};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use crate::bootstrap::PipelineFactoryFn;
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::channel::pipeline::PipelineContext;
 use crate::error::Error;
 use crate::runtime::{
     io::AsyncReadExt,
     net::{TcpStream, ToSocketAddrs},
-    Runtime,
+    sleep, Runtime,
 };
 
 pub struct BootstrapTcpClient {
@@ -50,13 +51,39 @@ impl BootstrapTcpClient {
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active().await;
-            while let Ok(n) = socket_rd.read(&mut buf).await {
-                if n == 0 {
-                    pipeline.read_eof().await;
-                    break;
+            loop {
+                let mut timeout = Instant::now() + Duration::from_secs(MAX_DURATION);
+                pipeline.poll_timeout(&mut timeout).await;
+
+                let timer = if let Some(interval) = timeout.checked_duration_since(Instant::now()) {
+                    sleep(interval)
+                } else {
+                    sleep(Duration::from_secs(0))
+                };
+                tokio::pin!(timer);
+
+                tokio::select! {
+                    _ = timer.as_mut() => {
+                        pipeline.read_timeout(timeout).await;
+                    }
+                    res = socket_rd.read(&mut buf) => {
+                        match res {
+                            Ok(n) => {
+                                if n == 0 {
+                                    pipeline.read_eof().await;
+                                    break;
+                                }
+
+                                trace!("pipeline recv {} bytes", n);
+                                pipeline.read(&mut BytesMut::from(&buf[..n])).await;
+                            }
+                            Err(err) => {
+                                warn!("TcpStream read error {}", err);
+                                break;
+                            }
+                        };
+                    }
                 }
-                debug!("pipeline recv {} bytes", n);
-                pipeline.read(&mut BytesMut::from(&buf[..n])).await;
             }
             pipeline.transport_inactive().await;
         }));

@@ -1,12 +1,14 @@
 use bytes::BytesMut;
-use log::{debug, trace, warn};
+use log::{trace, warn};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use crate::bootstrap::PipelineFactoryFn;
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::error::Error;
 use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
     net::{ToSocketAddrs, UdpSocket},
+    sleep,
     sync::Mutex,
     Runtime,
 };
@@ -65,11 +67,24 @@ impl BootstrapUdpServer {
 
             pipeline.transport_active().await;
             loop {
+                let mut timeout = Instant::now() + Duration::from_secs(MAX_DURATION);
+                pipeline.poll_timeout(&mut timeout).await;
+
+                let timer = if let Some(interval) = timeout.checked_duration_since(Instant::now()) {
+                    sleep(interval)
+                } else {
+                    sleep(Duration::from_secs(0))
+                };
+                tokio::pin!(timer);
+
                 tokio::select! {
                     _ = close_rx.recv() => {
                         trace!("UdpSocket read exit loop");
                         done_tx.take();
                         break;
+                    }
+                    _ = timer.as_mut() => {
+                        pipeline.read_timeout(timeout).await;
                     }
                     res = socket_rd.recv_from(&mut buf) => {
                         match res {
@@ -79,9 +94,9 @@ impl BootstrapUdpServer {
                                     break;
                                 }
 
-                                debug!("pipeline recv {} bytes", n);
+                                trace!("pipeline recv {} bytes", n);
                                 pipeline
-                                    .read(&mut TaggedBytesMut{
+                                    .read(&mut TaggedBytesMut {
                                         transport: TransportContext {
                                             local_addr,
                                             peer_addr: Some(peer_addr),

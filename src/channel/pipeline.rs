@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::channel::handler::{
     Handler, InboundHandler, InboundHandlerContext, Message, OutboundHandler,
@@ -223,6 +224,14 @@ impl PipelineContext {
         handler.read(&mut ctx, msg).await;
     }
 
+    pub async fn read_timeout(&self, timeout: Instant) {
+        let (mut handler, mut ctx) = (
+            self.inbound_handlers.first().unwrap().lock().await,
+            self.inbound_contexts.first().unwrap().lock().await,
+        );
+        handler.read_timeout(&mut ctx, timeout).await;
+    }
+
     pub async fn read_exception(&self, error: Error) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -237,6 +246,14 @@ impl PipelineContext {
             self.inbound_contexts.first().unwrap().lock().await,
         );
         handler.read_eof(&mut ctx).await;
+    }
+
+    pub async fn poll_timeout(&self, timeout: &mut Instant) {
+        let (mut handler, mut ctx) = (
+            self.inbound_handlers.first().unwrap().lock().await,
+            self.inbound_contexts.first().unwrap().lock().await,
+        );
+        handler.poll_timeout(&mut ctx, timeout).await;
     }
 
     pub async fn write(&self, msg: &mut Message) {

@@ -5,6 +5,7 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
 use retty::channel::{
@@ -28,7 +29,10 @@ use retty::transport::{AsyncTransportWrite, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct EchoDecoder;
+struct EchoDecoder {
+    interval: Duration,
+    timeout: Instant,
+}
 struct EchoEncoder;
 struct EchoHandler {
     decoder: EchoDecoder,
@@ -36,9 +40,12 @@ struct EchoHandler {
 }
 
 impl EchoHandler {
-    fn new() -> Self {
+    fn new(interval: Duration) -> Self {
         EchoHandler {
-            decoder: EchoDecoder,
+            decoder: EchoDecoder {
+                timeout: Instant::now() + interval,
+                interval,
+            },
             encoder: EchoEncoder,
         }
     }
@@ -56,6 +63,31 @@ impl InboundHandlerGeneric<String> for EchoDecoder {
     async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         println!("EOF received :(");
         ctx.fire_close().await;
+    }
+
+    async fn read_timeout_generic(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+        if timeout >= self.timeout {
+            println!("EchoHandler timeout at: {:?}", self.timeout);
+            self.timeout = Instant::now() + self.interval;
+            ctx.fire_write(&mut format!(
+                "Keep-alive message: next one at {:?}\r\n",
+                self.timeout
+            ))
+            .await;
+        }
+    }
+    async fn poll_timeout_generic(
+        &mut self,
+        ctx: &mut InboundHandlerContext,
+        timeout: &mut Instant,
+    ) {
+        *timeout = if *timeout <= self.timeout {
+            *timeout
+        } else {
+            self.timeout
+        };
+
+        ctx.fire_poll_timeout(timeout).await;
     }
 }
 
@@ -134,7 +166,7 @@ async fn main() -> Result<(), Error> {
                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = StringCodec::new();
-            let echo_handler = EchoHandler::new();
+            let echo_handler = EchoHandler::new(Duration::from_secs(5));
 
             pipeline.add_back(async_transport_handler);
             pipeline.add_back(line_based_frame_decoder_handler);

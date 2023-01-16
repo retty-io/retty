@@ -1,14 +1,16 @@
 use bytes::BytesMut;
-use log::{debug, trace, warn};
+use log::{trace, warn};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use waitgroup::{WaitGroup, Worker};
 
-use crate::bootstrap::PipelineFactoryFn;
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::error::Error;
 use crate::runtime::{
     io::AsyncReadExt,
     mpsc::{bounded, Receiver, Sender},
     net::{TcpListener, TcpStream, ToSocketAddrs},
+    sleep,
     sync::Mutex,
     Runtime,
 };
@@ -133,10 +135,23 @@ impl BootstrapTcpServer {
 
         pipeline.transport_active().await;
         loop {
+            let mut timeout = Instant::now() + Duration::from_secs(MAX_DURATION);
+            pipeline.poll_timeout(&mut timeout).await;
+
+            let timer = if let Some(interval) = timeout.checked_duration_since(Instant::now()) {
+                sleep(interval)
+            } else {
+                sleep(Duration::from_secs(0))
+            };
+            tokio::pin!(timer);
+
             tokio::select! {
                 _ = close_rx.recv() => {
                     trace!("TcpStream read exit loop");
                     break;
+                }
+                _ = timer.as_mut() => {
+                    pipeline.read_timeout(timeout).await;
                 }
                 res = socket_rd.read(&mut buf) => {
                     match res {
@@ -146,7 +161,7 @@ impl BootstrapTcpServer {
                                 break;
                             }
 
-                            debug!("pipeline recv {} bytes", n);
+                            trace!("pipeline recv {} bytes", n);
                             pipeline.read(&mut BytesMut::from(&buf[..n])).await;
                         }
                         Err(err) => {

@@ -1,9 +1,10 @@
 use async_trait::async_trait;
-use log::warn;
+use log::{trace, warn};
 use std::any::Any;
 use std::io::ErrorKind;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
@@ -15,9 +16,13 @@ pub type Message = dyn Any + Send + Sync;
 pub trait InboundHandler: Send + Sync {
     async fn transport_active(&mut self, ctx: &mut InboundHandlerContext);
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext);
+
     async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message);
     async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error);
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext);
+
+    async fn read_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant);
+    async fn poll_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: &mut Instant);
 }
 
 #[async_trait]
@@ -28,6 +33,7 @@ pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
     async fn transport_inactive_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_inactive().await;
     }
+
     async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
         ctx.fire_read(message).await;
     }
@@ -36,6 +42,17 @@ pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
     }
     async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_read_eof().await;
+    }
+
+    async fn read_timeout_generic(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+        ctx.fire_read_timeout(timeout).await;
+    }
+    async fn poll_timeout_generic(
+        &mut self,
+        ctx: &mut InboundHandlerContext,
+        timeout: &mut Instant,
+    ) {
+        ctx.fire_poll_timeout(timeout).await;
     }
 }
 
@@ -47,6 +64,7 @@ impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
         self.transport_inactive_generic(ctx).await;
     }
+
     async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
         if let Some(msg) = message.downcast_mut::<T>() {
             self.read_generic(ctx, msg).await;
@@ -63,6 +81,13 @@ impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<
     }
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
         self.read_eof_generic(ctx).await;
+    }
+
+    async fn read_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+        self.read_timeout_generic(ctx, timeout).await;
+    }
+    async fn poll_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: &mut Instant) {
+        self.poll_timeout_generic(ctx, timeout).await;
     }
 }
 
@@ -183,6 +208,30 @@ impl InboundHandlerContext {
             next_handler.read_eof(&mut next_ctx).await;
         } else {
             warn!("read_eof reached end of pipeline");
+        }
+    }
+
+    pub async fn fire_read_timeout(&mut self, timeout: Instant) {
+        if let (Some(next_in_handler), Some(next_in_ctx)) =
+            (&self.next_in_handler, &self.next_in_ctx)
+        {
+            let (mut next_handler, mut next_ctx) =
+                (next_in_handler.lock().await, next_in_ctx.lock().await);
+            next_handler.read_timeout(&mut next_ctx, timeout).await;
+        } else {
+            warn!("read reached end of pipeline");
+        }
+    }
+
+    pub async fn fire_poll_timeout(&mut self, timeout: &mut Instant) {
+        if let (Some(next_in_handler), Some(next_in_ctx)) =
+            (&self.next_in_handler, &self.next_in_ctx)
+        {
+            let (mut next_handler, mut next_ctx) =
+                (next_in_handler.lock().await, next_in_ctx.lock().await);
+            next_handler.poll_timeout(&mut next_ctx, timeout).await;
+        } else {
+            trace!("poll_timeout reached end of pipeline");
         }
     }
 }

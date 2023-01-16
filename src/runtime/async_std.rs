@@ -30,3 +30,5 @@ pub mod io {
 pub mod mpsc {
     pub use async_std::channel::{bounded, Receiver, Sender};
 }
+
+pub use async_std::task::sleep;

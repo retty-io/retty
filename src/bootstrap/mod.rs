@@ -16,3 +16,5 @@ pub type PipelineFactoryFn = Box<
         + Send
         + Sync,
 >;
+
+const MAX_DURATION: u64 = 86400; // 1 day
