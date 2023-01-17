@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
 use retty::channel::{
     handler::{
-        Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
-        OutboundHandlerGeneric,
+        Handler, InboundHandlerContext, InboundHandlerGeneric, InboundHandlerInternal,
+        OutboundHandlerGeneric, OutboundHandlerInternal,
     },
     pipeline::Pipeline,
 };
@@ -105,8 +105,8 @@ impl Handler for TaggedEchoHandler {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandler>>,
-        Arc<Mutex<dyn OutboundHandler>>,
+        Arc<Mutex<dyn InboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<TaggedString>> = Box::new(self.decoder);
         let encoder: Box<dyn OutboundHandlerGeneric<TaggedString>> = Box::new(self.encoder);

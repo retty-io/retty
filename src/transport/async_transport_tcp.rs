@@ -4,8 +4,8 @@ use log::{trace, warn};
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerGeneric, OutboundHandler, OutboundHandlerContext,
-    OutboundHandlerGeneric,
+    Handler, InboundHandlerGeneric, InboundHandlerInternal, OutboundHandlerContext,
+    OutboundHandlerGeneric, OutboundHandlerInternal,
 };
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
@@ -66,8 +66,8 @@ impl Handler for AsyncTransportTcp {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandler>>,
-        Arc<Mutex<dyn OutboundHandler>>,
+        Arc<Mutex<dyn InboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
         let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);

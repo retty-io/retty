@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+    Handler, InboundHandlerContext, InboundHandlerInternal, OutboundHandlerContext,
+    OutboundHandlerInternal,
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
@@ -12,8 +13,8 @@ use crate::transport::TransportContext;
 pub struct Pipeline {
     pub(crate) transport_ctx: TransportContext,
     pub(crate) handler_ids: Vec<String>,
-    pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandler>>>,
-    pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandler>>>,
+    pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
+    pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 }
 
 impl Pipeline {
@@ -153,10 +154,10 @@ impl Pipeline {
 #[derive(Clone)]
 pub struct PipelineContext {
     pub(crate) inbound_contexts: Vec<Arc<Mutex<InboundHandlerContext>>>,
-    pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandler>>>,
+    pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
 
     pub(crate) outbound_contexts: Vec<Arc<Mutex<OutboundHandlerContext>>>,
-    pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandler>>>,
+    pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 }
 
 impl PipelineContext {
@@ -173,9 +174,9 @@ impl PipelineContext {
     pub(crate) fn add_back(
         &mut self,
         inbound_context: Arc<Mutex<InboundHandlerContext>>,
-        inbound_handler: Arc<Mutex<dyn InboundHandler>>,
+        inbound_handler: Arc<Mutex<dyn InboundHandlerInternal>>,
         outbound_context: Arc<Mutex<OutboundHandlerContext>>,
-        outbound_handler: Arc<Mutex<dyn OutboundHandler>>,
+        outbound_handler: Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
         self.inbound_contexts.push(inbound_context);
         self.inbound_handlers.push(inbound_handler);
@@ -188,7 +189,7 @@ impl PipelineContext {
         self.inbound_contexts.first().unwrap().clone()
     }
 
-    fn header_handler(&self) -> Arc<Mutex<dyn InboundHandler>> {
+    fn header_handler(&self) -> Arc<Mutex<dyn InboundHandlerInternal>> {
         self.inbound_handlers.first().unwrap().clone()
     }
 
@@ -196,7 +197,7 @@ impl PipelineContext {
         self.outbound_contexts.last().unwrap().clone()
     }
 
-    fn tail_handler(&self) -> Arc<Mutex<dyn OutboundHandler>> {
+    fn tail_handler(&self) -> Arc<Mutex<dyn OutboundHandlerInternal>> {
         self.outbound_handlers.last().unwrap().clone()
     }
 
@@ -205,7 +206,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_active(&mut ctx).await;
+        handler.transport_active_internal(&mut ctx).await;
     }
 
     pub async fn transport_inactive(&self) {
@@ -213,7 +214,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_inactive(&mut ctx).await;
+        handler.transport_inactive_internal(&mut ctx).await;
     }
 
     pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
@@ -221,7 +222,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read(&mut ctx, msg).await;
+        handler.read_internal(&mut ctx, msg).await;
     }
 
     pub async fn read_timeout(&self, timeout: Instant) {
@@ -229,7 +230,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_timeout(&mut ctx, timeout).await;
+        handler.read_timeout_internal(&mut ctx, timeout).await;
     }
 
     pub async fn read_exception(&self, error: Error) {
@@ -237,7 +238,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_exception(&mut ctx, error).await;
+        handler.read_exception_internal(&mut ctx, error).await;
     }
 
     pub async fn read_eof(&self) {
@@ -245,7 +246,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_eof(&mut ctx).await;
+        handler.read_eof_internal(&mut ctx).await;
     }
 
     pub async fn poll_timeout(&self, timeout: &mut Instant) {
@@ -253,7 +254,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.poll_timeout(&mut ctx, timeout).await;
+        handler.poll_timeout_internal(&mut ctx, timeout).await;
     }
 
     pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
@@ -261,7 +262,7 @@ impl PipelineContext {
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write(&mut ctx, msg).await;
+        handler.write_internal(&mut ctx, msg).await;
     }
 
     pub async fn write_exception(&self, error: Error) {
@@ -269,7 +270,7 @@ impl PipelineContext {
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_exception(&mut ctx, error).await;
+        handler.write_exception_internal(&mut ctx, error).await;
     }
 
     pub async fn close(&self) {
@@ -277,6 +278,6 @@ impl PipelineContext {
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.close(&mut ctx).await;
+        handler.close_internal(&mut ctx).await;
     }
 }

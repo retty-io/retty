@@ -77,8 +77,8 @@ impl Handler for ByteToMessageCodec {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandler>>,
-        Arc<Mutex<dyn OutboundHandler>>,
+        Arc<Mutex<dyn InboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<BytesMut>> = Box::new(self.decoder);
         let encoder: Box<dyn OutboundHandlerGeneric<BytesMut>> = Box::new(self.encoder);

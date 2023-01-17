@@ -68,8 +68,8 @@ impl Handler for TaggedByteToMessageCodec {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandler>>,
-        Arc<Mutex<dyn OutboundHandler>>,
+        Arc<Mutex<dyn InboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.decoder);
         let encoder: Box<dyn OutboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.encoder);

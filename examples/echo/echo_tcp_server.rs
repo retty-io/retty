@@ -6,8 +6,8 @@ use std::sync::Arc;
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
     handler::{
-        Handler, InboundHandler, InboundHandlerContext, InboundHandlerGeneric, OutboundHandler,
-        OutboundHandlerGeneric,
+        Handler, InboundHandlerContext, InboundHandlerGeneric, InboundHandlerInternal,
+        OutboundHandlerGeneric, OutboundHandlerInternal,
     },
     pipeline::Pipeline,
 };
@@ -62,8 +62,8 @@ impl Handler for EchoHandler {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandler>>,
-        Arc<Mutex<dyn OutboundHandler>>,
+        Arc<Mutex<dyn InboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
         let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
         let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
