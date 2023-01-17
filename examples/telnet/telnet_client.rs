@@ -90,13 +90,16 @@ struct Cli {
     host: String,
     #[arg(long, default_value_t = 8080)]
     port: u16,
+    #[arg(long, default_value_t = format!("INFO"))]
+    log_level: String,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
     if cli.debug {
         env_logger::Builder::new()
             .format(|buf, record| {
@@ -110,7 +113,7 @@ async fn main() -> Result<(), Error> {
                     record.args()
                 )
             })
-            .filter(None, log::LevelFilter::Trace)
+            .filter(None, log_level)
             .init();
     }
 
