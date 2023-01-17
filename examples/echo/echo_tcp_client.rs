@@ -75,19 +75,19 @@ impl InboundHandlerGeneric<String> for EchoDecoder {
             ))
             .await;
         }
+
+        //last handler, no need to fire_read_timeout
     }
     async fn poll_timeout_generic(
         &mut self,
-        ctx: &mut InboundHandlerContext,
+        _ctx: &mut InboundHandlerContext,
         timeout: &mut Instant,
     ) {
-        *timeout = if *timeout <= self.timeout {
-            *timeout
-        } else {
-            self.timeout
-        };
+        if self.timeout < *timeout {
+            *timeout = self.timeout
+        }
 
-        ctx.fire_poll_timeout(timeout).await;
+        //last handler, no need to fire_poll_timeout
     }
 }
 

@@ -79,19 +79,19 @@ impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
                 .await;
             }
         }
+
+        //last handler, no need to fire_read_timeout
     }
     async fn poll_timeout_generic(
         &mut self,
-        ctx: &mut InboundHandlerContext,
+        _ctx: &mut InboundHandlerContext,
         timeout: &mut Instant,
     ) {
-        *timeout = if self.last_transport.is_some() && self.timeout <= *timeout {
-            self.timeout
-        } else {
-            *timeout
-        };
+        if self.last_transport.is_some() && self.timeout < *timeout {
+            *timeout = self.timeout;
+        }
 
-        ctx.fire_poll_timeout(timeout).await;
+        //last handler, no need to fire_poll_timeout
     }
 }
 

@@ -50,14 +50,6 @@ impl InboundHandlerGeneric<TaggedString> for TaggedEchoDecoder {
             msg.message, msg.transport.peer_addr
         );
     }
-    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
-        println!("received exception: {}", error);
-        ctx.fire_close().await;
-    }
-    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
-        println!("EOF received :(");
-        ctx.fire_close().await;
-    }
 }
 
 impl OutboundHandlerGeneric<TaggedString> for TaggedEchoEncoder {}
