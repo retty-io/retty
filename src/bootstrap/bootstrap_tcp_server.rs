@@ -138,8 +138,8 @@ impl BootstrapTcpServer {
             let mut timeout = Instant::now() + Duration::from_secs(MAX_DURATION);
             pipeline.poll_timeout(&mut timeout).await;
 
-            let timer = if let Some(interval) = timeout.checked_duration_since(Instant::now()) {
-                sleep(interval)
+            let timer = if let Some(duration) = timeout.checked_duration_since(Instant::now()) {
+                sleep(duration)
             } else {
                 sleep(Duration::from_secs(0))
             };
@@ -151,7 +151,7 @@ impl BootstrapTcpServer {
                     break;
                 }
                 _ = timer.as_mut() => {
-                    pipeline.read_timeout(timeout).await;
+                    pipeline.read_timeout(Instant::now()).await;
                 }
                 res = socket_rd.read(&mut buf) => {
                     match res {
