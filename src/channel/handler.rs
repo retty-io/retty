@@ -10,14 +10,16 @@ use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::TransportContext;
 
-pub type Message = dyn Any + Send + Sync;
-
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
     async fn transport_active(&mut self, ctx: &mut InboundHandlerContext);
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext);
 
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message);
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext,
+        message: &mut (dyn Any + Send + Sync),
+    );
     async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error);
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext);
 
@@ -65,7 +67,11 @@ impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<
         self.transport_inactive_generic(ctx).await;
     }
 
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut Message) {
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext,
+        message: &mut (dyn Any + Send + Sync),
+    ) {
         if let Some(msg) = message.downcast_mut::<T>() {
             self.read_generic(ctx, msg).await;
         } else {
@@ -93,7 +99,11 @@ impl<T: Send + Sync + 'static> InboundHandler for Box<dyn InboundHandlerGeneric<
 
 #[async_trait]
 pub trait OutboundHandler: Send + Sync {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message);
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext,
+        message: &mut (dyn Any + Send + Sync),
+    );
     async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error);
     async fn close(&mut self, ctx: &mut OutboundHandlerContext);
 }
@@ -113,7 +123,11 @@ pub trait OutboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
 
 #[async_trait]
 impl<T: Send + Sync + 'static> OutboundHandler for Box<dyn OutboundHandlerGeneric<T>> {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut Message) {
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext,
+        message: &mut (dyn Any + Send + Sync),
+    ) {
         if let Some(msg) = message.downcast_mut::<T>() {
             self.write_generic(ctx, msg).await;
         } else {
@@ -175,7 +189,7 @@ impl InboundHandlerContext {
         }
     }
 
-    pub async fn fire_read(&mut self, message: &mut Message) {
+    pub async fn fire_read(&mut self, message: &mut (dyn Any + Send + Sync)) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
@@ -263,7 +277,7 @@ impl OutboundHandlerContext {
         *self.transport_ctx.as_ref().unwrap()
     }
 
-    pub async fn fire_write(&mut self, message: &mut Message) {
+    pub async fn fire_write(&mut self, message: &mut (dyn Any + Send + Sync)) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {

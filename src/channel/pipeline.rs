@@ -1,9 +1,9 @@
+use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerContext, Message, OutboundHandler,
-    OutboundHandlerContext,
+    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
@@ -216,7 +216,7 @@ impl PipelineContext {
         handler.transport_inactive(&mut ctx).await;
     }
 
-    pub async fn read(&self, msg: &mut Message) {
+    pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -256,7 +256,7 @@ impl PipelineContext {
         handler.poll_timeout(&mut ctx, timeout).await;
     }
 
-    pub async fn write(&self, msg: &mut Message) {
+    pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
