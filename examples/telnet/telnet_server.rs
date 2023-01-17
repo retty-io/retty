@@ -6,8 +6,8 @@ use std::sync::Arc;
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
     handler::{
-        Handler, InboundHandlerContext, InboundHandlerGeneric, InboundHandlerInternal,
-        OutboundHandlerGeneric, OutboundHandlerInternal,
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
+        OutboundHandlerInternal,
     },
     pipeline::Pipeline,
 };
@@ -42,8 +42,8 @@ impl TelnetHandler {
 }
 
 #[async_trait]
-impl InboundHandlerGeneric<String> for TelnetDecoder {
-    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
+impl InboundHandler<String> for TelnetDecoder {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
         if message.is_empty() {
             ctx.fire_write(&mut "Please type something.\r\n".to_string())
                 .await;
@@ -57,7 +57,7 @@ impl InboundHandlerGeneric<String> for TelnetDecoder {
         }
     }
 
-    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
         let transport = ctx.get_transport();
         ctx.fire_write(&mut format!(
             "Welcome to {}!\r\nType 'bye' to disconnect.\r\n",
@@ -67,7 +67,7 @@ impl InboundHandlerGeneric<String> for TelnetDecoder {
     }
 }
 
-impl OutboundHandlerGeneric<String> for TelnetEncoder {}
+impl OutboundHandler<String> for TelnetEncoder {}
 
 impl Handler for TelnetHandler {
     fn id(&self) -> String {
@@ -80,8 +80,8 @@ impl Handler for TelnetHandler {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
+        let decoder: Box<dyn InboundHandler<String>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandler<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

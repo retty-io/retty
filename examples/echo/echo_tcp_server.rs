@@ -6,8 +6,8 @@ use std::sync::Arc;
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
     handler::{
-        Handler, InboundHandlerContext, InboundHandlerGeneric, InboundHandlerInternal,
-        OutboundHandlerGeneric, OutboundHandlerInternal,
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
+        OutboundHandlerInternal,
     },
     pipeline::Pipeline,
 };
@@ -42,17 +42,17 @@ impl EchoHandler {
 }
 
 #[async_trait]
-impl InboundHandlerGeneric<String> for EchoDecoder {
-    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
+impl InboundHandler<String> for EchoDecoder {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
         println!("handling {}", message);
         ctx.fire_write(&mut format!("{}\r\n", message)).await;
     }
-    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_close().await;
     }
 }
 
-impl OutboundHandlerGeneric<String> for EchoEncoder {}
+impl OutboundHandler<String> for EchoEncoder {}
 
 impl Handler for EchoHandler {
     fn id(&self) -> String {
@@ -65,8 +65,8 @@ impl Handler for EchoHandler {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
+        let decoder: Box<dyn InboundHandler<String>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandler<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

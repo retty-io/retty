@@ -32,43 +32,39 @@ pub trait InboundHandlerInternal: Send + Sync {
 }
 
 #[async_trait]
-pub trait InboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
-    async fn transport_active_generic(&mut self, ctx: &mut InboundHandlerContext) {
+pub trait InboundHandler<T: Send + Sync + 'static>: Send + Sync {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive_generic(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_transport_inactive().await;
     }
 
-    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut T) {
         ctx.fire_read(message).await;
     }
-    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         ctx.fire_read_exception(error).await;
     }
-    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
         ctx.fire_read_eof().await;
     }
 
-    async fn read_timeout_generic(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+    async fn read_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
         ctx.fire_read_timeout(timeout).await;
     }
-    async fn poll_timeout_generic(
-        &mut self,
-        ctx: &mut InboundHandlerContext,
-        timeout: &mut Instant,
-    ) {
+    async fn poll_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: &mut Instant) {
         ctx.fire_poll_timeout(timeout).await;
     }
 }
 
 #[async_trait]
-impl<T: Send + Sync + 'static> InboundHandlerInternal for Box<dyn InboundHandlerGeneric<T>> {
+impl<T: Send + Sync + 'static> InboundHandlerInternal for Box<dyn InboundHandler<T>> {
     async fn transport_active_internal(&mut self, ctx: &mut InboundHandlerContext) {
-        self.transport_active_generic(ctx).await;
+        self.transport_active(ctx).await;
     }
     async fn transport_inactive_internal(&mut self, ctx: &mut InboundHandlerContext) {
-        self.transport_inactive_generic(ctx).await;
+        self.transport_inactive(ctx).await;
     }
 
     async fn read_internal(
@@ -77,7 +73,7 @@ impl<T: Send + Sync + 'static> InboundHandlerInternal for Box<dyn InboundHandler
         message: &mut (dyn Any + Send + Sync),
     ) {
         if let Some(msg) = message.downcast_mut::<T>() {
-            self.read_generic(ctx, msg).await;
+            self.read(ctx, msg).await;
         } else {
             ctx.fire_read_exception(Error::new(
                 ErrorKind::Other,
@@ -87,21 +83,21 @@ impl<T: Send + Sync + 'static> InboundHandlerInternal for Box<dyn InboundHandler
         }
     }
     async fn read_exception_internal(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
-        self.read_exception_generic(ctx, error).await;
+        self.read_exception(ctx, error).await;
     }
     async fn read_eof_internal(&mut self, ctx: &mut InboundHandlerContext) {
-        self.read_eof_generic(ctx).await;
+        self.read_eof(ctx).await;
     }
 
     async fn read_timeout_internal(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
-        self.read_timeout_generic(ctx, timeout).await;
+        self.read_timeout(ctx, timeout).await;
     }
     async fn poll_timeout_internal(
         &mut self,
         ctx: &mut InboundHandlerContext,
         timeout: &mut Instant,
     ) {
-        self.poll_timeout_generic(ctx, timeout).await;
+        self.poll_timeout(ctx, timeout).await;
     }
 }
 
@@ -117,27 +113,27 @@ pub trait OutboundHandlerInternal: Send + Sync {
 }
 
 #[async_trait]
-pub trait OutboundHandlerGeneric<T: Send + Sync + 'static>: Send + Sync {
-    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
+pub trait OutboundHandler<T: Send + Sync + 'static>: Send + Sync {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut T) {
         ctx.fire_write(message).await;
     }
-    async fn write_exception_generic(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
+    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
         ctx.fire_write_exception(error).await;
     }
-    async fn close_generic(&mut self, ctx: &mut OutboundHandlerContext) {
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext) {
         ctx.fire_close().await;
     }
 }
 
 #[async_trait]
-impl<T: Send + Sync + 'static> OutboundHandlerInternal for Box<dyn OutboundHandlerGeneric<T>> {
+impl<T: Send + Sync + 'static> OutboundHandlerInternal for Box<dyn OutboundHandler<T>> {
     async fn write_internal(
         &mut self,
         ctx: &mut OutboundHandlerContext,
         message: &mut (dyn Any + Send + Sync),
     ) {
         if let Some(msg) = message.downcast_mut::<T>() {
-            self.write_generic(ctx, msg).await;
+            self.write(ctx, msg).await;
         } else {
             ctx.fire_write_exception(Error::new(
                 ErrorKind::Other,
@@ -147,10 +143,10 @@ impl<T: Send + Sync + 'static> OutboundHandlerInternal for Box<dyn OutboundHandl
         }
     }
     async fn write_exception_internal(&mut self, ctx: &mut OutboundHandlerContext, error: Error) {
-        self.write_exception_generic(ctx, error).await;
+        self.write_exception(ctx, error).await;
     }
     async fn close_internal(&mut self, ctx: &mut OutboundHandlerContext) {
-        self.close_generic(ctx).await;
+        self.close(ctx).await;
     }
 }
 

@@ -34,8 +34,8 @@ pub struct TaggedString {
 }
 
 #[async_trait]
-impl InboundHandlerGeneric<TaggedBytesMut> for StringDecoder {
-    async fn read_generic(&mut self, ctx: &mut InboundHandlerContext, msg: &mut TaggedBytesMut) {
+impl InboundHandler<TaggedBytesMut> for StringDecoder {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext, msg: &mut TaggedBytesMut) {
         match String::from_utf8(msg.message.to_vec()) {
             Ok(message) => {
                 ctx.fire_read(&mut TaggedString {
@@ -50,8 +50,8 @@ impl InboundHandlerGeneric<TaggedBytesMut> for StringDecoder {
 }
 
 #[async_trait]
-impl OutboundHandlerGeneric<TaggedString> for StringEncoder {
-    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedString) {
+impl OutboundHandler<TaggedString> for StringEncoder {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedString) {
         let mut buf = BytesMut::new();
         buf.put(msg.message.as_bytes());
         ctx.fire_write(&mut TaggedBytesMut {
@@ -73,8 +73,8 @@ impl Handler for TaggedStringCodec {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandlerGeneric<TaggedString>> = Box::new(self.encoder);
+        let decoder: Box<dyn InboundHandler<TaggedBytesMut>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandler<TaggedString>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

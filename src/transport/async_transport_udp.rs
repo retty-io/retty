@@ -5,8 +5,8 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandlerGeneric, InboundHandlerInternal, OutboundHandlerContext,
-    OutboundHandlerGeneric, OutboundHandlerInternal,
+    Handler, InboundHandler, InboundHandlerInternal, OutboundHandler, OutboundHandlerContext,
+    OutboundHandlerInternal,
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
@@ -36,11 +36,11 @@ pub struct TaggedBytesMut {
     pub message: BytesMut,
 }
 
-impl InboundHandlerGeneric<TaggedBytesMut> for AsyncTransportUdpDecoder {}
+impl InboundHandler<TaggedBytesMut> for AsyncTransportUdpDecoder {}
 
 #[async_trait]
-impl OutboundHandlerGeneric<TaggedBytesMut> for AsyncTransportUdpEncoder {
-    async fn write_generic(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedBytesMut) {
+impl OutboundHandler<TaggedBytesMut> for AsyncTransportUdpEncoder {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedBytesMut) {
         if let Some(target) = msg.transport.peer_addr {
             match self.writer.write(&msg.message, Some(target)).await {
                 Ok(n) => {
@@ -76,8 +76,8 @@ impl Handler for AsyncTransportUdp {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandlerGeneric<TaggedBytesMut>> = Box::new(self.encoder);
+        let decoder: Box<dyn InboundHandler<TaggedBytesMut>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandler<TaggedBytesMut>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }

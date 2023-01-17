@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
 use retty::channel::{
     handler::{
-        Handler, InboundHandlerContext, InboundHandlerGeneric, InboundHandlerInternal,
-        OutboundHandlerGeneric, OutboundHandlerInternal,
+        Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
+        OutboundHandlerInternal,
     },
     pipeline::Pipeline,
 };
@@ -52,20 +52,20 @@ impl EchoHandler {
 }
 
 #[async_trait]
-impl InboundHandlerGeneric<String> for EchoDecoder {
-    async fn read_generic(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
+impl InboundHandler<String> for EchoDecoder {
+    async fn read(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
         println!("received back: {}", message);
     }
-    async fn read_exception_generic(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
         println!("received exception: {}", error);
         ctx.fire_close().await;
     }
-    async fn read_eof_generic(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
 
-    async fn read_timeout_generic(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+    async fn read_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
         if timeout >= self.timeout {
             println!("EchoHandler timeout at: {:?}", self.timeout);
             self.timeout = Instant::now() + self.interval;
@@ -78,11 +78,7 @@ impl InboundHandlerGeneric<String> for EchoDecoder {
 
         //last handler, no need to fire_read_timeout
     }
-    async fn poll_timeout_generic(
-        &mut self,
-        _ctx: &mut InboundHandlerContext,
-        timeout: &mut Instant,
-    ) {
+    async fn poll_timeout(&mut self, _ctx: &mut InboundHandlerContext, timeout: &mut Instant) {
         if self.timeout < *timeout {
             *timeout = self.timeout
         }
@@ -91,7 +87,7 @@ impl InboundHandlerGeneric<String> for EchoDecoder {
     }
 }
 
-impl OutboundHandlerGeneric<String> for EchoEncoder {}
+impl OutboundHandler<String> for EchoEncoder {}
 
 impl Handler for EchoHandler {
     fn id(&self) -> String {
@@ -104,8 +100,8 @@ impl Handler for EchoHandler {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandlerGeneric<String>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandlerGeneric<String>> = Box::new(self.encoder);
+        let decoder: Box<dyn InboundHandler<String>> = Box::new(self.decoder);
+        let encoder: Box<dyn OutboundHandler<String>> = Box::new(self.encoder);
         (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
     }
 }
