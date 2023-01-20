@@ -70,6 +70,10 @@ impl Handler for StringCodec {
     type In = BytesMut;
     type Out = String;
 
+    fn name(&self) -> &str {
+        "StringCodec"
+    }
+
     fn split(
         self,
     ) -> (

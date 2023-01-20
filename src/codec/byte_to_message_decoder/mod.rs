@@ -92,6 +92,10 @@ impl Handler for ByteToMessageCodec {
     type In = BytesMut;
     type Out = Self::In;
 
+    fn name(&self) -> &str {
+        "ByteToMessageCodec"
+    }
+
     fn split(
         self,
     ) -> (

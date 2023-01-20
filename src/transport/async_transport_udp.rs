@@ -89,6 +89,10 @@ impl Handler for AsyncTransportUdp {
     type In = TaggedBytesMut;
     type Out = Self::In;
 
+    fn name(&self) -> &str {
+        "AsyncTransportUdp"
+    }
+
     fn split(
         self,
     ) -> (

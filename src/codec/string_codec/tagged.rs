@@ -84,6 +84,10 @@ impl Handler for TaggedStringCodec {
     type In = TaggedBytesMut;
     type Out = TaggedString;
 
+    fn name(&self) -> &str {
+        "TaggedStringCodec"
+    }
+
     fn split(
         self,
     ) -> (

@@ -89,6 +89,10 @@ impl Handler for TaggedByteToMessageCodec {
     type In = TaggedBytesMut;
     type Out = Self::In;
 
+    fn name(&self) -> &str {
+        "TaggedByteToMessageCodec"
+    }
+
     fn split(
         self,
     ) -> (

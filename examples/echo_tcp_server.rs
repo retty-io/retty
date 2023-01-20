@@ -77,6 +77,10 @@ impl Handler for EchoHandler {
     type In = String;
     type Out = Self::In;
 
+    fn name(&self) -> &str {
+        "EchoHandler"
+    }
+
     fn split(
         self,
     ) -> (

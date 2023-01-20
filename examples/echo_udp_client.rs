@@ -75,6 +75,10 @@ impl Handler for TaggedEchoHandler {
     type In = TaggedString;
     type Out = Self::In;
 
+    fn name(&self) -> &str {
+        "TaggedEchoHandler"
+    }
+
     fn split(
         self,
     ) -> (

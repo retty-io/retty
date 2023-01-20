@@ -81,6 +81,10 @@ impl Handler for AsyncTransportTcp {
     type In = BytesMut;
     type Out = Self::In;
 
+    fn name(&self) -> &str {
+        "AsyncTransportTcp"
+    }
+
     fn split(
         self,
     ) -> (
