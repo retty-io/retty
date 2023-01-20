@@ -21,7 +21,7 @@ use retty::codec::{
 };
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
-use retty::transport::{AsyncTransportWrite, TransportContext};
+use retty::transport::AsyncTransportWrite;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -140,10 +140,7 @@ async fn main() -> anyhow::Result<()> {
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-                let mut pipeline = Pipeline::new(TransportContext {
-                    local_addr: sock.local_addr().unwrap(),
-                    peer_addr: sock.peer_addr().ok(),
-                });
+                let mut pipeline = Pipeline::new();
 
                 let async_transport_handler = AsyncTransportTcp::new(sock);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(

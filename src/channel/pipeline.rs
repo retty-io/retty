@@ -2,17 +2,17 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::channel::handler::Handler;
-use crate::channel::handler_internal::{
-    InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
-    OutboundHandlerInternal,
+use crate::channel::{
+    handler::Handler,
+    handler_internal::{
+        InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
+        OutboundHandlerInternal,
+    },
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::transport::TransportContext;
 
 pub struct Pipeline {
-    pub(crate) transport_ctx: TransportContext,
     pub(crate) inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
     pub(crate) outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
@@ -20,9 +20,8 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(transport_ctx: TransportContext) -> Self {
+    pub fn new() -> Self {
         Self {
-            transport_ctx,
             inbound_contexts: Vec::new(),
             inbound_handlers: Vec::new(),
             outbound_contexts: Vec::new(),
@@ -122,22 +121,6 @@ impl Pipeline {
         }
 
         self
-    }
-
-    fn header_handler_ctx(&self) -> Arc<Mutex<dyn InboundHandlerContextInternal>> {
-        self.inbound_contexts.first().unwrap().clone()
-    }
-
-    fn header_handler(&self) -> Arc<Mutex<dyn InboundHandlerInternal>> {
-        self.inbound_handlers.first().unwrap().clone()
-    }
-
-    fn tail_handler_ctx(&self) -> Arc<Mutex<dyn OutboundHandlerContextInternal>> {
-        self.outbound_contexts.last().unwrap().clone()
-    }
-
-    fn tail_handler(&self) -> Arc<Mutex<dyn OutboundHandlerInternal>> {
-        self.outbound_handlers.last().unwrap().clone()
     }
 
     pub async fn transport_active(&self) {
