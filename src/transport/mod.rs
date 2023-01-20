@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
 use crate::runtime::net::{OwnedReadHalf, OwnedWriteHalf, UdpSocket};
 
-//pub mod async_transport_tcp;
+pub mod async_transport_tcp;
 //pub mod async_transport_udp;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
