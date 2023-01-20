@@ -31,7 +31,7 @@ impl Pipeline {
     }
     pub fn add_back(&mut self, handler: impl Handler) {
         let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
-            handler.split();
+            handler.generate();
         self.inbound_contexts.push(inbound_context);
         self.inbound_handlers.push(inbound_handler);
         self.outbound_contexts.push(outbound_context);
@@ -40,7 +40,7 @@ impl Pipeline {
 
     pub fn add_front(&mut self, handler: impl Handler) {
         let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
-            handler.split();
+            handler.generate();
         self.inbound_contexts.insert(0, inbound_context);
         self.inbound_handlers.insert(0, inbound_handler);
         self.outbound_contexts.insert(0, outbound_context);

@@ -8,13 +8,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
-use retty::channel::handler::OutboundHandlerContext;
-use retty::channel::handler_internal::{
-    InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
-    OutboundHandlerInternal,
-};
 use retty::channel::{
-    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
+    handler::{
+        Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+    },
+    handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
     pipeline::Pipeline,
 };
 use retty::codec::{
@@ -123,27 +121,22 @@ impl OutboundHandler for EchoEncoder {
 }
 
 impl Handler for EchoHandler {
+    type In = String;
+    type Out = Self::In;
+
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandlerContextInternal>>,
         Arc<Mutex<dyn InboundHandlerInternal>>,
-        Arc<Mutex<dyn OutboundHandlerContextInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let inbound_context: InboundHandlerContext<String, String> =
-            InboundHandlerContext::default();
-        let inbound_handler: Box<dyn InboundHandler<Rin = String, Rout = String>> =
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
             Box::new(self.decoder);
-        let outbound_context: OutboundHandlerContext<String, String> =
-            OutboundHandlerContext::default();
-        let outbound_handler: Box<dyn OutboundHandler<Win = String, Wout = String>> =
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
             Box::new(self.encoder);
 
         (
-            Arc::new(Mutex::new(inbound_context)),
             Arc::new(Mutex::new(inbound_handler)),
-            Arc::new(Mutex::new(outbound_context)),
             Arc::new(Mutex::new(outbound_handler)),
         )
     }

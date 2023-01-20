@@ -15,13 +15,41 @@ use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
 pub trait Handler: Send + Sync {
+    type In: Default + Send + Sync + 'static;
+    type Out: Default + Send + Sync + 'static;
+
     #[allow(clippy::type_complexity)]
-    fn split(
+    fn generate(
         self,
     ) -> (
         Arc<Mutex<dyn InboundHandlerContextInternal>>,
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerContextInternal>>,
+        Arc<Mutex<dyn OutboundHandlerInternal>>,
+    )
+    where
+        Self: Sized,
+    {
+        let inbound_context: InboundHandlerContext<Self::In, Self::Out> =
+            InboundHandlerContext::default();
+        let outbound_context: OutboundHandlerContext<Self::Out, Self::In> =
+            OutboundHandlerContext::default();
+
+        let (inbound_handler, outbound_handler) = self.split();
+
+        (
+            Arc::new(Mutex::new(inbound_context)),
+            inbound_handler,
+            Arc::new(Mutex::new(outbound_context)),
+            outbound_handler,
+        )
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn split(
+        self,
+    ) -> (
+        Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     );
 }
@@ -29,8 +57,8 @@ pub trait Handler: Send + Sync {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
-    type Rin: Send + Sync + 'static;
-    type Rout: Send + Sync + 'static;
+    type Rin: Default + Send + Sync + 'static;
+    type Rout: Default + Send + Sync + 'static;
 
     async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         ctx.fire_transport_active().await;
@@ -72,8 +100,8 @@ pub trait InboundHandler: Send + Sync {
 }
 
 #[async_trait]
-impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerInternal
-    for Box<dyn InboundHandler<Rin = Rin, Rout = Rout>>
+impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
+    InboundHandlerInternal for Box<dyn InboundHandler<Rin = Rin, Rout = Rout>>
 {
     async fn transport_active_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal) {
         if let Some(ctx) = ctx
@@ -250,7 +278,7 @@ impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundHandlerInt
 }
 
 #[derive(Default)]
-pub struct InboundHandlerContext<Rin, Rout> {
+pub struct InboundHandlerContext<Rin: Default, Rout: Default> {
     pub(crate) next_in_ctx: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     pub(crate) next_in_handler: Option<Arc<Mutex<dyn InboundHandlerInternal>>>,
 
@@ -260,7 +288,9 @@ pub struct InboundHandlerContext<Rin, Rout> {
     phantom_rout: PhantomData<Rout>,
 }
 
-impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerContext<Rin, Rout> {
+impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
+    InboundHandlerContext<Rin, Rout>
+{
     pub async fn fire_transport_active(&mut self) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -351,8 +381,8 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerCont
 }
 
 #[async_trait]
-impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerContextInternal
-    for InboundHandlerContext<Rin, Rout>
+impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
+    InboundHandlerContextInternal for InboundHandlerContext<Rin, Rout>
 {
     async fn fire_transport_active_internal(&mut self) {
         self.fire_transport_active().await;
@@ -409,14 +439,14 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerCont
     }
 }
 
-impl<Rin, Rout> Deref for InboundHandlerContext<Rin, Rout> {
+impl<Rin: Default, Rout: Default> Deref for InboundHandlerContext<Rin, Rout> {
     type Target = OutboundHandlerContext<Rout, Rin>;
     fn deref(&self) -> &Self::Target {
         &self.next_out
     }
 }
 
-impl<Rin, Rout> DerefMut for InboundHandlerContext<Rin, Rout> {
+impl<Rin: Default, Rout: Default> DerefMut for InboundHandlerContext<Rin, Rout> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.next_out
     }

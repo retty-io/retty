@@ -5,10 +5,7 @@ use bytes::{BufMut, BytesMut};
 use std::sync::Arc;
 
 use crate::channel::handler::*;
-use crate::channel::handler_internal::{
-    InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
-    OutboundHandlerInternal,
-};
+use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::runtime::sync::Mutex;
 
 struct StringDecoder;
@@ -70,27 +67,22 @@ impl OutboundHandler for StringEncoder {
 }
 
 impl Handler for StringCodec {
+    type In = BytesMut;
+    type Out = String;
+
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandlerContextInternal>>,
         Arc<Mutex<dyn InboundHandlerInternal>>,
-        Arc<Mutex<dyn OutboundHandlerContextInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let inbound_context: InboundHandlerContext<BytesMut, String> =
-            InboundHandlerContext::default();
-        let inbound_handler: Box<dyn InboundHandler<Rin = BytesMut, Rout = String>> =
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
             Box::new(self.decoder);
-        let outbound_context: OutboundHandlerContext<String, BytesMut> =
-            OutboundHandlerContext::default();
-        let outbound_handler: Box<dyn OutboundHandler<Win = String, Wout = BytesMut>> =
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
             Box::new(self.encoder);
 
         (
-            Arc::new(Mutex::new(inbound_context)),
             Arc::new(Mutex::new(inbound_handler)),
-            Arc::new(Mutex::new(outbound_context)),
             Arc::new(Mutex::new(outbound_handler)),
         )
     }
