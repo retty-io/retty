@@ -31,7 +31,12 @@ impl AsyncTransportTcp {
     }
 }
 
-impl InboundHandler<BytesMut> for AsyncTransportTcpDecoder {}
+impl InboundHandler for AsyncTransportTcpDecoder {
+    type Rin = BytesMut;
+    type Rout = BytesMut;
+    type Win = Self::Rout;
+    type Wout = Self::Rin;
+}
 
 #[async_trait]
 impl OutboundHandler<BytesMut> for AsyncTransportTcpEncoder {
@@ -59,10 +64,6 @@ impl OutboundHandler<BytesMut> for AsyncTransportTcpEncoder {
 }
 
 impl Handler for AsyncTransportTcp {
-    fn id(&self) -> String {
-        "AsyncTransportTcp".to_string()
-    }
-
     fn split(
         self,
     ) -> (

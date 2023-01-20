@@ -2,8 +2,9 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::channel::handler::{
-    Handler, InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
+use crate::channel::handler::Handler;
+use crate::channel::handler_internal::{
+    InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
     OutboundHandlerInternal,
 };
 use crate::error::Error;
