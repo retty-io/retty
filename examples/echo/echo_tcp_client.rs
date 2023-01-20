@@ -8,11 +8,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use retty::bootstrap::bootstrap_tcp_client::BootstrapTcpClient;
+use retty::channel::handler::OutboundHandlerContext;
+use retty::channel::handler_internal::{
+    InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
+    OutboundHandlerInternal,
+};
 use retty::channel::{
-    handler::{
-        Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
-        OutboundHandlerInternal,
-    },
+    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
 };
 use retty::codec::{
@@ -52,20 +54,35 @@ impl EchoHandler {
 }
 
 #[async_trait]
-impl InboundHandler<String> for EchoDecoder {
-    async fn read(&mut self, _ctx: &mut InboundHandlerContext, message: &mut String) {
+impl InboundHandler for EchoDecoder {
+    type Rin = String;
+    type Rout = Self::Rin;
+
+    async fn read(
+        &mut self,
+        _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        message: &mut Self::Rin,
+    ) {
         println!("received back: {}", message);
     }
-    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext, error: Error) {
+    async fn read_exception(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        error: Error,
+    ) {
         println!("received exception: {}", error);
         ctx.fire_close().await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
 
-    async fn read_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+    async fn read_timeout(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        timeout: Instant,
+    ) {
         if timeout >= self.timeout {
             println!("EchoHandler timeout at: {:?}", self.timeout);
             self.timeout = Instant::now() + self.interval;
@@ -78,7 +95,11 @@ impl InboundHandler<String> for EchoDecoder {
 
         //last handler, no need to fire_read_timeout
     }
-    async fn poll_timeout(&mut self, _ctx: &mut InboundHandlerContext, timeout: &mut Instant) {
+    async fn poll_timeout(
+        &mut self,
+        _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        timeout: &mut Instant,
+    ) {
         if self.timeout < *timeout {
             *timeout = self.timeout
         }
@@ -87,22 +108,44 @@ impl InboundHandler<String> for EchoDecoder {
     }
 }
 
-impl OutboundHandler<String> for EchoEncoder {}
+#[async_trait]
+impl OutboundHandler for EchoEncoder {
+    type Win = String;
+    type Wout = Self::Win;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        message: &mut Self::Win,
+    ) {
+        ctx.fire_write(message).await;
+    }
+}
 
 impl Handler for EchoHandler {
-    fn id(&self) -> String {
-        "Echo Handler".to_string()
-    }
-
     fn split(
         self,
     ) -> (
+        Arc<Mutex<dyn InboundHandlerContextInternal>>,
         Arc<Mutex<dyn InboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundHandlerContextInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<String>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<String>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_context: InboundHandlerContext<String, String> =
+            InboundHandlerContext::default();
+        let inbound_handler: Box<dyn InboundHandler<Rin = String, Rout = String>> =
+            Box::new(self.decoder);
+        let outbound_context: OutboundHandlerContext<String, String> =
+            OutboundHandlerContext::default();
+        let outbound_handler: Box<dyn OutboundHandler<Win = String, Wout = String>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_context)),
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_context)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }
 
