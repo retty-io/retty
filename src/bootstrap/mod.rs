@@ -6,8 +6,8 @@ use std::pin::Pin;
 
 pub mod bootstrap_tcp_client;
 pub mod bootstrap_tcp_server;
-//pub mod bootstrap_udp_client;
-//pub mod bootstrap_udp_server;
+pub mod bootstrap_udp_client;
+pub mod bootstrap_udp_server;
 
 pub type PipelineFactoryFn = Box<
     dyn (Fn(
