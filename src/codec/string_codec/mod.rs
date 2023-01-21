@@ -1,4 +1,4 @@
-//pub mod tagged;
+pub mod tagged;
 
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
