@@ -12,6 +12,7 @@ use crate::channel::{
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
+#[derive(Default)]
 pub struct Pipeline {
     pub(crate) inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
@@ -21,13 +22,9 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new() -> Self {
-        Self {
-            inbound_contexts: Vec::new(),
-            inbound_handlers: Vec::new(),
-            outbound_contexts: Vec::new(),
-            outbound_handlers: Vec::new(),
-        }
+        Self::default()
     }
+
     pub fn add_back(&mut self, handler: impl Handler) {
         let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
             handler.generate();

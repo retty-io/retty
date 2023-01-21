@@ -5,9 +5,9 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerInternal, OutboundHandler, OutboundHandlerContext,
-    OutboundHandlerInternal,
+    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
 };
+use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::{AsyncTransportWrite, TransportContext};
@@ -31,16 +31,36 @@ impl AsyncTransportUdp {
     }
 }
 
+#[derive(Default)]
 pub struct TaggedBytesMut {
     pub transport: TransportContext,
     pub message: BytesMut,
 }
 
-impl InboundHandler<TaggedBytesMut> for AsyncTransportUdpDecoder {}
+#[async_trait]
+impl InboundHandler for AsyncTransportUdpDecoder {
+    type Rin = TaggedBytesMut;
+    type Rout = Self::Rin;
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        msg: &mut Self::Rin,
+    ) {
+        ctx.fire_read(msg).await;
+    }
+}
 
 #[async_trait]
-impl OutboundHandler<TaggedBytesMut> for AsyncTransportUdpEncoder {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedBytesMut) {
+impl OutboundHandler for AsyncTransportUdpEncoder {
+    type Win = TaggedBytesMut;
+    type Wout = Self::Win;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        msg: &mut Self::Win,
+    ) {
         if let Some(target) = msg.transport.peer_addr {
             match self.writer.write(&msg.message, Some(target)).await {
                 Ok(n) => {
@@ -66,9 +86,8 @@ impl OutboundHandler<TaggedBytesMut> for AsyncTransportUdpEncoder {
 }
 
 impl Handler for AsyncTransportUdp {
-    fn id(&self) -> String {
-        "AsyncTransportUdp".to_string()
-    }
+    type In = TaggedBytesMut;
+    type Out = Self::In;
 
     fn split(
         self,
@@ -76,8 +95,14 @@ impl Handler for AsyncTransportUdp {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<TaggedBytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<TaggedBytesMut>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+            Box::new(self.decoder);
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }
