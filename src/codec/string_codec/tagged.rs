@@ -3,14 +3,17 @@ use bytes::{BufMut, BytesMut};
 use std::sync::Arc;
 
 use crate::channel::handler::*;
-use crate::codec::string_codec::{StringDecoder, StringEncoder};
+use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::runtime::sync::Mutex;
 use crate::transport::async_transport_udp::TaggedBytesMut;
 use crate::transport::TransportContext;
 
+struct TaggedStringDecoder;
+struct TaggedStringEncoder;
+
 pub struct TaggedStringCodec {
-    decoder: StringDecoder,
-    encoder: StringEncoder,
+    decoder: TaggedStringDecoder,
+    encoder: TaggedStringEncoder,
 }
 
 impl Default for TaggedStringCodec {
@@ -22,20 +25,28 @@ impl Default for TaggedStringCodec {
 impl TaggedStringCodec {
     pub fn new() -> Self {
         TaggedStringCodec {
-            decoder: StringDecoder {},
-            encoder: StringEncoder {},
+            decoder: TaggedStringDecoder {},
+            encoder: TaggedStringEncoder {},
         }
     }
 }
 
+#[derive(Default)]
 pub struct TaggedString {
     pub transport: TransportContext,
     pub message: String,
 }
 
 #[async_trait]
-impl InboundHandler<TaggedBytesMut> for StringDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, msg: &mut TaggedBytesMut) {
+impl InboundHandler for TaggedStringDecoder {
+    type Rin = TaggedBytesMut;
+    type Rout = TaggedString;
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        msg: &mut Self::Rin,
+    ) {
         match String::from_utf8(msg.message.to_vec()) {
             Ok(message) => {
                 ctx.fire_read(&mut TaggedString {
@@ -50,8 +61,15 @@ impl InboundHandler<TaggedBytesMut> for StringDecoder {
 }
 
 #[async_trait]
-impl OutboundHandler<TaggedString> for StringEncoder {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, msg: &mut TaggedString) {
+impl OutboundHandler for TaggedStringEncoder {
+    type Win = TaggedString;
+    type Wout = TaggedBytesMut;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        msg: &mut Self::Win,
+    ) {
         let mut buf = BytesMut::new();
         buf.put(msg.message.as_bytes());
         ctx.fire_write(&mut TaggedBytesMut {
@@ -63,9 +81,8 @@ impl OutboundHandler<TaggedString> for StringEncoder {
 }
 
 impl Handler for TaggedStringCodec {
-    fn id(&self) -> String {
-        "TaggedStringCodec Handler".to_string()
-    }
+    type In = TaggedBytesMut;
+    type Out = TaggedString;
 
     fn split(
         self,
@@ -73,8 +90,14 @@ impl Handler for TaggedStringCodec {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<TaggedBytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<TaggedString>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+            Box::new(self.decoder);
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }

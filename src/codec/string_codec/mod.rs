@@ -5,6 +5,7 @@ use bytes::{BufMut, BytesMut};
 use std::sync::Arc;
 
 use crate::channel::handler::*;
+use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::runtime::sync::Mutex;
 
 struct StringDecoder;
@@ -31,8 +32,15 @@ impl StringCodec {
 }
 
 #[async_trait]
-impl InboundHandler<BytesMut> for StringDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, msg: &mut BytesMut) {
+impl InboundHandler for StringDecoder {
+    type Rin = BytesMut;
+    type Rout = String;
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        msg: &mut Self::Rin,
+    ) {
         match String::from_utf8(msg.to_vec()) {
             Ok(mut message) => {
                 ctx.fire_read(&mut message).await;
@@ -43,8 +51,15 @@ impl InboundHandler<BytesMut> for StringDecoder {
 }
 
 #[async_trait]
-impl OutboundHandler<String> for StringEncoder {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut String) {
+impl OutboundHandler for StringEncoder {
+    type Win = String;
+    type Wout = BytesMut;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        message: &mut Self::Win,
+    ) {
         let mut buf = BytesMut::new();
         buf.put(message.as_bytes());
         ctx.fire_write(&mut buf).await;
@@ -52,9 +67,8 @@ impl OutboundHandler<String> for StringEncoder {
 }
 
 impl Handler for StringCodec {
-    fn id(&self) -> String {
-        "StringCodec Handler".to_string()
-    }
+    type In = BytesMut;
+    type Out = String;
 
     fn split(
         self,
@@ -62,8 +76,14 @@ impl Handler for StringCodec {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<BytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<String>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+            Box::new(self.decoder);
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }

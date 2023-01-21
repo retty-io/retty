@@ -2,98 +2,67 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::channel::handler::{
-    Handler, InboundHandlerContext, InboundHandlerInternal, OutboundHandlerContext,
-    OutboundHandlerInternal,
+use crate::channel::{
+    handler::Handler,
+    handler_internal::{
+        InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
+        OutboundHandlerInternal,
+    },
 };
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
-use crate::transport::TransportContext;
 
+#[derive(Default)]
 pub struct Pipeline {
-    pub(crate) transport_ctx: TransportContext,
-    pub(crate) handler_ids: Vec<String>,
+    pub(crate) inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
+    pub(crate) outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
     pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 }
 
 impl Pipeline {
-    pub fn new(transport_ctx: TransportContext) -> Self {
-        Self {
-            transport_ctx,
-            handler_ids: Vec::new(),
-            inbound_handlers: Vec::new(),
-            outbound_handlers: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
+
     pub fn add_back(&mut self, handler: impl Handler) {
-        self.handler_ids.push(handler.id());
-        let (inbound, outbound) = handler.split();
-        self.inbound_handlers.push(inbound);
-        self.outbound_handlers.push(outbound);
+        let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
+            handler.generate();
+        self.inbound_contexts.push(inbound_context);
+        self.inbound_handlers.push(inbound_handler);
+        self.outbound_contexts.push(outbound_context);
+        self.outbound_handlers.push(outbound_handler);
     }
 
     pub fn add_front(&mut self, handler: impl Handler) {
-        self.handler_ids.insert(0, handler.id());
-        let (inbound, outbound) = handler.split();
-        self.inbound_handlers.insert(0, inbound);
-        self.outbound_handlers.insert(0, outbound);
+        let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
+            handler.generate();
+        self.inbound_contexts.insert(0, inbound_context);
+        self.inbound_handlers.insert(0, inbound_handler);
+        self.outbound_contexts.insert(0, outbound_context);
+        self.outbound_handlers.insert(0, outbound_handler);
     }
 
-    pub async fn finalize(mut self) -> PipelineContext {
-        let mut pipeline_context = PipelineContext::new();
-
-        let (handler_ids, inbound_handlers, outbound_handlers) = (
-            self.handler_ids.drain(..),
-            self.inbound_handlers.drain(..),
-            self.outbound_handlers.drain(..),
-        );
-        for (handler_id, (inbound_handler, outbound_handler)) in handler_ids.into_iter().zip(
-            inbound_handlers
-                .into_iter()
-                .zip(outbound_handlers.into_iter()),
-        ) {
-            let inbound_context = Arc::new(Mutex::new(InboundHandlerContext {
-                id: handler_id.clone(),
-                next_out: OutboundHandlerContext {
-                    transport_ctx: Some(self.transport_ctx),
-                    ..Default::default()
-                },
-                ..Default::default()
-            }));
-            let outbound_context = Arc::new(Mutex::new(OutboundHandlerContext {
-                id: handler_id,
-                transport_ctx: Some(self.transport_ctx),
-                ..Default::default()
-            }));
-
-            pipeline_context.add_back(
-                inbound_context,
-                inbound_handler,
-                outbound_context,
-                outbound_handler,
-            );
-        }
-
-        let mut enumerate = pipeline_context.inbound_contexts.iter().enumerate();
-        let ctx_pipe_len = pipeline_context.inbound_contexts.len();
+    pub async fn finalize(self) -> Self {
+        let mut enumerate = self.inbound_contexts.iter().enumerate();
+        let ctx_pipe_len = self.inbound_contexts.len();
         for _ in 0..ctx_pipe_len {
             let (j, ctx) = enumerate.next().unwrap();
             let mut curr = ctx.lock().await;
 
             {
                 let (next_context, next_handler) = (
-                    pipeline_context.inbound_contexts.get(j + 1),
-                    pipeline_context.inbound_handlers.get(j + 1),
+                    self.inbound_contexts.get(j + 1),
+                    self.inbound_handlers.get(j + 1),
                 );
                 match (next_context, next_handler) {
                     (Some(next_ctx), Some(next_hdlr)) => {
-                        curr.next_in_ctx = Some(next_ctx.clone());
-                        curr.next_in_handler = Some(next_hdlr.clone());
+                        curr.set_next_in_ctx(Some(next_ctx.clone()));
+                        curr.set_next_in_handler(Some(next_hdlr.clone()));
                     }
                     _ => {
-                        curr.next_in_ctx = None;
-                        curr.next_in_handler = None;
+                        curr.set_next_in_ctx(None);
+                        curr.set_next_in_handler(None);
                     }
                 }
             }
@@ -101,27 +70,27 @@ impl Pipeline {
             {
                 let (prev_context, prev_handler) = if j > 0 {
                     (
-                        pipeline_context.outbound_contexts.get(j - 1),
-                        pipeline_context.outbound_handlers.get(j - 1),
+                        self.outbound_contexts.get(j - 1),
+                        self.outbound_handlers.get(j - 1),
                     )
                 } else {
                     (None, None)
                 };
                 match (prev_context, prev_handler) {
                     (Some(prev_ctx), Some(prev_hdlr)) => {
-                        curr.next_out_ctx = Some(prev_ctx.clone());
-                        curr.next_out_handler = Some(prev_hdlr.clone());
+                        curr.set_next_out_ctx(Some(prev_ctx.clone()));
+                        curr.set_next_out_handler(Some(prev_hdlr.clone()));
                     }
                     _ => {
-                        curr.next_out_ctx = None;
-                        curr.next_out_handler = None;
+                        curr.set_next_out_ctx(None);
+                        curr.set_next_out_handler(None);
                     }
                 }
             }
         }
 
-        let mut enumerate = pipeline_context.outbound_contexts.iter().enumerate();
-        let ctx_pipe_len = pipeline_context.outbound_contexts.len();
+        let mut enumerate = self.outbound_contexts.iter().enumerate();
+        let ctx_pipe_len = self.outbound_contexts.len();
         for _ in 0..ctx_pipe_len {
             let (j, ctx) = enumerate.next().unwrap();
             let mut curr = ctx.lock().await;
@@ -129,76 +98,26 @@ impl Pipeline {
             {
                 let (prev_context, prev_handler) = if j > 0 {
                     (
-                        pipeline_context.outbound_contexts.get(j - 1),
-                        pipeline_context.outbound_handlers.get(j - 1),
+                        self.outbound_contexts.get(j - 1),
+                        self.outbound_handlers.get(j - 1),
                     )
                 } else {
                     (None, None)
                 };
                 match (prev_context, prev_handler) {
                     (Some(prev_ctx), Some(prev_hdlr)) => {
-                        curr.next_out_ctx = Some(prev_ctx.clone());
-                        curr.next_out_handler = Some(prev_hdlr.clone());
+                        curr.set_next_out_ctx(Some(prev_ctx.clone()));
+                        curr.set_next_out_handler(Some(prev_hdlr.clone()));
                     }
                     _ => {
-                        curr.next_out_ctx = None;
-                        curr.next_out_handler = None;
+                        curr.set_next_out_ctx(None);
+                        curr.set_next_out_handler(None);
                     }
                 }
             }
         }
-        pipeline_context
-    }
-}
 
-#[derive(Clone)]
-pub struct PipelineContext {
-    pub(crate) inbound_contexts: Vec<Arc<Mutex<InboundHandlerContext>>>,
-    pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
-
-    pub(crate) outbound_contexts: Vec<Arc<Mutex<OutboundHandlerContext>>>,
-    pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
-}
-
-impl PipelineContext {
-    pub(crate) fn new() -> PipelineContext {
-        PipelineContext {
-            inbound_contexts: vec![],
-            inbound_handlers: vec![],
-
-            outbound_contexts: vec![],
-            outbound_handlers: vec![],
-        }
-    }
-
-    pub(crate) fn add_back(
-        &mut self,
-        inbound_context: Arc<Mutex<InboundHandlerContext>>,
-        inbound_handler: Arc<Mutex<dyn InboundHandlerInternal>>,
-        outbound_context: Arc<Mutex<OutboundHandlerContext>>,
-        outbound_handler: Arc<Mutex<dyn OutboundHandlerInternal>>,
-    ) {
-        self.inbound_contexts.push(inbound_context);
-        self.inbound_handlers.push(inbound_handler);
-
-        self.outbound_contexts.push(outbound_context);
-        self.outbound_handlers.push(outbound_handler);
-    }
-
-    fn header_handler_ctx(&self) -> Arc<Mutex<InboundHandlerContext>> {
-        self.inbound_contexts.first().unwrap().clone()
-    }
-
-    fn header_handler(&self) -> Arc<Mutex<dyn InboundHandlerInternal>> {
-        self.inbound_handlers.first().unwrap().clone()
-    }
-
-    fn tail_handler_ctx(&self) -> Arc<Mutex<OutboundHandlerContext>> {
-        self.outbound_contexts.last().unwrap().clone()
-    }
-
-    fn tail_handler(&self) -> Arc<Mutex<dyn OutboundHandlerInternal>> {
-        self.outbound_handlers.last().unwrap().clone()
+        self
     }
 
     pub async fn transport_active(&self) {
@@ -206,7 +125,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_active_internal(&mut ctx).await;
+        handler.transport_active_internal(&mut *ctx).await;
     }
 
     pub async fn transport_inactive(&self) {
@@ -214,7 +133,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_inactive_internal(&mut ctx).await;
+        handler.transport_inactive_internal(&mut *ctx).await;
     }
 
     pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
@@ -222,7 +141,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_internal(&mut ctx, msg).await;
+        handler.read_internal(&mut *ctx, msg).await;
     }
 
     pub async fn read_timeout(&self, timeout: Instant) {
@@ -230,7 +149,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_timeout_internal(&mut ctx, timeout).await;
+        handler.read_timeout_internal(&mut *ctx, timeout).await;
     }
 
     pub async fn read_exception(&self, error: Error) {
@@ -238,7 +157,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_exception_internal(&mut ctx, error).await;
+        handler.read_exception_internal(&mut *ctx, error).await;
     }
 
     pub async fn read_eof(&self) {
@@ -246,7 +165,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_eof_internal(&mut ctx).await;
+        handler.read_eof_internal(&mut *ctx).await;
     }
 
     pub async fn poll_timeout(&self, timeout: &mut Instant) {
@@ -254,7 +173,7 @@ impl PipelineContext {
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.poll_timeout_internal(&mut ctx, timeout).await;
+        handler.poll_timeout_internal(&mut *ctx, timeout).await;
     }
 
     pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
@@ -262,7 +181,7 @@ impl PipelineContext {
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_internal(&mut ctx, msg).await;
+        handler.write_internal(&mut *ctx, msg).await;
     }
 
     pub async fn write_exception(&self, error: Error) {
@@ -270,7 +189,7 @@ impl PipelineContext {
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_exception_internal(&mut ctx, error).await;
+        handler.write_exception_internal(&mut *ctx, error).await;
     }
 
     pub async fn close(&self) {
@@ -278,6 +197,6 @@ impl PipelineContext {
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.close_internal(&mut ctx).await;
+        handler.close_internal(&mut *ctx).await;
     }
 }

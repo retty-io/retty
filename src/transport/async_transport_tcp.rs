@@ -4,9 +4,9 @@ use log::{trace, warn};
 use std::sync::Arc;
 
 use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerInternal, OutboundHandler, OutboundHandlerContext,
-    OutboundHandlerInternal,
+    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
 };
+use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
 
@@ -31,11 +31,30 @@ impl AsyncTransportTcp {
     }
 }
 
-impl InboundHandler<BytesMut> for AsyncTransportTcpDecoder {}
+#[async_trait]
+impl InboundHandler for AsyncTransportTcpDecoder {
+    type Rin = BytesMut;
+    type Rout = Self::Rin;
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        msg: &mut Self::Rin,
+    ) {
+        ctx.fire_read(msg).await;
+    }
+}
 
 #[async_trait]
-impl OutboundHandler<BytesMut> for AsyncTransportTcpEncoder {
-    async fn write(&mut self, ctx: &mut OutboundHandlerContext, message: &mut BytesMut) {
+impl OutboundHandler for AsyncTransportTcpEncoder {
+    type Win = BytesMut;
+    type Wout = Self::Win;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        message: &mut Self::Win,
+    ) {
         if let Some(writer) = &mut self.writer {
             match writer.write(message, None).await {
                 Ok(n) => {
@@ -52,16 +71,15 @@ impl OutboundHandler<BytesMut> for AsyncTransportTcpEncoder {
             };
         }
     }
-    async fn close(&mut self, _ctx: &mut OutboundHandlerContext) {
+    async fn close(&mut self, _ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>) {
         trace!("close socket");
         self.writer.take();
     }
 }
 
 impl Handler for AsyncTransportTcp {
-    fn id(&self) -> String {
-        "AsyncTransportTcp".to_string()
-    }
+    type In = BytesMut;
+    type Out = Self::In;
 
     fn split(
         self,
@@ -69,8 +87,14 @@ impl Handler for AsyncTransportTcp {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<BytesMut>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<BytesMut>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+            Box::new(self.decoder);
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }

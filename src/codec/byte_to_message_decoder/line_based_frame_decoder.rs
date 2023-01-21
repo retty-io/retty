@@ -51,10 +51,6 @@ impl LineBasedFrameDecoder {
 }
 
 impl MessageDecoder for LineBasedFrameDecoder {
-    fn id(&self) -> String {
-        "LineBasedFrameDecoder".to_string()
-    }
-
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, Error> {
         let eol = self.find_end_of_line(buf);
         let mut offset = 0;

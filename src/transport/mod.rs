@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
@@ -12,6 +13,15 @@ pub mod async_transport_udp;
 pub struct TransportContext {
     pub local_addr: SocketAddr,
     pub peer_addr: Option<SocketAddr>,
+}
+
+impl Default for TransportContext {
+    fn default() -> Self {
+        Self {
+            local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
+            peer_addr: None,
+        }
+    }
 }
 
 #[async_trait]

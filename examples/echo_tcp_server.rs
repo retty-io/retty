@@ -7,9 +7,9 @@ use std::sync::Arc;
 use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
 use retty::channel::{
     handler::{
-        Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
-        OutboundHandlerInternal,
+        Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
     },
+    handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
     pipeline::Pipeline,
 };
 use retty::codec::{
@@ -21,7 +21,7 @@ use retty::codec::{
 };
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::async_transport_tcp::AsyncTransportTcp;
-use retty::transport::{AsyncTransportWrite, TransportContext};
+use retty::transport::AsyncTransportWrite;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,22 +42,40 @@ impl EchoHandler {
 }
 
 #[async_trait]
-impl InboundHandler<String> for EchoDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, message: &mut String) {
+impl InboundHandler for EchoDecoder {
+    type Rin = String;
+    type Rout = Self::Rin;
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        message: &mut Self::Rin,
+    ) {
         println!("handling {}", message);
         ctx.fire_write(&mut format!("{}\r\n", message)).await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         ctx.fire_close().await;
     }
 }
 
-impl OutboundHandler<String> for EchoEncoder {}
+#[async_trait]
+impl OutboundHandler for EchoEncoder {
+    type Win = String;
+    type Wout = Self::Win;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        message: &mut Self::Win,
+    ) {
+        ctx.fire_write(message).await;
+    }
+}
 
 impl Handler for EchoHandler {
-    fn id(&self) -> String {
-        "Echo Handler".to_string()
-    }
+    type In = String;
+    type Out = Self::In;
 
     fn split(
         self,
@@ -65,9 +83,15 @@ impl Handler for EchoHandler {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<String>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<String>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+            Box::new(self.decoder);
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }
 
@@ -116,10 +140,7 @@ async fn main() -> anyhow::Result<()> {
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-                let mut pipeline = Pipeline::new(TransportContext {
-                    local_addr: sock.local_addr().unwrap(),
-                    peer_addr: sock.peer_addr().ok(),
-                });
+                let mut pipeline = Pipeline::new();
 
                 let async_transport_handler = AsyncTransportTcp::new(sock);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
