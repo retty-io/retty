@@ -8,7 +8,7 @@ use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
 pub mod line_based_frame_decoder;
-//pub mod tagged;
+pub mod tagged;
 
 pub trait MessageDecoder {
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, Error>;
