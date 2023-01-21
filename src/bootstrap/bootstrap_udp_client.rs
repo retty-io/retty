@@ -4,14 +4,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
-use crate::channel::pipeline::Pipeline;
+use crate::channel::Pipeline;
 use crate::error::Error;
 use crate::runtime::{
     net::{ToSocketAddrs, UdpSocket},
     sleep, Runtime,
 };
-use crate::transport::async_transport_udp::TaggedBytesMut;
-use crate::transport::TransportContext;
+use crate::transport::{TaggedBytesMut, TransportContext};
 
 pub struct BootstrapUdpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,

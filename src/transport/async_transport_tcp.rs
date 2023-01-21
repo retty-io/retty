@@ -3,10 +3,10 @@ use bytes::BytesMut;
 use log::{trace, warn};
 use std::sync::Arc;
 
-use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+use crate::channel::{
+    Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
+    OutboundHandlerContext, OutboundHandlerInternal,
 };
-use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
 

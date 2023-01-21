@@ -1,13 +1,18 @@
-use crate::channel::pipeline::Pipeline;
+use crate::channel::Pipeline;
 use crate::transport::AsyncTransportWrite;
 
 use std::future::Future;
 use std::pin::Pin;
 
-pub mod bootstrap_tcp_client;
-pub mod bootstrap_tcp_server;
-pub mod bootstrap_udp_client;
-pub mod bootstrap_udp_server;
+mod bootstrap_tcp_client;
+mod bootstrap_tcp_server;
+mod bootstrap_udp_client;
+mod bootstrap_udp_server;
+
+pub use bootstrap_tcp_client::BootstrapTcpClient;
+pub use bootstrap_tcp_server::BootstrapTcpServer;
+pub use bootstrap_udp_client::BootstrapUdpClient;
+pub use bootstrap_udp_server::BootstrapUdpServer;
 
 pub type PipelineFactoryFn = Box<
     dyn (Fn(

@@ -1,3 +1,9 @@
-pub mod handler;
-pub mod handler_internal;
-pub mod pipeline;
+mod handler;
+mod handler_internal;
+mod pipeline;
+
+pub use handler::{
+    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+};
+pub use handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
+pub use pipeline::Pipeline;

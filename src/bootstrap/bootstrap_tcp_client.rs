@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
-use crate::channel::pipeline::Pipeline;
+use crate::channel::Pipeline;
 use crate::error::Error;
 use crate::runtime::{
     io::AsyncReadExt,

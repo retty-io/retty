@@ -12,8 +12,7 @@ use crate::runtime::{
     sync::Mutex,
     Runtime,
 };
-use crate::transport::async_transport_udp::TaggedBytesMut;
-use crate::transport::TransportContext;
+use crate::transport::{TaggedBytesMut, TransportContext};
 
 pub struct BootstrapUdpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,

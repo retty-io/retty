@@ -6,8 +6,11 @@ use std::sync::Arc;
 use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
 use crate::runtime::net::{OwnedReadHalf, OwnedWriteHalf, UdpSocket};
 
-pub mod async_transport_tcp;
-pub mod async_transport_udp;
+mod async_transport_tcp;
+mod async_transport_udp;
+
+pub use async_transport_tcp::AsyncTransportTcp;
+pub use async_transport_udp::{AsyncTransportUdp, TaggedBytesMut};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TransportContext {

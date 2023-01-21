@@ -4,13 +4,10 @@ use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use retty::bootstrap::bootstrap_tcp_server::BootstrapTcpServer;
+use retty::bootstrap::BootstrapTcpServer;
 use retty::channel::{
-    handler::{
-        Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
-    },
-    handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
-    pipeline::Pipeline,
+    Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
+    OutboundHandlerContext, OutboundHandlerInternal, Pipeline,
 };
 use retty::codec::{
     byte_to_message_decoder::{
@@ -20,8 +17,7 @@ use retty::codec::{
     string_codec::StringCodec,
 };
 use retty::runtime::{default_runtime, sync::Mutex};
-use retty::transport::async_transport_tcp::AsyncTransportTcp;
-use retty::transport::AsyncTransportWrite;
+use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

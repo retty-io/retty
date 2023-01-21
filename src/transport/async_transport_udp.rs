@@ -4,10 +4,10 @@ use log::{trace, warn};
 use std::io::ErrorKind;
 use std::sync::Arc;
 
-use crate::channel::handler::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+use crate::channel::{
+    Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
+    OutboundHandlerContext, OutboundHandlerInternal,
 };
-use crate::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::{AsyncTransportWrite, TransportContext};
