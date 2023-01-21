@@ -6,11 +6,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use retty::bootstrap::bootstrap_udp_server::BootstrapUdpServer;
+use retty::channel::handler::OutboundHandlerContext;
+use retty::channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
 use retty::channel::{
-    handler::{
-        Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
-        OutboundHandlerInternal,
-    },
+    handler::{Handler, InboundHandler, InboundHandlerContext, OutboundHandler},
     pipeline::Pipeline,
 };
 use retty::codec::byte_to_message_decoder::{
@@ -49,8 +48,15 @@ impl TaggedEchoHandler {
 }
 
 #[async_trait]
-impl InboundHandler<TaggedString> for TaggedEchoDecoder {
-    async fn read(&mut self, ctx: &mut InboundHandlerContext, msg: &mut TaggedString) {
+impl InboundHandler for TaggedEchoDecoder {
+    type Rin = TaggedString;
+    type Rout = Self::Rin;
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        msg: &mut Self::Rin,
+    ) {
         println!(
             "handling {} from {:?}",
             msg.message, msg.transport.peer_addr
@@ -67,7 +73,11 @@ impl InboundHandler<TaggedString> for TaggedEchoDecoder {
         }
     }
 
-    async fn read_timeout(&mut self, ctx: &mut InboundHandlerContext, timeout: Instant) {
+    async fn read_timeout(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        timeout: Instant,
+    ) {
         if self.last_transport.is_some() && self.timeout <= timeout {
             println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
             self.timeout = Instant::now() + self.interval;
@@ -82,7 +92,11 @@ impl InboundHandler<TaggedString> for TaggedEchoDecoder {
 
         //last handler, no need to fire_read_timeout
     }
-    async fn poll_timeout(&mut self, _ctx: &mut InboundHandlerContext, timeout: &mut Instant) {
+    async fn poll_timeout(
+        &mut self,
+        _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        timeout: &mut Instant,
+    ) {
         if self.last_transport.is_some() && self.timeout < *timeout {
             *timeout = self.timeout;
         }
@@ -91,12 +105,23 @@ impl InboundHandler<TaggedString> for TaggedEchoDecoder {
     }
 }
 
-impl OutboundHandler<TaggedString> for TaggedEchoEncoder {}
+#[async_trait]
+impl OutboundHandler for TaggedEchoEncoder {
+    type Win = TaggedString;
+    type Wout = Self::Win;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        message: &mut Self::Win,
+    ) {
+        ctx.fire_write(message).await;
+    }
+}
 
 impl Handler for TaggedEchoHandler {
-    fn id(&self) -> String {
-        "TaggedEcho Handler".to_string()
-    }
+    type In = TaggedString;
+    type Out = Self::In;
 
     fn split(
         self,
@@ -104,9 +129,15 @@ impl Handler for TaggedEchoHandler {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let decoder: Box<dyn InboundHandler<TaggedString>> = Box::new(self.decoder);
-        let encoder: Box<dyn OutboundHandler<TaggedString>> = Box::new(self.encoder);
-        (Arc::new(Mutex::new(decoder)), Arc::new(Mutex::new(encoder)))
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+            Box::new(self.decoder);
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+            Box::new(self.encoder);
+
+        (
+            Arc::new(Mutex::new(inbound_handler)),
+            Arc::new(Mutex::new(outbound_handler)),
+        )
     }
 }
 
@@ -155,10 +186,7 @@ async fn main() -> anyhow::Result<()> {
     bootstrap
         .pipeline(Box::new(
             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-                let mut pipeline = Pipeline::new(TransportContext {
-                    local_addr: sock.local_addr().unwrap(),
-                    peer_addr: sock.peer_addr().ok(),
-                });
+                let mut pipeline = Pipeline::new();
 
                 let async_transport_handler = AsyncTransportUdp::new(sock);
                 let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
