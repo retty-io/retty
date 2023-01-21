@@ -35,24 +35,16 @@ anyhow = "1.0.68"
 
 [[example]]
 name = "echo_tcp_server"
-path = "examples/echo/echo_tcp_server.rs"
+path = "examples/echo_tcp_server.rs"
 
 [[example]]
 name = "echo_tcp_client"
-path = "examples/echo/echo_tcp_client.rs"
+path = "examples/echo_tcp_client.rs"
 
 [[example]]
 name = "echo_udp_server"
-path = "examples/echo/echo_udp_server.rs"
+path = "examples/echo_udp_server.rs"
 
 [[example]]
 name = "echo_udp_client"
-path = "examples/echo/echo_udp_client.rs"
-
-[[example]]
-name = "telnet_server"
-path = "examples/telnet/telnet_server.rs"
-
-[[example]]
-name = "telnet_client"
-path = "examples/telnet/telnet_client.rs"
+path = "examples/echo_udp_client.rs"
