@@ -12,6 +12,8 @@ use crate::transport::{TaggedBytesMut, TransportContext};
 struct TaggedStringDecoder;
 struct TaggedStringEncoder;
 
+/// A tagged StringCodec handler that reads input of TaggedBytesMut and output of TaggedString,
+/// or writes input of TaggedString and output of TaggedBytesMut
 pub struct TaggedStringCodec {
     decoder: TaggedStringDecoder,
     encoder: TaggedStringEncoder,
@@ -24,6 +26,7 @@ impl Default for TaggedStringCodec {
 }
 
 impl TaggedStringCodec {
+    /// Creates a new TaggedStringCodec handler
     pub fn new() -> Self {
         TaggedStringCodec {
             decoder: TaggedStringDecoder {},
@@ -32,9 +35,12 @@ impl TaggedStringCodec {
     }
 }
 
+/// A tagged String with [TransportContext]
 #[derive(Default)]
 pub struct TaggedString {
+    /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
     pub transport: TransportContext,
+    /// Message body with String type
     pub message: String,
 }
 

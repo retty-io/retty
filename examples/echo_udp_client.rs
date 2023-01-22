@@ -15,7 +15,7 @@ use retty::codec::byte_to_message_decoder::{
     line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
     tagged::TaggedByteToMessageCodec,
 };
-use retty::codec::string_codec::tagged::{TaggedString, TaggedStringCodec};
+use retty::codec::string_codec::{TaggedString, TaggedStringCodec};
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TransportContext};
 

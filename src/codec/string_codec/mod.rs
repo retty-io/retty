@@ -1,4 +1,4 @@
-pub mod tagged;
+mod tagged;
 
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
@@ -10,9 +10,13 @@ use crate::channel::{
 };
 use crate::runtime::sync::Mutex;
 
+pub use tagged::{TaggedString, TaggedStringCodec};
+
 struct StringDecoder;
 struct StringEncoder;
 
+/// A StringCodec handler that reads input of BytesMut and output of String,
+/// or writes input of String and output of BytesMut
 pub struct StringCodec {
     decoder: StringDecoder,
     encoder: StringEncoder,
@@ -25,6 +29,7 @@ impl Default for StringCodec {
 }
 
 impl StringCodec {
+    /// Creates a new StringCodec handler
     pub fn new() -> Self {
         StringCodec {
             decoder: StringDecoder {},
