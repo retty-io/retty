@@ -15,12 +15,14 @@ struct AsyncTransportTcpEncoder {
     writer: Option<Box<dyn AsyncTransportWrite + Send + Sync>>,
 }
 
+/// Asynchronous transport handler for TCP
 pub struct AsyncTransportTcp {
     decoder: AsyncTransportTcpDecoder,
     encoder: AsyncTransportTcpEncoder,
 }
 
 impl AsyncTransportTcp {
+    /// Creates a new asynchronous transport handler for TCP
     pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>) -> Self {
         AsyncTransportTcp {
             decoder: AsyncTransportTcpDecoder {},

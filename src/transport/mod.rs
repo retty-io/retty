@@ -12,9 +12,12 @@ mod async_transport_udp;
 pub use async_transport_tcp::AsyncTransportTcp;
 pub use async_transport_udp::{AsyncTransportUdp, TaggedBytesMut};
 
+/// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TransportContext {
+    /// Local socket address, either IPv4 or IPv6
     pub local_addr: SocketAddr,
+    /// Optional peer socket address, either IPv4 or IPv6
     pub peer_addr: Option<SocketAddr>,
 }
 
@@ -27,26 +30,34 @@ impl Default for TransportContext {
     }
 }
 
-#[async_trait]
-pub trait AsyncTransportAddress {
+/// Obtains local address and peer address
+pub trait TransportAddress {
+    /// Returns the local address
     fn local_addr(&self) -> std::io::Result<SocketAddr>;
+    /// Returns the peer address
     fn peer_addr(&self) -> std::io::Result<SocketAddr>;
 }
 
+/// Read half of an asynchronous transport
 #[async_trait]
-pub trait AsyncTransportRead: AsyncTransportAddress {
+pub trait AsyncTransportRead: TransportAddress {
+    /// Reads data from an asynchronous transport into the provided buffer.
+    /// On success, returns the number of bytes read and the origin.
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)>;
 }
 
+/// Write half of an asynchronous transport
 #[async_trait]
-pub trait AsyncTransportWrite: AsyncTransportAddress {
+pub trait AsyncTransportWrite: TransportAddress {
+    /// Sends data to an asynchronous transport to the given address, optional for TCP transport.
+    /// On success, returns the number of bytes written.
     async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[async_trait]
-impl AsyncTransportAddress for OwnedReadHalf {
+impl TransportAddress for OwnedReadHalf {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
         self.local_addr()
     }
@@ -58,7 +69,7 @@ impl AsyncTransportAddress for OwnedReadHalf {
 
 #[cfg(not(feature = "runtime-async-std"))]
 #[async_trait]
-impl AsyncTransportAddress for OwnedWriteHalf {
+impl TransportAddress for OwnedWriteHalf {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
         self.local_addr()
     }
@@ -85,8 +96,7 @@ impl AsyncTransportWrite for OwnedWriteHalf {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[async_trait]
-impl AsyncTransportAddress for Arc<UdpSocket> {
+impl TransportAddress for Arc<UdpSocket> {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
         UdpSocket::local_addr(self)
     }

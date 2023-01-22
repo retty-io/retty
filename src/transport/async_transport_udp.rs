@@ -17,12 +17,14 @@ struct AsyncTransportUdpEncoder {
     writer: Box<dyn AsyncTransportWrite + Send + Sync>,
 }
 
+/// Asynchronous transport handler for UDP
 pub struct AsyncTransportUdp {
     decoder: AsyncTransportUdpDecoder,
     encoder: AsyncTransportUdpEncoder,
 }
 
 impl AsyncTransportUdp {
+    /// Create a new asynchronous transport handler for UDP
     pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>) -> Self {
         AsyncTransportUdp {
             decoder: AsyncTransportUdpDecoder {},
@@ -31,9 +33,12 @@ impl AsyncTransportUdp {
     }
 }
 
+/// A tagged [BytesMut](bytes::BytesMut) with [TransportContext]
 #[derive(Default)]
 pub struct TaggedBytesMut {
+    /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
     pub transport: TransportContext,
+    /// Message body with [BytesMut](bytes::BytesMut) type
     pub message: BytesMut,
 }
 
