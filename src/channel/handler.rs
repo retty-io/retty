@@ -63,7 +63,7 @@ pub trait Handler: Send + Sync {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Handles an inbound I/O event or intercepts an I/O operation, and forwards it to its next inbound handler in its [Pipeline].
+/// Handles an inbound I/O event or intercepts an I/O operation, and forwards it to its next inbound handler in its Pipeline.
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
     /// Associated input message type for [InboundHandler::read]
@@ -239,7 +239,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
 }
 
-/// Handles an outbound I/O event or intercepts an I/O operation, and forwards it to its next outbound handler in its [Pipeline].
+/// Handles an outbound I/O event or intercepts an I/O operation, and forwards it to its next outbound handler in its Pipeline.
 #[async_trait]
 pub trait OutboundHandler: Send + Sync {
     /// Associated input message type for [OutboundHandler::write]
@@ -324,7 +324,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     }
 }
 
-/// Enables a [InboundHandler] to interact with its [Pipeline] and other handlers.
+/// Enables a [InboundHandler] to interact with its Pipeline and other handlers.
 #[derive(Default)]
 pub struct InboundHandlerContext<Rin: Default, Rout: Default> {
     name: String,
@@ -523,7 +523,7 @@ impl<Rin: Default, Rout: Default> DerefMut for InboundHandlerContext<Rin, Rout> 
     }
 }
 
-/// Enables a [OutboundHandler] to interact with its [Pipeline] and other handlers.
+/// Enables a [OutboundHandler] to interact with its Pipeline and other handlers.
 #[derive(Default)]
 pub struct OutboundHandlerContext<Win, Wout> {
     name: String,
