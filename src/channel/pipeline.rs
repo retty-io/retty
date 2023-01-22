@@ -12,6 +12,49 @@ use crate::channel::{
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
+/// A list of Handlers which handles or intercepts inbound events and outbound operations.
+/// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
+/// over how an event is handled and how the Handlers in a pipeline interact with each other.
+///
+/// How an event flows in a pipeline
+/// ```text
+///                                                  Write Request
+///                                                       |
+///   +---------------------------------------------------+---------------+
+///   |                             Pipeline              |               |
+///   |                                                  \|/              |
+///   |    +---------------------+            +-----------+----------+    |
+///   |    | Inbound Handler  N  | ---------> | Outbound Handler  1  |    |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |              /|\                                  |               |
+///   |               |                                  \|/              |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |    | Inbound Handler N-1 | ---------> | Outbound Handler  2  |    |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |              /|\                                  .               |
+///   |               .                                   .               |
+///   | Inbound HandlerContext.fire_*()  Outbound HandlerContext.fire_*() |
+///   |        [ method call]                       [method call]         |
+///   |               .                                   .               |
+///   |               .                                  \|/              |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |    | Inbound Handler  2  | ---------> | Outbound Handler M-1 |    |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |              /|\                                  |               |
+///   |               |                                  \|/              |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |    | Inbound Handler  1  | ---------> | Outbound Handler  M  |    |
+///   |    +----------+----------+            +-----------+----------+    |
+///   |              /|\                                  |               |
+///   +---------------+-----------------------------------+---------------+
+///                   |                                  \|/
+///   +---------------+-----------------------------------+---------------+
+///   |               |                                   |               |
+///   |  [ AsyncTransport.read() ]            [ AsyncTransport.write() ]  |
+///   |                                                                   |
+///   |        Internal I/O Threads (Transport Implementation)            |
+///   +-------------------------------------------------------------------+
+/// ```
 #[derive(Default)]
 pub struct Pipeline {
     pub(crate) inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
@@ -21,10 +64,12 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    /// Creates a new Pipeline
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Appends a [Handler] at the last position of this pipeline.
     pub fn add_back(&mut self, handler: impl Handler) {
         let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
             handler.generate();
@@ -34,6 +79,7 @@ impl Pipeline {
         self.outbound_handlers.push(outbound_handler);
     }
 
+    /// Inserts a [Handler] at the first position of this pipeline.
     pub fn add_front(&mut self, handler: impl Handler) {
         let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
             handler.generate();
@@ -43,6 +89,7 @@ impl Pipeline {
         self.outbound_handlers.insert(0, outbound_handler);
     }
 
+    /// Finalizes the pipeline
     pub async fn finalize(self) -> Self {
         let mut enumerate = self.inbound_contexts.iter().enumerate();
         let ctx_pipe_len = self.inbound_contexts.len();
@@ -120,6 +167,7 @@ impl Pipeline {
         self
     }
 
+    /// Transport is active now, which means it is connected.
     pub async fn transport_active(&self) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -128,6 +176,7 @@ impl Pipeline {
         handler.transport_active_internal(&mut *ctx).await;
     }
 
+    /// Transport is inactive now, which means it is disconnected.
     pub async fn transport_inactive(&self) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -136,6 +185,7 @@ impl Pipeline {
         handler.transport_inactive_internal(&mut *ctx).await;
     }
 
+    /// Reads a message.
     pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -144,6 +194,7 @@ impl Pipeline {
         handler.read_internal(&mut *ctx, msg).await;
     }
 
+    /// Reads a timeout event.
     pub async fn read_timeout(&self, timeout: Instant) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -152,6 +203,7 @@ impl Pipeline {
         handler.read_timeout_internal(&mut *ctx, timeout).await;
     }
 
+    /// Reads an [Error] exception in one of its inbound operations.
     pub async fn read_exception(&self, error: Error) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -160,6 +212,7 @@ impl Pipeline {
         handler.read_exception_internal(&mut *ctx, error).await;
     }
 
+    /// Reads an EOF event.
     pub async fn read_eof(&self) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -168,6 +221,10 @@ impl Pipeline {
         handler.read_eof_internal(&mut *ctx).await;
     }
 
+    /// Polls timout event in its inbound operations.
+    /// If any inbound handler has timeout event to trigger in future,
+    /// it should compare its own timeout event with the provided timout event and
+    /// updates the provided timeout event with the minimal of these two timeout events.
     pub async fn poll_timeout(&self, timeout: &mut Instant) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
@@ -176,6 +233,7 @@ impl Pipeline {
         handler.poll_timeout_internal(&mut *ctx, timeout).await;
     }
 
+    /// Writes a message.
     pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
@@ -184,6 +242,7 @@ impl Pipeline {
         handler.write_internal(&mut *ctx, msg).await;
     }
 
+    /// Writes an [Error] exception from one of its outbound operations.
     pub async fn write_exception(&self, error: Error) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
@@ -192,6 +251,7 @@ impl Pipeline {
         handler.write_exception_internal(&mut *ctx, error).await;
     }
 
+    /// Writes a close event.
     pub async fn close(&self) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
