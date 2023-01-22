@@ -12,49 +12,8 @@ use crate::channel::{
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
-/// A list of Handlers which handles or intercepts inbound events and outbound operations.
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 /// over how an event is handled and how the Handlers in a pipeline interact with each other.
-///
-/// How an event flows in a pipeline
-/// ```text
-///                                                  Write Request
-///                                                       |
-///   +---------------------------------------------------+---------------+
-///   |                             Pipeline              |               |
-///   |                                                  \|/              |
-///   |    +---------------------+            +-----------+----------+    |
-///   |    | Inbound Handler  N  | ---------> | Outbound Handler  1  |    |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |              /|\                                  |               |
-///   |               |                                  \|/              |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |    | Inbound Handler N-1 | ---------> | Outbound Handler  2  |    |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |              /|\                                  .               |
-///   |               .                                   .               |
-///   | Inbound HandlerContext.fire_*()  Outbound HandlerContext.fire_*() |
-///   |        [ method call]                       [method call]         |
-///   |               .                                   .               |
-///   |               .                                  \|/              |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |    | Inbound Handler  2  | ---------> | Outbound Handler M-1 |    |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |              /|\                                  |               |
-///   |               |                                  \|/              |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |    | Inbound Handler  1  | ---------> | Outbound Handler  M  |    |
-///   |    +----------+----------+            +-----------+----------+    |
-///   |              /|\                                  |               |
-///   +---------------+-----------------------------------+---------------+
-///                   |                                  \|/
-///   +---------------+-----------------------------------+---------------+
-///   |               |                                   |               |
-///   |  [ AsyncTransport.read() ]            [ AsyncTransport.write() ]  |
-///   |                                                                   |
-///   |        Internal I/O Threads (Transport Implementation)            |
-///   +-------------------------------------------------------------------+
-/// ```
 #[derive(Default)]
 pub struct Pipeline {
     inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,

@@ -4,25 +4,22 @@
 //! It's like [Netty](https://netty.io) or [Wangle](https://github.com/facebook/wangle), but in Rust.
 //!
 //! ### What is a Pipeline?
-//! The fundamental abstraction of Retty is the Pipeline. Once you have fully understood this abstraction,
+//! The fundamental abstraction of Retty is the [Pipeline](crate::channel::Pipeline). Once you have fully understood this abstraction,
 //! you will be able to write all sorts of sophisticated protocols, application clients/servers.
 //! The pipeline is the most important and powerful abstraction of Retty. It offers immense flexibility
 //! to customize how requests and responses are handled by your service.
 //!  
-//! A pipeline is a chain of request/response handlers that handle upstream (handling request) and
-//! downstream (handling response). Once you chain handlers together, it provides an agile way to convert
+//! A [Pipeline](crate::channel::Pipeline) is a chain of request/response [handlers](crate::channel::Handler) that handle [inbound](crate::channel::InboundHandler) (handling request) and
+//! [outbound](crate::channel::OutboundHandler) (handling response). Once you chain handlers together, it provides an agile way to convert
 //! a raw data stream into the desired message type (class) and the inverse -- desired message type to raw data stream.
+//! Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
+//! over how an event is handled and how the handlers in a pipeline interact with each other.
 //!
-//! A handler should do one and only one function - just like the UNIX philosophy. If you have a handler that
+//! A [Handler](crate::channel::Handler) should do one and only one function - just like the UNIX philosophy. If you have a handler that
 //! is doing more than one function than you should split it into individual handlers. This is really important for
 //! maintainability and flexibility as its common to change your protocol for one reason or the other.
-//! All shared state within handlers are not thread-safe. Only use shared state that is guarded by a mutex, atomic lock, etc.
 //!
-//! A list of Handlers which handles or intercepts inbound events and outbound operations.
-//! Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
-//! over how an event is handled and how the Handlers in a pipeline interact with each other.
-//!
-//! ### How an event flows in a pipeline
+//! ### How does an event flow in a Pipeline?
 //! ```text
 //!                                                  Write Request
 //!                                                       |
@@ -30,26 +27,32 @@
 //!   |                             Pipeline              |               |
 //!   |                                                  \|/              |
 //!   |    +---------------------+            +-----------+----------+    |
-//!   |    | Inbound Handler  N  | ---------> | Outbound Handler  1  |    |
+//!   |    |  InboundHandler  N  |            |  OutboundHandler  1  |    |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |              /|\                                  |               |
-//!   |               |                                  \|/              |
+//!   |              /|\          \                       |               |
+//!   |               |            \........              |               |
+//!   |               |                     \             |               |
+//!   |               |                     _\|          \|/              |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |    | Inbound Handler N-1 | ---------> | Outbound Handler  2  |    |
+//!   |    |  InboundHandler N-1 |            |  OutboundHandler  2  |    |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |              /|\                                  .               |
-//!   |               .                                   .               |
-//!   | Inbound HandlerContext.fire_*()  Outbound HandlerContext.fire_*() |
-//!   |        [ method call]                       [method call]         |
-//!   |               .                                   .               |
-//!   |               .                                  \|/              |
+//!   |              /|\          \                       |               |
+//!   |               |            \..                    |               |
+//!   |               .               \                   .               |
+//!   | InboundHandlerContext.fire_*() \  OutboundHandlerContext.fire_*() |
+//!   |        [ method call]           \           [method call]         |
+//!   |               |                  \..              |               |
+//!   |               .                     \             .               |
+//!   |               .                     _\|          \|/              |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |    | Inbound Handler  2  | ---------> | Outbound Handler M-1 |    |
+//!   |    |  InboundHandler  2  |            |  OutboundHandler M-1 |    |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |              /|\                                  |               |
-//!   |               |                                  \|/              |
+//!   |              /|\          \                       |               |
+//!   |               |            \........              |               |
+//!   |               |                     \             |               |
+//!   |               |                     _\|          \|/              |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |    | Inbound Handler  1  | ---------> | Outbound Handler  M  |    |
+//!   |    |  InboundHandler  1  |            |  OutboundHandler  M  |    |
 //!   |    +----------+----------+            +-----------+----------+    |
 //!   |              /|\                                  |               |
 //!   +---------------+-----------------------------------+---------------+
@@ -65,9 +68,9 @@
 //! ### Echo Server Example
 //! Let's look at how to write an echo server.
 //!
-//! Here's the main piece of code in our echo server; it receives a string, prints it to stdout and
-//! sends it back downstream in the pipeline. It's really important to add the line delimiter because
-//! our pipeline will use a line decoder.
+//! Here's the main piece of code in our echo server; it receives a string from inbound direction in the pipeline,
+//! prints it to stdout and sends it back to outbound direction in the pipeline. It's really important to add the
+//! line delimiter because our pipeline will use a line decoder.
 //! ```ignore
 //! struct EchoHandler {
 //!     decoder: EchoDecoder,
@@ -129,54 +132,54 @@
 //! This needs to be the final handler in the pipeline. Now the definition of the pipeline is needed to handle the requests and responses.
 //! ```ignore
 //! let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
-//!     bootstrap
-//!         .pipeline(Box::new(
-//!             move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-//!                 let mut pipeline = Pipeline::new();
+//! bootstrap
+//!     .pipeline(Box::new(
+//!         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+//!             let mut pipeline = Pipeline::new();
 //!
-//!                 let async_transport_handler = AsyncTransportTcp::new(sock);
-//!                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-//!                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-//!                 ));
-//!                 let string_codec_handler = StringCodec::new();
-//!                 let echo_handler = EchoHandler::new();
+//!             let async_transport_handler = AsyncTransportTcp::new(sock);
+//!             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+//!                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+//!             ));
+//!             let string_codec_handler = StringCodec::new();
+//!             let echo_handler = EchoHandler::new();
 //!
-//!                 pipeline.add_back(async_transport_handler);
-//!                 pipeline.add_back(line_based_frame_decoder_handler);
-//!                 pipeline.add_back(string_codec_handler);
-//!                 pipeline.add_back(echo_handler);
+//!             pipeline.add_back(async_transport_handler);
+//!             pipeline.add_back(line_based_frame_decoder_handler);
+//!             pipeline.add_back(string_codec_handler);
+//!             pipeline.add_back(echo_handler);
 //!
-//!                 Box::pin(async move { pipeline.finalize().await })
-//!             },
-//!         ))
-//!         .bind(format!("{}:{}", host, port))
-//!         .await?;
+//!             Box::pin(async move { pipeline.finalize().await })
+//!         },
+//!     ))
+//!     .bind(format!("{}:{}", host, port))
+//!     .await?;
 //! ```
 //!
 //! It is very important to be strict in the order of insertion as they are ordered by insertion. The pipeline has 4 handlers:
 //!
-//! * AsyncTransportTcp
+//! * [AsyncTransportTcp](crate::transport::AsyncTransportTcp)
 //!     * Inbound: Reads a raw data stream from the socket and converts it into a zero-copy byte buffer.
 //!     * Outbound: Writes the contents of a zero-copy byte buffer to the underlying socket.
-//! * ByteToMessageCodec
+//! * [ByteToMessageCodec](crate::codec::byte_to_message_decoder::ByteToMessageCodec)
 //!     * Inbound: receives a zero-copy byte buffer and splits on line-endings
 //!     * Outbound: just passes the byte buffer to AsyncTransportTcp
-//! * StringCodec
+//! * [StringCodec](crate::codec::string_codec::StringCodec)
 //!     * Inbound: receives a byte buffer and decodes it into a std::string and pass up to the EchoHandler.
 //!     * Outbound: receives a std::string and encodes it into a byte buffer and pass down to the ByteToMessageCodec.
 //! * EchoHandler
 //!     * Inbound: receives a std::string and writes it to the pipeline, which will send the message outbound.
 //!     * Outbound: receives a std::string and forwards it to StringCodec.
 //!
-//! Now that all needs to be done is plug the pipeline factory into a BootstrapTcpServer and that’s pretty much it.
+//! Now that all needs to be done is plug the pipeline factory into a [BootstrapTcpServer](crate::bootstrap::BootstrapTcpServer) and that’s pretty much it.
 //! Bind a port and wait for it to stop.
 //!
 //! ```ignore
 //! tokio::select! {
-//!        _ = tokio::signal::ctrl_c() => {
-//!            bootstrap.stop().await;
-//!        }
-//!    };
+//!     _ = tokio::signal::ctrl_c() => {
+//!         bootstrap.stop().await;
+//!     }
+//! };
 //! ```
 
 #![warn(rust_2018_idioms)]
