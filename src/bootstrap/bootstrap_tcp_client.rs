@@ -12,12 +12,14 @@ use crate::runtime::{
     sleep, Runtime,
 };
 
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
 pub struct BootstrapTcpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
     runtime: Arc<dyn Runtime>,
 }
 
 impl BootstrapTcpClient {
+    /// Creates a new BootstrapTcpClient
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -25,12 +27,13 @@ impl BootstrapTcpClient {
         }
     }
 
+    /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
-    /// connect host:port
+    /// Connects to the remote peer
     pub async fn connect<A: ToSocketAddrs>(&mut self, addr: A) -> Result<Arc<Pipeline>, Error> {
         let socket = TcpStream::connect(addr).await?;
 

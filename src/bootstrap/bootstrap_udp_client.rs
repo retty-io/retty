@@ -12,6 +12,7 @@ use crate::runtime::{
 };
 use crate::transport::{TaggedBytesMut, TransportContext};
 
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
 pub struct BootstrapUdpClient {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
     runtime: Arc<dyn Runtime>,
@@ -19,6 +20,7 @@ pub struct BootstrapUdpClient {
 }
 
 impl BootstrapUdpClient {
+    /// Creates a new BootstrapUdpClient
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -27,18 +29,20 @@ impl BootstrapUdpClient {
         }
     }
 
+    /// Creates pipeline instances from when calling [BootstrapUdpClient::connect].
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
+    /// Binds local address and port
     pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
         let socket = UdpSocket::bind(addr).await?;
         self.socket = Some(Arc::new(socket));
         Ok(())
     }
 
-    /// connect host:port
+    /// Connects to the remote peer
     pub async fn connect<A: ToSocketAddrs>(&mut self, addr: A) -> Result<Arc<Pipeline>, Error> {
         let socket = Arc::clone(self.socket.as_ref().unwrap());
         socket.connect(addr).await?;

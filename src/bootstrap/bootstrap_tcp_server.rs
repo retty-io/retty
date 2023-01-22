@@ -15,6 +15,7 @@ use crate::runtime::{
     Runtime,
 };
 
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapTcpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
     runtime: Arc<dyn Runtime>,
@@ -23,6 +24,7 @@ pub struct BootstrapTcpServer {
 }
 
 impl BootstrapTcpServer {
+    /// Creates a new BootstrapTcpServer
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -32,12 +34,13 @@ impl BootstrapTcpServer {
         }
     }
 
+    /// Creates pipeline instances from when calling [BootstrapTcpServer::bind].
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
-    /// bind address and port
+    /// Binds local address and port
     pub async fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), Error> {
         let listener = TcpListener::bind(addr).await?;
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
@@ -175,6 +178,7 @@ impl BootstrapTcpServer {
         pipeline.transport_inactive().await;
     }
 
+    /// Gracefully stop the server
     pub async fn stop(&mut self) {
         {
             let mut tx = self.close_tx.lock().await;

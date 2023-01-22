@@ -14,6 +14,7 @@ use crate::runtime::{
 };
 use crate::transport::{TaggedBytesMut, TransportContext};
 
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
 pub struct BootstrapUdpServer {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
     runtime: Arc<dyn Runtime>,
@@ -22,6 +23,7 @@ pub struct BootstrapUdpServer {
 }
 
 impl BootstrapUdpServer {
+    /// Creates a new BootstrapUdpServer
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -31,12 +33,13 @@ impl BootstrapUdpServer {
         }
     }
 
+    /// Creates pipeline instances from when calling [BootstrapUdpServer::bind].
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
-    /// bind address and port
+    /// Binds local address and port
     pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
         let socket = Arc::new(UdpSocket::bind(addr).await?);
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
@@ -118,6 +121,7 @@ impl BootstrapUdpServer {
         Ok(())
     }
 
+    /// Gracefully stop the server
     pub async fn stop(&self) {
         {
             let mut tx = self.close_tx.lock().await;
