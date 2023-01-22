@@ -36,9 +36,9 @@ pub trait Handler: Send + Sync {
     where
         Self: Sized,
     {
-        let inbound_context: InboundHandlerContext<Self::In, Self::Out> =
+        let inbound_context: InboundHandlerContext<Self::Out> =
             InboundHandlerContext::new(self.name());
-        let outbound_context: OutboundHandlerContext<Self::Out, Self::In> =
+        let outbound_context: OutboundHandlerContext<Self::In> =
             OutboundHandlerContext::new(self.name());
 
         let (inbound_handler, outbound_handler) = self.split();
@@ -72,37 +72,29 @@ pub trait InboundHandler: Send + Sync {
     type Rout: Default + Send + Sync + 'static;
 
     /// Transport is active now, which means it is connected.
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>) {
         ctx.fire_transport_active().await;
     }
     /// Transport is inactive now, which means it is disconnected.
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>) {
         ctx.fire_transport_inactive().await;
     }
 
     /// Reads a message.
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
-    );
+    async fn read(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, msg: &mut Self::Rin);
     /// Reads an [Error] exception in one of its inbound operations.
-    async fn read_exception(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        err: Error,
-    ) {
+    async fn read_exception(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, err: Error) {
         ctx.fire_read_exception(err).await;
     }
     /// Reads an EOF event.
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>) {
         ctx.fire_read_eof().await;
     }
 
     /// Reads a timeout event.
     async fn read_timeout(
         &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        ctx: &mut InboundHandlerContext<Self::Rout>,
         timeout: Instant,
     ) {
         ctx.fire_read_timeout(timeout).await;
@@ -110,10 +102,10 @@ pub trait InboundHandler: Send + Sync {
     /// Polls timout event in its inbound operations.
     /// If any inbound handler has timeout event to trigger in future,
     /// it should compare its own timeout event with the provided timout event and
-    /// updates the provided timeout event with the minimal of these two timeout events.
+    /// update the provided timeout event with the minimal of these two timeout events.
     async fn poll_timeout(
         &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        ctx: &mut InboundHandlerContext<Self::Rout>,
         timeout: &mut Instant,
     ) {
         ctx.fire_poll_timeout(timeout).await;
@@ -125,10 +117,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     InboundHandlerInternal for Box<dyn InboundHandler<Rin = Rin, Rout = Rout>>
 {
     async fn transport_active_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             self.transport_active(ctx).await;
         } else {
             panic!(
@@ -138,10 +127,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
     async fn transport_inactive_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             self.transport_inactive(ctx).await;
         } else {
             panic!(
@@ -156,10 +142,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx: &mut dyn InboundHandlerContextInternal,
         msg: &mut MessageInternal,
     ) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             if let Some(msg) = msg.downcast_mut::<Rin>() {
                 self.read(ctx, msg).await;
             } else {
@@ -177,10 +160,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx: &mut dyn InboundHandlerContextInternal,
         err: Error,
     ) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             self.read_exception(ctx, err).await;
         } else {
             panic!(
@@ -190,10 +170,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
     async fn read_eof_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             self.read_eof(ctx).await;
         } else {
             panic!(
@@ -208,10 +185,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx: &mut dyn InboundHandlerContextInternal,
         timeout: Instant,
     ) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             self.read_timeout(ctx, timeout).await;
         } else {
             panic!(
@@ -225,10 +199,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx: &mut dyn InboundHandlerContextInternal,
         timeout: &mut Instant,
     ) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<InboundHandlerContext<Rout>>() {
             self.poll_timeout(ctx, timeout).await;
         } else {
             panic!(
@@ -248,21 +219,13 @@ pub trait OutboundHandler: Send + Sync {
     type Wout: Default + Send + Sync + 'static;
 
     /// Writes a message.
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: &mut Self::Win,
-    );
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext<Self::Wout>, msg: &mut Self::Win);
     /// Writes an [Error] exception from one of its outbound operations.
-    async fn write_exception(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        err: Error,
-    ) {
+    async fn write_exception(&mut self, ctx: &mut OutboundHandlerContext<Self::Wout>, err: Error) {
         ctx.fire_write_exception(err).await;
     }
     /// Writes a close event.
-    async fn close(&mut self, ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>) {
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext<Self::Wout>) {
         ctx.fire_close().await;
     }
 }
@@ -276,10 +239,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         ctx: &mut dyn OutboundHandlerContextInternal,
         msg: &mut MessageInternal,
     ) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<OutboundHandlerContext<Win, Wout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<OutboundHandlerContext<Wout>>() {
             if let Some(msg) = msg.downcast_mut::<Win>() {
                 self.write(ctx, msg).await;
             } else {
@@ -297,10 +257,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         ctx: &mut dyn OutboundHandlerContextInternal,
         err: Error,
     ) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<OutboundHandlerContext<Win, Wout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<OutboundHandlerContext<Wout>>() {
             self.write_exception(ctx, err).await;
         } else {
             panic!(
@@ -310,10 +267,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         }
     }
     async fn close_internal(&mut self, ctx: &mut dyn OutboundHandlerContextInternal) {
-        if let Some(ctx) = ctx
-            .as_any()
-            .downcast_mut::<OutboundHandlerContext<Win, Wout>>()
-        {
+        if let Some(ctx) = ctx.as_any().downcast_mut::<OutboundHandlerContext<Wout>>() {
             self.close(ctx).await;
         } else {
             panic!(
@@ -326,21 +280,18 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
 
 /// Enables a [InboundHandler] to interact with its Pipeline and other handlers.
 #[derive(Default)]
-pub struct InboundHandlerContext<Rin: Default, Rout: Default> {
+pub struct InboundHandlerContext<In: Default> {
     name: String,
 
     next_in_ctx: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     next_in_handler: Option<Arc<Mutex<dyn InboundHandlerInternal>>>,
 
-    next_out: OutboundHandlerContext<Rout, Rin>,
+    next_out: OutboundHandlerContext<In>,
 
-    phantom_rin: PhantomData<Rin>,
-    phantom_rout: PhantomData<Rout>,
+    phantom: PhantomData<In>,
 }
 
-impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
-    InboundHandlerContext<Rin, Rout>
-{
+impl<In: Default + Send + Sync + 'static> InboundHandlerContext<In> {
     /// Creates a new InboundHandlerContext
     pub fn new(name: &str) -> Self {
         Self {
@@ -374,7 +325,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
 
     /// Reads a message.
-    pub async fn fire_read(&mut self, msg: &mut Rout) {
+    pub async fn fire_read(&mut self, msg: &mut In) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
@@ -432,7 +383,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     /// Polls timout event in its inbound operations.
     /// If any inbound handler has timeout event to trigger in future,
     /// it should compare its own timeout event with the provided timout event and
-    /// updates the provided timeout event with the minimal of these two timeout events.
+    /// update the provided timeout event with the minimal of these two timeout events.
     pub async fn fire_poll_timeout(&mut self, timeout: &mut Instant) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -449,8 +400,8 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
 }
 
 #[async_trait]
-impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
-    InboundHandlerContextInternal for InboundHandlerContext<Rin, Rout>
+impl<In: Default + Send + Sync + 'static> InboundHandlerContextInternal
+    for InboundHandlerContext<In>
 {
     async fn fire_transport_active_internal(&mut self) {
         self.fire_transport_active().await;
@@ -459,7 +410,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         self.fire_transport_inactive().await;
     }
     async fn fire_read_internal(&mut self, msg: &mut MessageInternal) {
-        if let Some(msg) = msg.downcast_mut::<Rout>() {
+        if let Some(msg) = msg.downcast_mut::<In>() {
             self.fire_read(msg).await;
         } else {
             panic!("msg can't downcast_mut::<Rout> in {} handler", self.name());
@@ -510,14 +461,14 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
 }
 
-impl<Rin: Default, Rout: Default> Deref for InboundHandlerContext<Rin, Rout> {
-    type Target = OutboundHandlerContext<Rout, Rin>;
+impl<In: Default> Deref for InboundHandlerContext<In> {
+    type Target = OutboundHandlerContext<In>;
     fn deref(&self) -> &Self::Target {
         &self.next_out
     }
 }
 
-impl<Rin: Default, Rout: Default> DerefMut for InboundHandlerContext<Rin, Rout> {
+impl<In: Default> DerefMut for InboundHandlerContext<In> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.next_out
     }
@@ -525,19 +476,16 @@ impl<Rin: Default, Rout: Default> DerefMut for InboundHandlerContext<Rin, Rout> 
 
 /// Enables a [OutboundHandler] to interact with its Pipeline and other handlers.
 #[derive(Default)]
-pub struct OutboundHandlerContext<Win, Wout> {
+pub struct OutboundHandlerContext<Out> {
     name: String,
 
     next_out_ctx: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
     next_out_handler: Option<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 
-    phantom_win: PhantomData<Win>,
-    phantom_wout: PhantomData<Wout>,
+    phantom: PhantomData<Out>,
 }
 
-impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
-    OutboundHandlerContext<Win, Wout>
-{
+impl<Out: Default + Send + Sync + 'static> OutboundHandlerContext<Out> {
     /// Creates a new OutboundHandlerContext
     pub fn new(name: &str) -> Self {
         Self {
@@ -547,7 +495,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     }
 
     /// Writes a message.
-    pub async fn fire_write(&mut self, msg: &mut Wout) {
+    pub async fn fire_write(&mut self, msg: &mut Out) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {
@@ -589,11 +537,11 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
 }
 
 #[async_trait]
-impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
-    OutboundHandlerContextInternal for OutboundHandlerContext<Win, Wout>
+impl<Out: Default + Send + Sync + 'static> OutboundHandlerContextInternal
+    for OutboundHandlerContext<Out>
 {
     async fn fire_write_internal(&mut self, msg: &mut MessageInternal) {
-        if let Some(msg) = msg.downcast_mut::<Wout>() {
+        if let Some(msg) = msg.downcast_mut::<Out>() {
             self.fire_write(msg).await;
         } else {
             panic!("msg can't downcast_mut::<Wout> in {} handler", self.name());

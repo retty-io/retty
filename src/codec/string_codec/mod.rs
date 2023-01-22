@@ -45,11 +45,7 @@ impl InboundHandler for StringDecoder {
     type Rin = BytesMut;
     type Rout = String;
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, msg: &mut Self::Rin) {
         match String::from_utf8(msg.to_vec()) {
             Ok(mut message) => {
                 ctx.fire_read(&mut message).await;
@@ -66,7 +62,7 @@ impl OutboundHandler for StringEncoder {
 
     async fn write(
         &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        ctx: &mut OutboundHandlerContext<Self::Wout>,
         message: &mut Self::Win,
     ) {
         let mut buf = BytesMut::new();

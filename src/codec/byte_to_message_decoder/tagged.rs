@@ -41,19 +41,15 @@ impl InboundHandler for TaggedByteToMessageDecoder {
     type Rin = TaggedBytesMut;
     type Rout = Self::Rin;
 
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>) {
         self.transport_active = true;
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>) {
         self.transport_active = false;
         ctx.fire_transport_inactive().await;
     }
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, msg: &mut Self::Rin) {
         while self.transport_active {
             match self.message_decoder.decode(&mut msg.message) {
                 Ok(message) => {
@@ -83,7 +79,7 @@ impl OutboundHandler for TaggedByteToMessageEncoder {
 
     async fn write(
         &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        ctx: &mut OutboundHandlerContext<Self::Wout>,
         message: &mut Self::Win,
     ) {
         ctx.fire_write(message).await;

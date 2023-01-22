@@ -48,11 +48,7 @@ impl InboundHandler for AsyncTransportUdpDecoder {
     type Rin = TaggedBytesMut;
     type Rout = Self::Rin;
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, msg: &mut Self::Rin) {
         ctx.fire_read(msg).await;
     }
 }
@@ -62,11 +58,7 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
     type Win = TaggedBytesMut;
     type Wout = Self::Win;
 
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: &mut Self::Win,
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundHandlerContext<Self::Wout>, msg: &mut Self::Win) {
         if let Some(target) = msg.transport.peer_addr {
             match self.writer.write(&msg.message, Some(target)).await {
                 Ok(n) => {

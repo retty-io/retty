@@ -224,7 +224,7 @@ impl Pipeline {
     /// Polls timout event in its inbound operations.
     /// If any inbound handler has timeout event to trigger in future,
     /// it should compare its own timeout event with the provided timout event and
-    /// updates the provided timeout event with the minimal of these two timeout events.
+    /// update the provided timeout event with the minimal of these two timeout events.
     pub async fn poll_timeout(&self, timeout: &mut Instant) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,

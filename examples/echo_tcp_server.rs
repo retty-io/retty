@@ -39,15 +39,11 @@ impl InboundHandler for EchoDecoder {
     type Rin = String;
     type Rout = Self::Rin;
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        message: &mut Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, message: &mut Self::Rin) {
         println!("handling {}", message);
         ctx.fire_write(&mut format!("{}\r\n", message)).await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>) {
         ctx.fire_close().await;
     }
 }
@@ -59,7 +55,7 @@ impl OutboundHandler for EchoEncoder {
 
     async fn write(
         &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        ctx: &mut OutboundHandlerContext<Self::Wout>,
         message: &mut Self::Win,
     ) {
         ctx.fire_write(message).await;

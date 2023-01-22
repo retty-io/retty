@@ -48,11 +48,7 @@ impl InboundHandler for TaggedEchoDecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundHandlerContext<Self::Rout>, msg: &mut Self::Rin) {
         println!(
             "handling {} from {:?}",
             msg.message, msg.transport.peer_addr
@@ -71,7 +67,7 @@ impl InboundHandler for TaggedEchoDecoder {
 
     async fn read_timeout(
         &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        ctx: &mut InboundHandlerContext<Self::Rout>,
         timeout: Instant,
     ) {
         if self.last_transport.is_some() && self.timeout <= timeout {
@@ -90,7 +86,7 @@ impl InboundHandler for TaggedEchoDecoder {
     }
     async fn poll_timeout(
         &mut self,
-        _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        _ctx: &mut InboundHandlerContext<Self::Rout>,
         timeout: &mut Instant,
     ) {
         if self.last_transport.is_some() && self.timeout < *timeout {
@@ -108,7 +104,7 @@ impl OutboundHandler for TaggedEchoEncoder {
 
     async fn write(
         &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        ctx: &mut OutboundHandlerContext<Self::Wout>,
         message: &mut Self::Win,
     ) {
         ctx.fire_write(message).await;
