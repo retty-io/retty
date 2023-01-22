@@ -57,10 +57,10 @@ use crate::runtime::sync::Mutex;
 /// ```
 #[derive(Default)]
 pub struct Pipeline {
-    pub(crate) inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
-    pub(crate) inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
-    pub(crate) outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
-    pub(crate) outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
+    inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
+    inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
+    outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+    outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 }
 
 impl Pipeline {
@@ -194,15 +194,6 @@ impl Pipeline {
         handler.read_internal(&mut *ctx, msg).await;
     }
 
-    /// Reads a timeout event.
-    pub async fn read_timeout(&self, timeout: Instant) {
-        let (mut handler, mut ctx) = (
-            self.inbound_handlers.first().unwrap().lock().await,
-            self.inbound_contexts.first().unwrap().lock().await,
-        );
-        handler.read_timeout_internal(&mut *ctx, timeout).await;
-    }
-
     /// Reads an [Error] exception in one of its inbound operations.
     pub async fn read_exception(&self, error: Error) {
         let (mut handler, mut ctx) = (
@@ -219,6 +210,15 @@ impl Pipeline {
             self.inbound_contexts.first().unwrap().lock().await,
         );
         handler.read_eof_internal(&mut *ctx).await;
+    }
+
+    /// Reads a timeout event.
+    pub async fn read_timeout(&self, timeout: Instant) {
+        let (mut handler, mut ctx) = (
+            self.inbound_handlers.first().unwrap().lock().await,
+            self.inbound_contexts.first().unwrap().lock().await,
+        );
+        handler.read_timeout_internal(&mut *ctx, timeout).await;
     }
 
     /// Polls timout event in its inbound operations.

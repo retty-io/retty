@@ -8,6 +8,7 @@ use crate::runtime::sync::Mutex;
 
 pub(crate) type MessageInternal = dyn Any + Send + Sync;
 
+#[doc(hidden)]
 #[async_trait]
 pub trait InboundHandlerInternal: Send + Sync {
     async fn transport_active_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal);
@@ -37,6 +38,7 @@ pub trait InboundHandlerInternal: Send + Sync {
     );
 }
 
+#[doc(hidden)]
 #[async_trait]
 pub trait InboundHandlerContextInternal: Send + Sync {
     async fn fire_transport_active_internal(&mut self);
@@ -67,6 +69,7 @@ pub trait InboundHandlerContextInternal: Send + Sync {
     );
 }
 
+#[doc(hidden)]
 #[async_trait]
 pub trait OutboundHandlerInternal: Send + Sync {
     async fn write_internal(
@@ -82,6 +85,7 @@ pub trait OutboundHandlerInternal: Send + Sync {
     async fn close_internal(&mut self, ctx: &mut dyn OutboundHandlerContextInternal);
 }
 
+#[doc(hidden)]
 #[async_trait]
 pub trait OutboundHandlerContextInternal: Send + Sync {
     async fn fire_write_internal(&mut self, msg: &mut MessageInternal);

@@ -14,6 +14,7 @@ pub use bootstrap_tcp_server::BootstrapTcpServer;
 pub use bootstrap_udp_client::BootstrapUdpClient;
 pub use bootstrap_udp_server::BootstrapUdpServer;
 
+/// Creates a new [Pipeline]
 pub type PipelineFactoryFn = Box<
     dyn (Fn(
             Box<dyn AsyncTransportWrite + Send + Sync>,

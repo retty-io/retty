@@ -11,10 +11,10 @@ use retty::channel::{
     Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
     OutboundHandlerContext, OutboundHandlerInternal, Pipeline,
 };
-use retty::codec::byte_to_message_decoder::{
-    LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType,
+use retty::codec::{
+    byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
+    string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::codec::string_codec::{TaggedString, TaggedStringCodec};
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TransportContext};
 

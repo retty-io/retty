@@ -13,12 +13,17 @@ use crate::channel::handler_internal::{
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
+/// Handles both inbound and outbound events and splits itself into InboundHandler and OutboundHandler
 pub trait Handler: Send + Sync {
+    /// Associated In type that is used for InboundHandler::Rin type and OutboundHandler::Wout type
     type In: Default + Send + Sync + 'static;
+    /// Associated Out type that is used for InboundHandler::Rout type and OutboundHandler::Win type
     type Out: Default + Send + Sync + 'static;
 
+    /// Returns handler name
     fn name(&self) -> &str;
 
+    #[doc(hidden)]
     #[allow(clippy::type_complexity)]
     fn generate(
         self,
@@ -46,6 +51,7 @@ pub trait Handler: Send + Sync {
         )
     }
 
+    /// Splits itself into InboundHandler and OutboundHandler
     #[allow(clippy::type_complexity)]
     fn split(
         self,
@@ -56,23 +62,31 @@ pub trait Handler: Send + Sync {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Handles an inbound I/O event or intercepts an I/O operation, and forwards it to its next inbound handler in its [Pipeline].
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
+    /// Associated input message type for [InboundHandler::read]
     type Rin: Default + Send + Sync + 'static;
+    /// Associated output message type for [InboundHandler::read]
     type Rout: Default + Send + Sync + 'static;
 
+    /// Transport is active now, which means it is connected.
     async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         ctx.fire_transport_active().await;
     }
+    /// Transport is inactive now, which means it is disconnected.
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         ctx.fire_transport_inactive().await;
     }
 
+    /// Reads a message.
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
         msg: &mut Self::Rin,
     );
+    /// Reads an [Error] exception in one of its inbound operations.
     async fn read_exception(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
@@ -80,10 +94,12 @@ pub trait InboundHandler: Send + Sync {
     ) {
         ctx.fire_read_exception(err).await;
     }
+    /// Reads an EOF event.
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         ctx.fire_read_eof().await;
     }
 
+    /// Reads a timeout event.
     async fn read_timeout(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
@@ -91,6 +107,10 @@ pub trait InboundHandler: Send + Sync {
     ) {
         ctx.fire_read_timeout(timeout).await;
     }
+    /// Polls timout event in its inbound operations.
+    /// If any inbound handler has timeout event to trigger in future,
+    /// it should compare its own timeout event with the provided timout event and
+    /// updates the provided timeout event with the minimal of these two timeout events.
     async fn poll_timeout(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
@@ -219,16 +239,21 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
 }
 
+/// Handles an outbound I/O event or intercepts an I/O operation, and forwards it to its next outbound handler in its [Pipeline].
 #[async_trait]
 pub trait OutboundHandler: Send + Sync {
+    /// Associated input message type for [OutboundHandler::write]
     type Win: Default + Send + Sync + 'static;
+    /// Associated output message type for [OutboundHandler::write]
     type Wout: Default + Send + Sync + 'static;
 
+    /// Writes a message.
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
         msg: &mut Self::Win,
     );
+    /// Writes an [Error] exception from one of its outbound operations.
     async fn write_exception(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
@@ -236,6 +261,7 @@ pub trait OutboundHandler: Send + Sync {
     ) {
         ctx.fire_write_exception(err).await;
     }
+    /// Writes a close event.
     async fn close(&mut self, ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>) {
         ctx.fire_close().await;
     }
@@ -298,14 +324,15 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     }
 }
 
+/// Enables a [InboundHandler] to interact with its [Pipeline] and other handlers.
 #[derive(Default)]
 pub struct InboundHandlerContext<Rin: Default, Rout: Default> {
-    pub(crate) name: String,
+    name: String,
 
-    pub(crate) next_in_ctx: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
-    pub(crate) next_in_handler: Option<Arc<Mutex<dyn InboundHandlerInternal>>>,
+    next_in_ctx: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
+    next_in_handler: Option<Arc<Mutex<dyn InboundHandlerInternal>>>,
 
-    pub(crate) next_out: OutboundHandlerContext<Rout, Rin>,
+    next_out: OutboundHandlerContext<Rout, Rin>,
 
     phantom_rin: PhantomData<Rin>,
     phantom_rout: PhantomData<Rout>,
@@ -314,6 +341,7 @@ pub struct InboundHandlerContext<Rin: Default, Rout: Default> {
 impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
     InboundHandlerContext<Rin, Rout>
 {
+    /// Creates a new InboundHandlerContext
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -321,6 +349,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Transport is active now, which means it is connected.
     pub async fn fire_transport_active(&mut self) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -331,6 +360,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Transport is inactive now, which means it is disconnected.
     pub async fn fire_transport_inactive(&mut self) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -343,6 +373,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Reads a message.
     pub async fn fire_read(&mut self, msg: &mut Rout) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -355,6 +386,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Reads an [Error] exception in one of its inbound operations.
     pub async fn fire_read_exception(&mut self, err: Error) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -369,6 +401,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Reads an EOF event.
     pub async fn fire_read_eof(&mut self) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -381,6 +414,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Reads a timeout event.
     pub async fn fire_read_timeout(&mut self, timeout: Instant) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -395,6 +429,10 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
+    /// Polls timout event in its inbound operations.
+    /// If any inbound handler has timeout event to trigger in future,
+    /// it should compare its own timeout event with the provided timout event and
+    /// updates the provided timeout event with the minimal of these two timeout events.
     pub async fn fire_poll_timeout(&mut self, timeout: &mut Instant) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
@@ -485,12 +523,13 @@ impl<Rin: Default, Rout: Default> DerefMut for InboundHandlerContext<Rin, Rout> 
     }
 }
 
+/// Enables a [OutboundHandler] to interact with its [Pipeline] and other handlers.
 #[derive(Default)]
 pub struct OutboundHandlerContext<Win, Wout> {
-    pub(crate) name: String,
+    name: String,
 
-    pub(crate) next_out_ctx: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
-    pub(crate) next_out_handler: Option<Arc<Mutex<dyn OutboundHandlerInternal>>>,
+    next_out_ctx: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+    next_out_handler: Option<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 
     phantom_win: PhantomData<Win>,
     phantom_wout: PhantomData<Wout>,
@@ -499,6 +538,7 @@ pub struct OutboundHandlerContext<Win, Wout> {
 impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
     OutboundHandlerContext<Win, Wout>
 {
+    /// Creates a new OutboundHandlerContext
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -506,6 +546,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         }
     }
 
+    /// Writes a message.
     pub async fn fire_write(&mut self, msg: &mut Wout) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
@@ -518,6 +559,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         }
     }
 
+    /// Writes an [Error] exception from one of its outbound operations.
     pub async fn fire_write_exception(&mut self, err: Error) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
@@ -532,6 +574,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         }
     }
 
+    /// Writes a close event.
     pub async fn fire_close(&mut self) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
