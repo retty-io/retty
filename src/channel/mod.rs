@@ -1,3 +1,5 @@
+//! The handler and pipeline APIs which are asynchronous and event-driven abstraction of various transports
+
 mod handler;
 mod handler_internal;
 mod pipeline;

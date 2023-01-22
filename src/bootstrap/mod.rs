@@ -1,3 +1,5 @@
+//! The helper classes with fluent API which enable an easy implementation of typical client side and server side pipeline initialization.
+
 use crate::channel::Pipeline;
 use crate::transport::AsyncTransportWrite;
 

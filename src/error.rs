@@ -1,8 +1,10 @@
+//! Errors that arise from pipeline operations
+
 use std::fmt::{Display, Formatter};
 use std::net::AddrParseError;
 use std::string::FromUtf8Error;
 
-/// Errors that arise from pipeline read or write
+/// Errors that arise from pipeline operations
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Error {
     /// A list specifying general categories of [Error].

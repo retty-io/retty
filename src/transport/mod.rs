@@ -1,3 +1,5 @@
+//! Asynchronous transport abstraction for TCP and UDP
+
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::str::FromStr;

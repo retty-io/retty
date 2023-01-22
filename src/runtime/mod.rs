@@ -1,3 +1,5 @@
+//! Asynchronous runtime abstraction for tokio (default) and async-std
+
 use std::{fmt::Debug, future::Future, pin::Pin, sync::Arc};
 
 /// Abstracts I/O and timer operations for runtime independence
