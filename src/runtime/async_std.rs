@@ -12,23 +12,30 @@ impl Runtime for AsyncStdRuntime {
     }
 }
 
+/// A wrapper for async-std sync mod
 pub mod sync {
     pub use async_std::sync::Mutex;
 }
 
+/// A wrapper for async-std net mod
 pub mod net {
     pub use async_std::net::{TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
+    /// A OwnedReadHalf wrapper for async-std TcpStream
     pub type OwnedReadHalf = async_std::net::TcpStream;
+    /// A OwnedWriteHalf wrapper for async-std TcpStream
     pub type OwnedWriteHalf = async_std::net::TcpStream;
 }
 
+/// A wrapper for async-std io mod
 pub mod io {
     pub use async_std::io::{Read, Write};
     pub use futures_lite::io::{AsyncReadExt, AsyncWriteExt};
 }
 
+/// A wrapper for async-std mpsc mod
 pub mod mpsc {
     pub use async_std::channel::{bounded, Receiver, Sender};
 }
 
+/// A wrapper for async-std sleep
 pub use async_std::task::sleep;

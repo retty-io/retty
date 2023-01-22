@@ -12,10 +12,12 @@ impl Runtime for TokioRuntime {
     }
 }
 
+/// A wrapper for tokio sync mod
 pub mod sync {
     pub use tokio::sync::Mutex;
 }
 
+/// A wrapper for tokio net mod
 pub mod net {
     pub use tokio::net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -23,12 +25,15 @@ pub mod net {
     };
 }
 
+/// A wrapper for tokio io mod
 pub mod io {
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
 
+/// A wrapper for tokio mpsc mod
 pub mod mpsc {
     pub use tokio::sync::broadcast::{Receiver, Sender};
+    /// A bounded wrapper for tokio broadcast channel
     pub fn bounded<T: Clone>(cap: usize) -> (Sender<T>, Receiver<T>) {
         tokio::sync::broadcast::channel(cap)
     }
