@@ -2,9 +2,12 @@ use std::fmt::{Display, Formatter};
 use std::net::AddrParseError;
 use std::string::FromUtf8Error;
 
+/// Errors that arise from pipeline read or write
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Error {
+    /// A list specifying general categories of [Error].
     pub kind: std::io::ErrorKind,
+    /// A message describing error information
     pub message: String,
 }
 
@@ -44,6 +47,7 @@ impl From<FromUtf8Error> for Error {
 }
 
 impl Error {
+    /// Creates a new error from a known kind of error as well as a message.
     pub fn new(kind: std::io::ErrorKind, message: String) -> Self {
         Error { kind, message }
     }
