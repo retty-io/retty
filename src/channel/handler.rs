@@ -110,7 +110,7 @@ pub trait InboundHandler: Send + Sync {
     /// Polls timout event in its inbound operations.
     /// If any inbound handler has timeout event to trigger in future,
     /// it should compare its own timeout event with the provided timout event and
-    /// updates the provided timeout event with the minimal of these two timeout events.
+    /// update the provided timeout event with the minimal of these two timeout events.
     async fn poll_timeout(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
@@ -432,7 +432,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     /// Polls timout event in its inbound operations.
     /// If any inbound handler has timeout event to trigger in future,
     /// it should compare its own timeout event with the provided timout event and
-    /// updates the provided timeout event with the minimal of these two timeout events.
+    /// update the provided timeout event with the minimal of these two timeout events.
     pub async fn fire_poll_timeout(&mut self, timeout: &mut Instant) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
