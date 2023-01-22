@@ -15,7 +15,8 @@ struct AsyncTransportTcpEncoder {
     writer: Option<Box<dyn AsyncTransportWrite + Send + Sync>>,
 }
 
-/// Asynchronous transport handler for TCP
+/// Asynchronous TCP transport handler that reads with input of BytesMut and output of BytesMut,
+/// or writes with input of BytesMut and output of BytesMut
 pub struct AsyncTransportTcp {
     decoder: AsyncTransportTcpDecoder,
     encoder: AsyncTransportTcpEncoder,

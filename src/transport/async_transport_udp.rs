@@ -17,7 +17,8 @@ struct AsyncTransportUdpEncoder {
     writer: Box<dyn AsyncTransportWrite + Send + Sync>,
 }
 
-/// Asynchronous transport handler for UDP
+/// Asynchronous UDP transport handler for  that reads with input of TaggedBytesMut and output of TaggedBytesMut,
+/// or writes with input of TaggedBytesMut and output of TaggedBytesMut
 pub struct AsyncTransportUdp {
     decoder: AsyncTransportUdpDecoder,
     encoder: AsyncTransportUdpEncoder,

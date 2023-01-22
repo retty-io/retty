@@ -1,3 +1,5 @@
+//! Handlers for converting byte to message
+
 use async_trait::async_trait;
 use bytes::BytesMut;
 use std::sync::Arc;
@@ -9,10 +11,15 @@ use crate::channel::{
 use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
-pub mod line_based_frame_decoder;
-pub mod tagged;
+mod line_based_frame_decoder;
+mod tagged;
 
+pub use line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType};
+pub use tagged::TaggedByteToMessageCodec;
+
+/// This trait allows for decoding messages.
 pub trait MessageDecoder {
+    /// Decodes byte buffer to message buffer
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, Error>;
 }
 
@@ -23,12 +30,15 @@ struct ByteToMessageDecoder {
 
 struct ByteToMessageEncoder;
 
+/// A Byte to Message Codec handler that reads with input of BytesMut and output of BytesMut,
+/// or writes with input of BytesMut and output of BytesMut
 pub struct ByteToMessageCodec {
     decoder: ByteToMessageDecoder,
     encoder: ByteToMessageEncoder,
 }
 
 impl ByteToMessageCodec {
+    /// Creates a new ByteToMessageCodec handler
     pub fn new(message_decoder: Box<dyn MessageDecoder + Send + Sync>) -> Self {
         Self {
             decoder: ByteToMessageDecoder {

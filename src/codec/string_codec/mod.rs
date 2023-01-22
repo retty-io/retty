@@ -1,3 +1,5 @@
+//! Handlers for converting between (Tagged)BytesMut and (Tagged)String
+
 mod tagged;
 
 use async_trait::async_trait;
@@ -15,8 +17,8 @@ pub use tagged::{TaggedString, TaggedStringCodec};
 struct StringDecoder;
 struct StringEncoder;
 
-/// A StringCodec handler that reads input of BytesMut and output of String,
-/// or writes input of String and output of BytesMut
+/// A StringCodec handler that reads with input of BytesMut and output of String,
+/// or writes with input of String and output of BytesMut
 pub struct StringCodec {
     decoder: StringDecoder,
     encoder: StringEncoder,

@@ -3,14 +3,21 @@ use crate::error::Error;
 use bytes::BytesMut;
 use std::io::ErrorKind;
 
+/// Delimiter with different terminator type \n` or `\r\n`
 #[derive(Default, PartialEq, Eq)]
 pub enum TerminatorType {
+    /// Delimiter with \n` or `\r\n`
     #[default]
     BOTH,
+
+    /// Delimiter with `\n` only
     NEWLINE,
+
+    /// Delimiter with `\r\n` only
     CarriageNewline,
 }
 
+/// A line based frame decoder with [TerminatorType] as delimiter
 #[derive(Default)]
 pub struct LineBasedFrameDecoder {
     max_length: usize,
@@ -22,6 +29,7 @@ pub struct LineBasedFrameDecoder {
 }
 
 impl LineBasedFrameDecoder {
+    /// Creates a new LineBasedFrameDecoder
     pub fn new(max_length: usize, strip_delimiter: bool, terminator_type: TerminatorType) -> Self {
         Self {
             max_length,

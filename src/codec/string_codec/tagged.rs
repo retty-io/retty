@@ -12,8 +12,8 @@ use crate::transport::{TaggedBytesMut, TransportContext};
 struct TaggedStringDecoder;
 struct TaggedStringEncoder;
 
-/// A tagged StringCodec handler that reads input of TaggedBytesMut and output of TaggedString,
-/// or writes input of TaggedString and output of TaggedBytesMut
+/// A tagged StringCodec handler that reads with input of TaggedBytesMut and output of TaggedString,
+/// or writes with input of TaggedString and output of TaggedBytesMut
 pub struct TaggedStringCodec {
     decoder: TaggedStringDecoder,
     encoder: TaggedStringEncoder,

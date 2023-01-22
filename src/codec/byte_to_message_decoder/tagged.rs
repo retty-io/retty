@@ -16,12 +16,15 @@ struct TaggedByteToMessageDecoder {
 
 struct TaggedByteToMessageEncoder;
 
+/// A tagged Byte to Message Codec handler that reads with input of TaggedBytesMut and output of TaggedBytesMut,
+/// or writes with input of TaggedBytesMut and output of TaggedBytesMut
 pub struct TaggedByteToMessageCodec {
     decoder: TaggedByteToMessageDecoder,
     encoder: TaggedByteToMessageEncoder,
 }
 
 impl TaggedByteToMessageCodec {
+    /// Creates a new TaggedByteToMessageCodec handler
     pub fn new(message_decoder: Box<dyn MessageDecoder + Send + Sync>) -> Self {
         Self {
             decoder: TaggedByteToMessageDecoder {

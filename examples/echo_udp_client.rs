@@ -12,8 +12,7 @@ use retty::channel::{
     OutboundHandlerContext, OutboundHandlerInternal, Pipeline,
 };
 use retty::codec::byte_to_message_decoder::{
-    line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType},
-    tagged::TaggedByteToMessageCodec,
+    LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType,
 };
 use retty::codec::string_codec::{TaggedString, TaggedStringCodec};
 use retty::runtime::{default_runtime, sync::Mutex};
