@@ -116,8 +116,10 @@ impl OutboundHandler for TaggedEchoEncoder {
 }
 
 impl Handler for TaggedEchoHandler {
-    type In = TaggedString;
-    type Out = Self::In;
+    type Rin = TaggedString;
+    type Rout = Self::Rin;
+    type Win = TaggedString;
+    type Wout = Self::Win;
 
     fn name(&self) -> &str {
         "TaggedEchoHandler"
@@ -129,9 +131,9 @@ impl Handler for TaggedEchoHandler {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>> =
             Box::new(self.decoder);
-        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>> =
             Box::new(self.encoder);
 
         (

@@ -15,10 +15,14 @@ use crate::runtime::sync::Mutex;
 
 /// Handles both inbound and outbound events and splits itself into InboundHandler and OutboundHandler
 pub trait Handler: Send + Sync {
-    /// Associated In type that is used for InboundHandler::Rin type and OutboundHandler::Wout type
-    type In: Default + Send + Sync + 'static;
-    /// Associated Out type that is used for InboundHandler::Rout type and OutboundHandler::Win type
-    type Out: Default + Send + Sync + 'static;
+    /// Associated input message type for [InboundHandler::read]
+    type Rin: Default + Send + Sync + 'static;
+    /// Associated output message type for [InboundHandler::read]
+    type Rout: Default + Send + Sync + 'static;
+    /// Associated input message type for [OutboundHandler::write]
+    type Win: Default + Send + Sync + 'static;
+    /// Associated output message type for [OutboundHandler::write]
+    type Wout: Default + Send + Sync + 'static;
 
     /// Returns handler name
     fn name(&self) -> &str;
@@ -36,9 +40,9 @@ pub trait Handler: Send + Sync {
     where
         Self: Sized,
     {
-        let inbound_context: InboundHandlerContext<Self::In, Self::Out> =
+        let inbound_context: InboundHandlerContext<Self::Rin, Self::Rout> =
             InboundHandlerContext::new(self.name());
-        let outbound_context: OutboundHandlerContext<Self::Out, Self::In> =
+        let outbound_context: OutboundHandlerContext<Self::Win, Self::Wout> =
             OutboundHandlerContext::new(self.name());
 
         let (inbound_handler, outbound_handler) = self.split();
@@ -326,7 +330,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
 
 /// Enables a [InboundHandler] to interact with its Pipeline and other handlers.
 #[derive(Default)]
-pub struct InboundHandlerContext<Rin: Default, Rout: Default> {
+pub struct InboundHandlerContext<Rin, Rout> {
     name: String,
 
     next_in_ctx: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
@@ -510,14 +514,14 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
 }
 
-impl<Rin: Default, Rout: Default> Deref for InboundHandlerContext<Rin, Rout> {
+impl<Rin, Rout> Deref for InboundHandlerContext<Rin, Rout> {
     type Target = OutboundHandlerContext<Rout, Rin>;
     fn deref(&self) -> &Self::Target {
         &self.next_out
     }
 }
 
-impl<Rin: Default, Rout: Default> DerefMut for InboundHandlerContext<Rin, Rout> {
+impl<Rin, Rout> DerefMut for InboundHandlerContext<Rin, Rout> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.next_out
     }

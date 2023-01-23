@@ -101,8 +101,10 @@ impl OutboundHandler for ByteToMessageEncoder {
 }
 
 impl Handler for ByteToMessageCodec {
-    type In = BytesMut;
-    type Out = Self::In;
+    type Rin = BytesMut;
+    type Rout = Self::Rin;
+    type Win = BytesMut;
+    type Wout = Self::Win;
 
     fn name(&self) -> &str {
         "ByteToMessageCodec"
@@ -114,9 +116,9 @@ impl Handler for ByteToMessageCodec {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>> =
             Box::new(self.decoder);
-        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>> =
             Box::new(self.encoder);
 
         (

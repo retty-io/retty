@@ -92,8 +92,10 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
 }
 
 impl Handler for AsyncTransportUdp {
-    type In = TaggedBytesMut;
-    type Out = Self::In;
+    type Rin = TaggedBytesMut;
+    type Rout = Self::Rin;
+    type Win = TaggedBytesMut;
+    type Wout = Self::Win;
 
     fn name(&self) -> &str {
         "AsyncTransportUdp"
@@ -105,9 +107,9 @@ impl Handler for AsyncTransportUdp {
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
     ) {
-        let inbound_handler: Box<dyn InboundHandler<Rin = Self::In, Rout = Self::Out>> =
+        let inbound_handler: Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>> =
             Box::new(self.decoder);
-        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Out, Wout = Self::In>> =
+        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>> =
             Box::new(self.encoder);
 
         (
