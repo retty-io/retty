@@ -92,9 +92,6 @@
 //!         println!("handling {}", message);
 //!         ctx.fire_write(&mut format!("{}\r\n", message)).await;
 //!     }
-//!     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
-//!         ctx.fire_close().await;
-//!     }
 //! }
 //!
 //! #[async_trait]
@@ -143,28 +140,25 @@
 //! This needs to be the final handler in the pipeline. Now the definition of the pipeline is needed to handle the requests and responses.
 //! ```ignore
 //! let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
-//! bootstrap
-//!     .pipeline(Box::new(
-//!         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-//!             let mut pipeline = Pipeline::new();
+//! bootstrap.pipeline(Box::new(
+//!     move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+//!         let mut pipeline = Pipeline::new();
 //!
-//!             let async_transport_handler = AsyncTransportTcp::new(sock);
-//!             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-//!                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-//!             ));
-//!             let string_codec_handler = StringCodec::new();
-//!             let echo_handler = EchoHandler::new();
+//!         let async_transport_handler = AsyncTransportTcp::new(sock);
+//!         let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+//!             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+//!         ));
+//!         let string_codec_handler = StringCodec::new();
+//!         let echo_handler = EchoHandler::new();
 //!
-//!             pipeline.add_back(async_transport_handler);
-//!             pipeline.add_back(line_based_frame_decoder_handler);
-//!             pipeline.add_back(string_codec_handler);
-//!             pipeline.add_back(echo_handler);
+//!         pipeline.add_back(async_transport_handler);
+//!         pipeline.add_back(line_based_frame_decoder_handler);
+//!         pipeline.add_back(string_codec_handler);
+//!         pipeline.add_back(echo_handler);
 //!
-//!             Box::pin(async move { pipeline.finalize().await })
-//!         },
-//!     ))
-//!     .bind(format!("{}:{}", host, port))
-//!     .await?;
+//!         Box::pin(async move { pipeline.finalize().await })
+//!     },
+//! ));
 //! ```
 //!
 //! It is very important to be strict in the order of insertion as they are ordered by insertion. The pipeline has 4 handlers:
@@ -183,14 +177,142 @@
 //!     * Outbound: receives a std::string and forwards it to StringCodec.
 //!
 //! Now that all needs to be done is plug the pipeline factory into a [BootstrapTcpServer](crate::bootstrap::BootstrapTcpServer) and that’s pretty much it.
-//! Bind a port and wait for it to stop.
+//! Bind a local host:port and wait for it to stop.
 //!
 //! ```ignore
+//! bootstrap.bind(format!("{}:{}", host, port)).await?;
+//!
+//! println!("Press ctrl-c to stop");
 //! tokio::select! {
 //!     _ = tokio::signal::ctrl_c() => {
 //!         bootstrap.stop().await;
 //!     }
 //! };
+//! ```
+//!
+//! ### Echo Client Example
+//! The code for the echo client is very similar to the Echo Server. Here is the main echo handler.
+//! ```ignore
+//! #[async_trait]
+//! impl InboundHandler for EchoDecoder {
+//!     type Rin = String;
+//!     type Rout = Self::Rin;
+//!
+//!     async fn read(
+//!         &mut self,
+//!         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+//!         message: &mut Self::Rin,
+//!     ) {
+//!         println!("received back: {}", message);
+//!     }
+//!     async fn read_exception(
+//!         &mut self,
+//!         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+//!         error: Error,
+//!     ) {
+//!         println!("received exception: {}", error);
+//!         ctx.fire_close().await;
+//!     }
+//!     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+//!         println!("EOF received :(");
+//!         ctx.fire_close().await;
+//!     }
+//! }
+//!
+//! #[async_trait]
+//! impl OutboundHandler for EchoEncoder {
+//!     type Win = String;
+//!     type Wout = Self::Win;
+//!
+//!     async fn write(
+//!         &mut self,
+//!         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+//!         message: &mut Self::Win,
+//!     ) {
+//!         ctx.fire_write(message).await;
+//!     }
+//! }
+//!
+//! impl Handler for EchoHandler {
+//!     type Rin = String;
+//!     type Rout = Self::Rin;
+//!     type Win = String;
+//!     type Wout = Self::Win;
+//!
+//!     fn name(&self) -> &str {
+//!         "EchoHandler"
+//!     }
+//!
+//!     fn split(
+//!         self,
+//!     ) -> (
+//!         Arc<Mutex<dyn InboundHandlerInternal>>,
+//!         Arc<Mutex<dyn OutboundHandlerInternal>>,
+//!     ) {
+//!         let inbound_handler: Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>> =
+//!             Box::new(self.decoder);
+//!         let outbound_handler: Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>> =
+//!             Box::new(self.encoder);
+//!
+//!         (
+//!             Arc::new(Mutex::new(inbound_handler)),
+//!             Arc::new(Mutex::new(outbound_handler)),
+//!         )
+//!     }
+//! }
+//! ```
+//!
+//! Notice that we override other methods—read_exception and read_eof.
+//! There are few other methods that can be overriden. If you need to handle a particular event,
+//! just override the corresponding method.
+//!
+//! Now onto the client’s pipeline factory. It is identical the server’s pipeline factory, which
+//! handles writing data.
+//! ```ignore
+//! let mut bootstrap = BootstrapTcpClient::new(default_runtime().unwrap());
+//! bootstrap.pipeline(Box::new(
+//!     move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+//!         let mut pipeline = Pipeline::new();
+//!
+//!         let async_transport_handler = AsyncTransportTcp::new(sock);
+//!         let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+//!             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+//!         ));
+//!         let string_codec_handler = StringCodec::new();
+//!         let echo_handler = EchoHandler::new();
+//!
+//!         pipeline.add_back(async_transport_handler);
+//!         pipeline.add_back(line_based_frame_decoder_handler);
+//!         pipeline.add_back(string_codec_handler);
+//!         pipeline.add_back(echo_handler);
+//!
+//!         Box::pin(async move { pipeline.finalize().await })
+//!     },
+//! ));
+//! ```
+//!
+//! Now that all needs to be done is plug the pipeline factory into a BootstrapTcpClient and that’s pretty much it.
+//! Connect to the remote peer and then read line from stdin and write it to pipeline.
+//! ```ignore
+//! let pipeline = bootstrap
+//!     .connect(transport.peer_addr.as_ref().unwrap())
+//!     .await?;
+//!
+//! println!("Enter bye to stop");
+//! let mut buffer = String::new();
+//! while stdin().read_line(&mut buffer).is_ok() {
+//!     match buffer.trim_end() {
+//!         "" => break,
+//!         line => {
+//!             if line == "bye" {
+//!                 pipeline.close().await;
+//!                 break;
+//!             }
+//!             pipeline.write(&mut format!("{}\r\n", line)).await;
+//!         }
+//!     };
+//!     buffer.clear();
+//! }
 //! ```
 
 #![warn(rust_2018_idioms)]

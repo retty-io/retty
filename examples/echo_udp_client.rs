@@ -141,8 +141,8 @@ async fn main() -> anyhow::Result<()> {
         peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
     };
 
-    let mut client = BootstrapUdpClient::new(default_runtime().unwrap());
-    client.pipeline(Box::new(
+    let mut bootstrap = BootstrapUdpClient::new(default_runtime().unwrap());
+    bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let mut pipeline = Pipeline::new();
 
@@ -162,9 +162,9 @@ async fn main() -> anyhow::Result<()> {
         },
     ));
 
-    client.bind(transport.local_addr).await?;
+    bootstrap.bind(transport.local_addr).await?;
 
-    let pipeline = client
+    let pipeline = bootstrap
         .connect(transport.peer_addr.as_ref().unwrap())
         .await?;
 

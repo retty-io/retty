@@ -185,31 +185,29 @@ async fn main() -> anyhow::Result<()> {
     println!("listening {}:{}...", host, port);
 
     let mut bootstrap = BootstrapUdpServer::new(default_runtime().unwrap());
-    bootstrap
-        .pipeline(Box::new(
-            move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-                let mut pipeline = Pipeline::new();
+    bootstrap.pipeline(Box::new(
+        move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+            let mut pipeline = Pipeline::new();
 
-                let async_transport_handler = AsyncTransportUdp::new(sock);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = TaggedEchoHandler::new(Duration::from_secs(5));
+            let async_transport_handler = AsyncTransportUdp::new(sock);
+            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+            ));
+            let string_codec_handler = TaggedStringCodec::new();
+            let echo_handler = TaggedEchoHandler::new(Duration::from_secs(5));
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(echo_handler);
+            pipeline.add_back(async_transport_handler);
+            pipeline.add_back(line_based_frame_decoder_handler);
+            pipeline.add_back(string_codec_handler);
+            pipeline.add_back(echo_handler);
 
-                Box::pin(async move { pipeline.finalize().await })
-            },
-        ))
-        .bind(format!("{}:{}", host, port))
-        .await?;
+            Box::pin(async move { pipeline.finalize().await })
+        },
+    ));
+
+    bootstrap.bind(format!("{}:{}", host, port)).await?;
 
     println!("Press ctrl-c to stop");
-
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             bootstrap.stop().await;

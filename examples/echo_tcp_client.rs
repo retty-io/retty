@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use clap::Parser;
 use std::io::stdin;
 use std::io::Write;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -18,7 +17,7 @@ use retty::codec::{
 };
 use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
-use retty::transport::{AsyncTransportTcp, AsyncTransportWrite, TransportContext};
+use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -182,13 +181,8 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Connecting {}:{}...", host, port);
 
-    let transport = TransportContext {
-        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
-    };
-
-    let mut client = BootstrapTcpClient::new(default_runtime().unwrap());
-    client.pipeline(Box::new(
+    let mut bootstrap = BootstrapTcpClient::new(default_runtime().unwrap());
+    bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let mut pipeline = Pipeline::new();
 
@@ -208,9 +202,7 @@ async fn main() -> anyhow::Result<()> {
         },
     ));
 
-    let pipeline = client
-        .connect(transport.peer_addr.as_ref().unwrap())
-        .await?;
+    let pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
 
     println!("Enter bye to stop");
     let mut buffer = String::new();
