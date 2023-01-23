@@ -72,6 +72,13 @@
 //! prints it to stdout and sends it back to outbound direction in the pipeline. It's really important to add the
 //! line delimiter because our pipeline will use a line decoder.
 //! ```ignore
+//! struct EchoDecoder;
+//! struct EchoEncoder;
+//! struct EchoHandler {
+//!     decoder: EchoDecoder,
+//!     encoder: EchoEncoder,
+//! }
+//!
 //! #[async_trait]
 //! impl InboundHandler for EchoDecoder {
 //!     type Rin = String;
