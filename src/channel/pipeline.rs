@@ -49,7 +49,7 @@ impl Pipeline {
     }
 
     /// Finalizes the pipeline
-    pub async fn finalize(self) -> Self {
+    pub async fn finalize(self) -> Arc<Self> {
         let mut enumerate = self.inbound_contexts.iter().enumerate();
         let ctx_pipe_len = self.inbound_contexts.len();
         for _ in 0..ctx_pipe_len {
@@ -123,7 +123,7 @@ impl Pipeline {
             }
         }
 
-        self
+        Arc::new(self)
     }
 
     /// Transport is active now, which means it is connected.
