@@ -31,22 +31,22 @@ impl Shared {
         }
     }
 
-    fn join(&mut self, sender: SocketAddr, pipeline: Arc<Pipeline>) {
-        println!("{} joined", sender);
-        self.peers.insert(sender, pipeline);
+    fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline>) {
+        println!("{} joined", peer);
+        self.peers.insert(peer, pipeline);
     }
 
-    fn leave(&mut self, sender: &SocketAddr) {
-        println!("{} left", sender);
-        self.peers.remove(&sender);
+    fn leave(&mut self, peer: &SocketAddr) {
+        println!("{} left", peer);
+        self.peers.remove(peer);
     }
 
     /// Send message to every peer, except for the sender.
     async fn broadcast(&mut self, sender: SocketAddr, message: &mut String) {
         print!("broadcast message: {}", message);
-        for peer in self.peers.iter_mut() {
-            if *peer.0 != sender {
-                let _ = peer.1.write(message).await;
+        for (peer, pipeline) in self.peers.iter() {
+            if *peer != sender {
+                let _ = pipeline.write(message).await;
             }
         }
     }
@@ -54,7 +54,7 @@ impl Shared {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ChatDecoder {
-    addr: SocketAddr,
+    peer: SocketAddr,
     state: Arc<Mutex<Shared>>,
 }
 struct ChatEncoder;
@@ -64,9 +64,9 @@ struct ChatHandler {
 }
 
 impl ChatHandler {
-    fn new(addr: SocketAddr, state: Arc<Mutex<Shared>>) -> Self {
+    fn new(peer: SocketAddr, state: Arc<Mutex<Shared>>) -> Self {
         ChatHandler {
-            decoder: ChatDecoder { addr, state },
+            decoder: ChatDecoder { peer, state },
             encoder: ChatEncoder,
         }
     }
@@ -82,18 +82,20 @@ impl InboundHandler for ChatDecoder {
         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
         message: &mut Self::Rin,
     ) {
-        println!("handling {}", message);
+        println!("received: {}", message);
+
         let mut s = self.state.lock().await;
-        s.broadcast(self.addr, &mut format!("{}\r\n", message))
+        s.broadcast(self.peer, &mut format!("{}\r\n", message))
             .await;
     }
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
-        ctx.fire_close().await;
-
+        // first leave itself from state, otherwise, it may still receive message from broadcast,
+        // which may cause data racing.
         {
             let mut s = self.state.lock().await;
-            s.leave(&self.addr);
+            s.leave(&self.peer);
         }
+        ctx.fire_close().await;
     }
 }
 
@@ -182,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the shared state. This is how all the peers communicate.
     // The server task will hold a handle to this. For every new client, the
-    // `state` handle is cloned and passed into the task that processes the
+    // `state` handle is cloned and passed into the handler that processes the
     // client connection.
     let state = Arc::new(Mutex::new(Shared::new()));
 
@@ -192,8 +194,8 @@ async fn main() -> anyhow::Result<()> {
             let mut pipeline = Pipeline::new();
 
             let state = state.clone();
-            let sender = sock.peer_addr().unwrap();
-            let chat_handler = ChatHandler::new(sender, state.clone());
+            let peer = sock.peer_addr().unwrap();
+            let chat_handler = ChatHandler::new(peer, state.clone());
             let async_transport_handler = AsyncTransportTcp::new(sock);
             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
@@ -209,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
                 let pipeline = pipeline.finalize().await;
                 {
                     let mut s = state.lock().await;
-                    s.join(sender, pipeline.clone());
+                    s.join(peer, pipeline.clone());
                 }
                 pipeline
             })
