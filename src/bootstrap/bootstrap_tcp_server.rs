@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
-use crate::error::Error;
 use crate::runtime::{
     io::AsyncReadExt,
     mpsc::{bounded, Receiver, Sender},
@@ -41,7 +40,7 @@ impl BootstrapTcpServer {
     }
 
     /// Binds local address and port
-    pub async fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), Error> {
+    pub async fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind(addr).await?;
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 

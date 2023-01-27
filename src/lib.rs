@@ -208,9 +208,9 @@
 //!     async fn read_exception(
 //!         &mut self,
 //!         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-//!         error: Error,
+//!         err: Box<dyn Error + Send + Sync>,
 //!     ) {
-//!         println!("received exception: {}", error);
+//!         println!("received exception: {}", err);
 //!         ctx.fire_close().await;
 //!     }
 //!     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
@@ -322,6 +322,5 @@
 pub mod bootstrap;
 pub mod channel;
 pub mod codec;
-pub mod error;
 pub mod runtime;
 pub mod transport;

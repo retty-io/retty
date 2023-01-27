@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -9,7 +10,6 @@ use crate::channel::{
         OutboundHandlerInternal,
     },
 };
-use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
@@ -153,13 +153,13 @@ impl Pipeline {
         handler.read_internal(&mut *ctx, msg).await;
     }
 
-    /// Reads an [Error] exception in one of its inbound operations.
-    pub async fn read_exception(&self, error: Error) {
+    /// Reads an Error exception in one of its inbound operations.
+    pub async fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_exception_internal(&mut *ctx, error).await;
+        handler.read_exception_internal(&mut *ctx, err).await;
     }
 
     /// Reads an EOF event.
@@ -201,13 +201,13 @@ impl Pipeline {
         handler.write_internal(&mut *ctx, msg).await;
     }
 
-    /// Writes an [Error] exception from one of its outbound operations.
-    pub async fn write_exception(&self, error: Error) {
+    /// Writes an Error exception from one of its outbound operations.
+    pub async fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_exception_internal(&mut *ctx, error).await;
+        handler.write_exception_internal(&mut *ctx, err).await;
     }
 
     /// Writes a close event.

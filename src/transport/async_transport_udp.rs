@@ -8,7 +8,6 @@ use crate::channel::{
     Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
     OutboundHandlerContext, OutboundHandlerInternal,
 };
-use crate::error::Error;
 use crate::runtime::sync::Mutex;
 use crate::transport::{AsyncTransportWrite, TransportContext};
 
@@ -82,10 +81,10 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
                 }
             }
         } else {
-            let err = Error::new(
+            let err = Box::new(std::io::Error::new(
                 ErrorKind::NotConnected,
                 String::from("Transport endpoint is not connected"),
-            );
+            ));
             ctx.fire_write_exception(err).await;
         }
     }

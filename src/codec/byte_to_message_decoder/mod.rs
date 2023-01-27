@@ -8,7 +8,6 @@ use crate::channel::{
     Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
     OutboundHandlerContext, OutboundHandlerInternal,
 };
-use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
 mod line_based_frame_decoder;
@@ -20,7 +19,7 @@ pub use tagged::TaggedByteToMessageCodec;
 /// This trait allows for decoding messages.
 pub trait MessageDecoder {
     /// Decodes byte buffer to message buffer
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, Error>;
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, std::io::Error>;
 }
 
 struct ByteToMessageDecoder {
@@ -78,7 +77,7 @@ impl InboundHandler for ByteToMessageDecoder {
                     }
                 }
                 Err(err) => {
-                    ctx.fire_read_exception(err).await;
+                    ctx.fire_read_exception(Box::new(err)).await;
                     return;
                 }
             }

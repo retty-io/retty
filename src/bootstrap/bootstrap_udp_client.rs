@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::channel::Pipeline;
-use crate::error::Error;
 use crate::runtime::{
     net::{ToSocketAddrs, UdpSocket},
     sleep, Runtime,
@@ -36,14 +35,17 @@ impl BootstrapUdpClient {
     }
 
     /// Binds local address and port
-    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), std::io::Error> {
         let socket = UdpSocket::bind(addr).await?;
         self.socket = Some(Arc::new(socket));
         Ok(())
     }
 
     /// Connects to the remote peer
-    pub async fn connect<A: ToSocketAddrs>(&mut self, addr: A) -> Result<Arc<Pipeline>, Error> {
+    pub async fn connect<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+    ) -> Result<Arc<Pipeline>, std::io::Error> {
         let socket = Arc::clone(self.socket.as_ref().unwrap());
         socket.connect(addr).await?;
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use log::{trace, warn};
 use std::any::Any;
+use std::error::Error;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -10,7 +11,6 @@ use crate::channel::handler_internal::{
     InboundHandlerContextInternal, InboundHandlerInternal, MessageInternal,
     OutboundHandlerContextInternal, OutboundHandlerInternal,
 };
-use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
 /// Handles both inbound and outbound events and splits itself into InboundHandler and OutboundHandler
@@ -90,11 +90,11 @@ pub trait InboundHandler: Send + Sync {
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
         msg: &mut Self::Rin,
     );
-    /// Reads an [Error] exception in one of its inbound operations.
+    /// Reads an Error exception in one of its inbound operations.
     async fn read_exception(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        err: Error,
+        err: Box<dyn Error + Send + Sync>,
     ) {
         ctx.fire_read_exception(err).await;
     }
@@ -179,7 +179,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     async fn read_exception_internal(
         &mut self,
         ctx: &mut dyn InboundHandlerContextInternal,
-        err: Error,
+        err: Box<dyn Error + Send + Sync>,
     ) {
         if let Some(ctx) = ctx
             .as_any()
@@ -257,11 +257,11 @@ pub trait OutboundHandler: Send + Sync {
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
         msg: &mut Self::Win,
     );
-    /// Writes an [Error] exception from one of its outbound operations.
+    /// Writes an Error exception from one of its outbound operations.
     async fn write_exception(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        err: Error,
+        err: Box<dyn Error + Send + Sync>,
     ) {
         ctx.fire_write_exception(err).await;
     }
@@ -299,7 +299,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     async fn write_exception_internal(
         &mut self,
         ctx: &mut dyn OutboundHandlerContextInternal,
-        err: Error,
+        err: Box<dyn Error + Send + Sync>,
     ) {
         if let Some(ctx) = ctx
             .as_any()
@@ -390,8 +390,8 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
     }
 
-    /// Reads an [Error] exception in one of its inbound operations.
-    pub async fn fire_read_exception(&mut self, err: Error) {
+    /// Reads an Error exception in one of its inbound operations.
+    pub async fn fire_read_exception(&mut self, err: Box<dyn Error + Send + Sync>) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
@@ -469,7 +469,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
             panic!("msg can't downcast_mut::<Rout> in {} handler", self.name());
         }
     }
-    async fn fire_read_exception_internal(&mut self, err: Error) {
+    async fn fire_read_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>) {
         self.fire_read_exception(err).await;
     }
     async fn fire_read_eof_internal(&mut self) {
@@ -563,8 +563,8 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         }
     }
 
-    /// Writes an [Error] exception from one of its outbound operations.
-    pub async fn fire_write_exception(&mut self, err: Error) {
+    /// Writes an Error exception from one of its outbound operations.
+    pub async fn fire_write_exception(&mut self, err: Box<dyn Error + Send + Sync>) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {
@@ -603,7 +603,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
             panic!("msg can't downcast_mut::<Wout> in {} handler", self.name());
         }
     }
-    async fn fire_write_exception_internal(&mut self, err: Error) {
+    async fn fire_write_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>) {
         self.fire_write_exception(err).await;
     }
     async fn fire_close_internal(&mut self) {

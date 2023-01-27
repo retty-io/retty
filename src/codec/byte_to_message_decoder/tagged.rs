@@ -68,7 +68,7 @@ impl InboundHandler for TaggedByteToMessageDecoder {
                     }
                 }
                 Err(err) => {
-                    ctx.fire_read_exception(err).await;
+                    ctx.fire_read_exception(Box::new(err)).await;
                     return;
                 }
             }

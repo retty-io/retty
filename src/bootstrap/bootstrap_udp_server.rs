@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
-use crate::error::Error;
 use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
     net::{ToSocketAddrs, UdpSocket},
@@ -40,7 +39,7 @@ impl BootstrapUdpServer {
     }
 
     /// Binds local address and port
-    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), std::io::Error> {
         let socket = Arc::new(UdpSocket::bind(addr).await?);
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 

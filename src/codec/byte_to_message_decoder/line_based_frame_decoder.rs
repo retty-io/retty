@@ -1,5 +1,5 @@
 use crate::codec::byte_to_message_decoder::MessageDecoder;
-use crate::error::Error;
+
 use bytes::BytesMut;
 use std::io::ErrorKind;
 
@@ -59,7 +59,7 @@ impl LineBasedFrameDecoder {
 }
 
 impl MessageDecoder for LineBasedFrameDecoder {
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, Error> {
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, std::io::Error> {
         let eol = self.find_end_of_line(buf);
         let mut offset = 0;
         if !self.discarding {
@@ -67,7 +67,7 @@ impl MessageDecoder for LineBasedFrameDecoder {
                 offset += eol;
                 let delim_length = if buf[offset] == b'\r' { 2 } else { 1 };
                 if eol > self.max_length {
-                    return Err(Error::new(
+                    return Err(std::io::Error::new(
                         ErrorKind::Other,
                         format!("frame length {} exceeds max {}", eol, self.max_length),
                     ));
@@ -88,7 +88,10 @@ impl MessageDecoder for LineBasedFrameDecoder {
                     self.discarded_bytes = len;
                     let _ = buf.split_to(len);
                     self.discarding = true;
-                    Err(Error::new(ErrorKind::Other, format!("over {}", len)))
+                    Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        format!("over {}", len),
+                    ))
                 } else {
                     Ok(None)
                 }

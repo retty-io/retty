@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use clap::Parser;
+use std::error::Error;
 use std::io::stdin;
 use std::io::Write;
 use std::str::FromStr;
@@ -15,7 +16,6 @@ use retty::codec::{
     byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
     string_codec::StringCodec,
 };
-use retty::error::Error;
 use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
@@ -58,9 +58,9 @@ impl InboundHandler for EchoDecoder {
     async fn read_exception(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        error: Error,
+        err: Box<dyn Error + Send + Sync>,
     ) {
-        println!("received exception: {}", error);
+        println!("received exception: {}", err);
         ctx.fire_close().await;
     }
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {

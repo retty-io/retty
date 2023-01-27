@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use std::any::Any;
+use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::error::Error;
 use crate::runtime::sync::Mutex;
 
 pub(crate) type MessageInternal = dyn Any + Send + Sync;
@@ -22,7 +22,7 @@ pub trait InboundHandlerInternal: Send + Sync {
     async fn read_exception_internal(
         &mut self,
         ctx: &mut dyn InboundHandlerContextInternal,
-        err: Error,
+        err: Box<dyn Error + Send + Sync>,
     );
     async fn read_eof_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal);
 
@@ -44,7 +44,7 @@ pub trait InboundHandlerContextInternal: Send + Sync {
     async fn fire_transport_active_internal(&mut self);
     async fn fire_transport_inactive_internal(&mut self);
     async fn fire_read_internal(&mut self, msg: &mut MessageInternal);
-    async fn fire_read_exception_internal(&mut self, err: Error);
+    async fn fire_read_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>);
     async fn fire_read_eof_internal(&mut self);
     async fn fire_read_timeout_internal(&mut self, timeout: Instant);
     async fn fire_poll_timeout_internal(&mut self, timeout: &mut Instant);
@@ -80,7 +80,7 @@ pub trait OutboundHandlerInternal: Send + Sync {
     async fn write_exception_internal(
         &mut self,
         ctx: &mut dyn OutboundHandlerContextInternal,
-        err: Error,
+        err: Box<dyn Error + Send + Sync>,
     );
     async fn close_internal(&mut self, ctx: &mut dyn OutboundHandlerContextInternal);
 }
@@ -89,7 +89,7 @@ pub trait OutboundHandlerInternal: Send + Sync {
 #[async_trait]
 pub trait OutboundHandlerContextInternal: Send + Sync {
     async fn fire_write_internal(&mut self, msg: &mut MessageInternal);
-    async fn fire_write_exception_internal(&mut self, err: Error);
+    async fn fire_write_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>);
     async fn fire_close_internal(&mut self);
 
     fn name(&self) -> &str;

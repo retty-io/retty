@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::channel::Pipeline;
-use crate::error::Error;
 use crate::runtime::{
     io::AsyncReadExt,
     net::{TcpStream, ToSocketAddrs},
@@ -34,7 +33,10 @@ impl BootstrapTcpClient {
     }
 
     /// Connects to the remote peer
-    pub async fn connect<A: ToSocketAddrs>(&mut self, addr: A) -> Result<Arc<Pipeline>, Error> {
+    pub async fn connect<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+    ) -> Result<Arc<Pipeline>, std::io::Error> {
         let socket = TcpStream::connect(addr).await?;
 
         #[cfg(feature = "runtime-tokio")]
