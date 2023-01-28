@@ -97,13 +97,13 @@ impl BootstrapUdpServer {
 
                                 trace!("pipeline recv {} bytes", n);
                                 pipeline
-                                    .read(&mut TaggedBytesMut {
+                                    .read(Box::new(TaggedBytesMut {
                                         transport: TransportContext {
                                             local_addr,
                                             peer_addr: Some(peer_addr),
                                         },
                                         message: BytesMut::from(&buf[..n]),
-                                    })
+                                    }))
                                     .await;
                             }
                             Err(err) => {

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::channel::handler_internal::{
-    InboundHandlerContextInternal, InboundHandlerInternal, MessageInternal,
-    OutboundHandlerContextInternal, OutboundHandlerInternal,
+    InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
+    OutboundHandlerInternal,
 };
 use crate::runtime::sync::Mutex;
 
@@ -88,7 +88,7 @@ pub trait InboundHandler: Send + Sync {
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
+        msg: Self::Rin,
     );
     /// Reads an Error exception in one of its inbound operations.
     async fn read_exception(
@@ -158,20 +158,20 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     async fn read_internal(
         &mut self,
         ctx: &mut dyn InboundHandlerContextInternal,
-        msg: &mut MessageInternal,
+        msg: Box<dyn Any + Send + Sync>,
     ) {
         if let Some(ctx) = ctx
             .as_any()
             .downcast_mut::<InboundHandlerContext<Rin, Rout>>()
         {
-            if let Some(msg) = msg.downcast_mut::<Rin>() {
-                self.read(ctx, msg).await;
+            if let Ok(msg) = msg.downcast::<Rin>() {
+                self.read(ctx, *msg).await;
             } else {
-                panic!("msg can't downcast_mut::<Rin> in {} handler", ctx.name());
+                panic!("msg can't downcast::<Rin> in {} handler", ctx.name());
             }
         } else {
             panic!(
-                "ctx can't downcast_mut::<InboundHandlerContext<Rin, Rout>> in {} handler",
+                "ctx can't downcast::<InboundHandlerContext<Rin, Rout>> in {} handler",
                 ctx.name()
             );
         }
@@ -255,7 +255,7 @@ pub trait OutboundHandler: Send + Sync {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: &mut Self::Win,
+        msg: Self::Win,
     );
     /// Writes an Error exception from one of its outbound operations.
     async fn write_exception(
@@ -278,16 +278,16 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     async fn write_internal(
         &mut self,
         ctx: &mut dyn OutboundHandlerContextInternal,
-        msg: &mut MessageInternal,
+        msg: Box<dyn Any + Send + Sync>,
     ) {
         if let Some(ctx) = ctx
             .as_any()
             .downcast_mut::<OutboundHandlerContext<Win, Wout>>()
         {
-            if let Some(msg) = msg.downcast_mut::<Win>() {
-                self.write(ctx, msg).await;
+            if let Ok(msg) = msg.downcast::<Win>() {
+                self.write(ctx, *msg).await;
             } else {
-                panic!("msg can't downcast_mut::<Win> in {} handler", ctx.name());
+                panic!("msg can't downcast::<Win> in {} handler", ctx.name());
             }
         } else {
             panic!(
@@ -378,13 +378,15 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
 
     /// Reads a message.
-    pub async fn fire_read(&mut self, msg: &mut Rout) {
+    pub async fn fire_read(&mut self, msg: Rout) {
         if let (Some(next_in_handler), Some(next_in_ctx)) =
             (&self.next_in_handler, &self.next_in_ctx)
         {
             let (mut next_handler, mut next_ctx) =
                 (next_in_handler.lock().await, next_in_ctx.lock().await);
-            next_handler.read_internal(&mut *next_ctx, msg).await;
+            next_handler
+                .read_internal(&mut *next_ctx, Box::new(msg))
+                .await;
         } else {
             warn!("read reached end of pipeline");
         }
@@ -462,11 +464,11 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     async fn fire_transport_inactive_internal(&mut self) {
         self.fire_transport_inactive().await;
     }
-    async fn fire_read_internal(&mut self, msg: &mut MessageInternal) {
-        if let Some(msg) = msg.downcast_mut::<Rout>() {
-            self.fire_read(msg).await;
+    async fn fire_read_internal(&mut self, msg: Box<dyn Any + Send + Sync>) {
+        if let Ok(msg) = msg.downcast::<Rout>() {
+            self.fire_read(*msg).await;
         } else {
-            panic!("msg can't downcast_mut::<Rout> in {} handler", self.name());
+            panic!("msg can't downcast::<Rout> in {} handler", self.name());
         }
     }
     async fn fire_read_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>) {
@@ -551,13 +553,15 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     }
 
     /// Writes a message.
-    pub async fn fire_write(&mut self, msg: &mut Wout) {
+    pub async fn fire_write(&mut self, msg: Wout) {
         if let (Some(next_out_handler), Some(next_out_ctx)) =
             (&self.next_out_handler, &self.next_out_ctx)
         {
             let (mut next_handler, mut next_ctx) =
                 (next_out_handler.lock().await, next_out_ctx.lock().await);
-            next_handler.write_internal(&mut *next_ctx, msg).await;
+            next_handler
+                .write_internal(&mut *next_ctx, Box::new(msg))
+                .await;
         } else {
             warn!("write reached end of pipeline");
         }
@@ -596,11 +600,11 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
 impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
     OutboundHandlerContextInternal for OutboundHandlerContext<Win, Wout>
 {
-    async fn fire_write_internal(&mut self, msg: &mut MessageInternal) {
-        if let Some(msg) = msg.downcast_mut::<Wout>() {
-            self.fire_write(msg).await;
+    async fn fire_write_internal(&mut self, msg: Box<dyn Any + Send + Sync>) {
+        if let Ok(msg) = msg.downcast::<Wout>() {
+            self.fire_write(*msg).await;
         } else {
-            panic!("msg can't downcast_mut::<Wout> in {} handler", self.name());
+            panic!("msg can't downcast::<Wout> in {} handler", self.name());
         }
     }
     async fn fire_write_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>) {

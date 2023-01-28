@@ -52,13 +52,13 @@ impl InboundHandler for TaggedByteToMessageDecoder {
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
+        mut msg: Self::Rin,
     ) {
         while self.transport_active {
             match self.message_decoder.decode(&mut msg.message) {
                 Ok(message) => {
                     if let Some(message) = message {
-                        ctx.fire_read(&mut TaggedBytesMut {
+                        ctx.fire_read(TaggedBytesMut {
                             transport: msg.transport,
                             message,
                         })
@@ -84,9 +84,9 @@ impl OutboundHandler for TaggedByteToMessageEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 

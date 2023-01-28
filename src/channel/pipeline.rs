@@ -145,7 +145,7 @@ impl Pipeline {
     }
 
     /// Reads a message.
-    pub async fn read(&self, msg: &mut (dyn Any + Send + Sync)) {
+    pub async fn read(&self, msg: Box<dyn Any + Send + Sync>) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
@@ -193,7 +193,7 @@ impl Pipeline {
     }
 
     /// Writes a message.
-    pub async fn write(&self, msg: &mut (dyn Any + Send + Sync)) {
+    pub async fn write(&self, msg: Box<dyn Any + Send + Sync>) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,

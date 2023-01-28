@@ -44,9 +44,9 @@ impl InboundHandler for ChatDecoder {
     async fn read(
         &mut self,
         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        message: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
-        println!("received: {}", message);
+        println!("received: {}", msg);
     }
     async fn read_exception(
         &mut self,
@@ -70,9 +70,9 @@ impl OutboundHandler for ChatEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 
@@ -178,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
                     pipeline.close().await;
                     break;
                 }
-                pipeline.write(&mut format!("{}\r\n", line)).await;
+                pipeline.write(Box::new(format!("{}\r\n", line))).await;
             }
         };
         buffer.clear();

@@ -65,13 +65,13 @@ impl InboundHandler for ByteToMessageDecoder {
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        message: &mut Self::Rin,
+        mut msg: Self::Rin,
     ) {
         while self.transport_active {
-            match self.message_decoder.decode(message) {
-                Ok(msg) => {
-                    if let Some(mut msg) = msg {
-                        ctx.fire_read(&mut msg).await;
+            match self.message_decoder.decode(&mut msg) {
+                Ok(message) => {
+                    if let Some(message) = message {
+                        ctx.fire_read(message).await;
                     } else {
                         return;
                     }
@@ -93,9 +93,9 @@ impl OutboundHandler for ByteToMessageEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 

@@ -50,7 +50,7 @@ impl InboundHandler for AsyncTransportUdpDecoder {
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
         ctx.fire_read(msg).await;
     }
@@ -64,7 +64,7 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: &mut Self::Win,
+        msg: Self::Win,
     ) {
         if let Some(target) = msg.transport.peer_addr {
             match self.writer.write(&msg.message, Some(target)).await {

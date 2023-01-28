@@ -77,7 +77,7 @@ impl BootstrapTcpClient {
                                 }
 
                                 trace!("pipeline recv {} bytes", n);
-                                pipeline.read(&mut BytesMut::from(&buf[..n])).await;
+                                pipeline.read(Box::new(BytesMut::from(&buf[..n]))).await;
                             }
                             Err(err) => {
                                 warn!("TcpStream read error {}", err);

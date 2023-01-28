@@ -42,11 +42,11 @@ impl Shared {
     }
 
     /// Send message to every peer, except for the sender.
-    async fn broadcast(&mut self, sender: SocketAddr, message: &mut String) {
+    async fn broadcast(&mut self, sender: SocketAddr, message: String) {
         print!("broadcast message: {}", message);
         for (peer, pipeline) in self.peers.iter() {
             if *peer != sender {
-                let _ = pipeline.write(message).await;
+                let _ = pipeline.write(Box::new(message.clone())).await;
             }
         }
     }
@@ -80,13 +80,12 @@ impl InboundHandler for ChatDecoder {
     async fn read(
         &mut self,
         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        message: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
-        println!("received: {}", message);
+        println!("received: {}", msg);
 
         let mut s = self.state.lock().await;
-        s.broadcast(self.peer, &mut format!("{}\r\n", message))
-            .await;
+        s.broadcast(self.peer, format!("{}\r\n", msg)).await;
     }
     async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         // first leave itself from state, otherwise, it may still receive message from broadcast,
@@ -107,9 +106,9 @@ impl OutboundHandler for ChatEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 

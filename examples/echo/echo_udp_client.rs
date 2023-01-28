@@ -44,7 +44,7 @@ impl InboundHandler for TaggedEchoDecoder {
     async fn read(
         &mut self,
         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
         println!(
             "received back: {} from {:?}",
@@ -61,9 +61,9 @@ impl OutboundHandler for TaggedEchoEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 
@@ -175,10 +175,10 @@ async fn main() -> anyhow::Result<()> {
             "" => break,
             line => {
                 pipeline
-                    .write(&mut TaggedString {
+                    .write(Box::new(TaggedString {
                         transport,
                         message: format!("{}\r\n", line),
-                    })
+                    }))
                     .await;
                 if line == "bye" {
                     pipeline.close().await;

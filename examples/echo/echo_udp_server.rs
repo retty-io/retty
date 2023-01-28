@@ -51,7 +51,7 @@ impl InboundHandler for TaggedEchoDecoder {
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
         println!(
             "handling {} from {:?}",
@@ -61,7 +61,7 @@ impl InboundHandler for TaggedEchoDecoder {
             self.last_transport.take();
         } else {
             self.last_transport = Some(msg.transport);
-            ctx.fire_write(&mut TaggedString {
+            ctx.fire_write(TaggedString {
                 transport: msg.transport,
                 message: format!("{}\r\n", msg.message),
             })
@@ -78,7 +78,7 @@ impl InboundHandler for TaggedEchoDecoder {
             println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
             self.timeout = Instant::now() + self.interval;
             if let Some(transport) = &self.last_transport {
-                ctx.fire_write(&mut TaggedString {
+                ctx.fire_write(TaggedString {
                     transport: *transport,
                     message: format!("Keep-alive message: next one at {:?}\r\n", self.timeout),
                 })
@@ -109,9 +109,9 @@ impl OutboundHandler for TaggedEchoEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 

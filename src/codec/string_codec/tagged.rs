@@ -52,11 +52,11 @@ impl InboundHandler for TaggedStringDecoder {
     async fn read(
         &mut self,
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
         match String::from_utf8(msg.message.to_vec()) {
             Ok(message) => {
-                ctx.fire_read(&mut TaggedString {
+                ctx.fire_read(TaggedString {
                     transport: msg.transport,
                     message,
                 })
@@ -75,11 +75,11 @@ impl OutboundHandler for TaggedStringEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: &mut Self::Win,
+        msg: Self::Win,
     ) {
         let mut buf = BytesMut::new();
         buf.put(msg.message.as_bytes());
-        ctx.fire_write(&mut TaggedBytesMut {
+        ctx.fire_write(TaggedBytesMut {
             transport: msg.transport,
             message: buf,
         })

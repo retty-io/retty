@@ -51,9 +51,9 @@ impl InboundHandler for EchoDecoder {
     async fn read(
         &mut self,
         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        message: &mut Self::Rin,
+        msg: Self::Rin,
     ) {
-        println!("received back: {}", message);
+        println!("received back: {}", msg);
     }
     async fn read_exception(
         &mut self,
@@ -76,7 +76,7 @@ impl InboundHandler for EchoDecoder {
         if timeout >= self.timeout {
             println!("EchoHandler timeout at: {:?}", self.timeout);
             self.timeout = Instant::now() + self.interval;
-            ctx.fire_write(&mut format!(
+            ctx.fire_write(format!(
                 "Keep-alive message: next one at {:?}\r\n",
                 self.timeout
             ))
@@ -106,9 +106,9 @@ impl OutboundHandler for EchoEncoder {
     async fn write(
         &mut self,
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        message: &mut Self::Win,
+        msg: Self::Win,
     ) {
-        ctx.fire_write(message).await;
+        ctx.fire_write(msg).await;
     }
 }
 
@@ -214,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
                     pipeline.close().await;
                     break;
                 }
-                pipeline.write(&mut format!("{}\r\n", line)).await;
+                pipeline.write(Box::new(format!("{}\r\n", line))).await;
             }
         };
         buffer.clear();

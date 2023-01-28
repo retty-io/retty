@@ -87,10 +87,10 @@
 //!     async fn read(
 //!         &mut self,
 //!         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-//!         message: &mut Self::Rin,
+//!         msg: Self::Rin,
 //!     ) {
-//!         println!("handling {}", message);
-//!         ctx.fire_write(&mut format!("{}\r\n", message)).await;
+//!         println!("handling {}", msg);
+//!         ctx.fire_write(format!("{}\r\n", msg)).await;
 //!     }
 //! }
 //!
@@ -102,9 +102,9 @@
 //!     async fn write(
 //!         &mut self,
 //!         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-//!         message: &mut Self::Win,
+//!         msg: Self::Win,
 //!     ) {
-//!         ctx.fire_write(message).await;
+//!         ctx.fire_write(msg).await;
 //!     }
 //! }
 //!
@@ -201,9 +201,9 @@
 //!     async fn read(
 //!         &mut self,
 //!         _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-//!         message: &mut Self::Rin,
+//!         msg: Self::Rin,
 //!     ) {
-//!         println!("received back: {}", message);
+//!         println!("received back: {}", msg);
 //!     }
 //!     async fn read_exception(
 //!         &mut self,
@@ -227,9 +227,9 @@
 //!     async fn write(
 //!         &mut self,
 //!         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-//!         message: &mut Self::Win,
+//!         msg: Self::Win,
 //!     ) {
-//!         ctx.fire_write(message).await;
+//!         ctx.fire_write(msg).await;
 //!     }
 //! }
 //!
@@ -308,7 +308,7 @@
 //!                 pipeline.close().await;
 //!                 break;
 //!             }
-//!             pipeline.write(&mut format!("{}\r\n", line)).await;
+//!             pipeline.write(Box::new(format!("{}\r\n", line))).await;
 //!         }
 //!     };
 //!     buffer.clear();
