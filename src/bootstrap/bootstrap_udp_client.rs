@@ -12,13 +12,13 @@ use crate::runtime::{
 use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
-pub struct BootstrapUdpClient {
-    pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
+pub struct BootstrapUdpClient<W> {
+    pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     socket: Option<Arc<UdpSocket>>,
 }
 
-impl BootstrapUdpClient {
+impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
     /// Creates a new BootstrapUdpClient
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
@@ -29,7 +29,10 @@ impl BootstrapUdpClient {
     }
 
     /// Creates pipeline instances from when calling [BootstrapUdpClient::connect].
-    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
+    pub fn pipeline(
+        &mut self,
+        pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
+    ) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
@@ -45,7 +48,7 @@ impl BootstrapUdpClient {
     pub async fn connect<A: ToSocketAddrs>(
         &mut self,
         addr: A,
-    ) -> Result<Arc<Pipeline>, std::io::Error> {
+    ) -> Result<Arc<Pipeline<TaggedBytesMut, W>>, std::io::Error> {
         let socket = Arc::clone(self.socket.as_ref().unwrap());
         socket.connect(addr).await?;
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
@@ -85,13 +88,13 @@ impl BootstrapUdpClient {
 
                                 trace!("pipeline recv {} bytes", n);
                                 pipeline
-                                    .read(Box::new(TaggedBytesMut {
+                                    .read(TaggedBytesMut {
                                         transport: TransportContext {
                                             local_addr,
                                             peer_addr: Some(peer_addr),
                                         },
                                         message: BytesMut::from(&buf[..n]),
-                                    }))
+                                    })
                                     .await;
                             }
                             Err(err) => {

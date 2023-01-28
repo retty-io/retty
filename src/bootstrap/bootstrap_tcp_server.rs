@@ -15,14 +15,14 @@ use crate::runtime::{
 };
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
-pub struct BootstrapTcpServer {
-    pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
+pub struct BootstrapTcpServer<W> {
+    pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     wg: Arc<Mutex<Option<WaitGroup>>>,
 }
 
-impl BootstrapTcpServer {
+impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
     /// Creates a new BootstrapTcpServer
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl BootstrapTcpServer {
     }
 
     /// Creates pipeline instances from when calling [BootstrapTcpServer::bind].
-    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
+    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
@@ -120,7 +120,7 @@ impl BootstrapTcpServer {
 
     async fn process_pipeline(
         socket: TcpStream,
-        pipeline_factory_fn: Arc<PipelineFactoryFn>,
+        pipeline_factory_fn: Arc<PipelineFactoryFn<BytesMut, W>>,
         #[allow(unused_mut)] mut close_rx: Receiver<()>,
         worker: Worker,
     ) {
@@ -164,7 +164,7 @@ impl BootstrapTcpServer {
                             }
 
                             trace!("pipeline recv {} bytes", n);
-                            pipeline.read(Box::new(BytesMut::from(&buf[..n]))).await;
+                            pipeline.read(BytesMut::from(&buf[..n])).await;
                         }
                         Err(err) => {
                             warn!("TcpStream read error {}", err);

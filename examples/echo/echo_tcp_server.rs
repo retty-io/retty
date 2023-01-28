@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::BytesMut;
 use clap::Parser;
 use std::io::Write;
 use std::str::FromStr;
@@ -138,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
     let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-            let mut pipeline = Pipeline::new();
+            let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
             let async_transport_handler = AsyncTransportTcp::new(sock);
             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(

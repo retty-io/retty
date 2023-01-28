@@ -12,12 +12,12 @@ use crate::runtime::{
 };
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
-pub struct BootstrapTcpClient {
-    pipeline_factory_fn: Option<Arc<PipelineFactoryFn>>,
+pub struct BootstrapTcpClient<W> {
+    pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
 }
 
-impl BootstrapTcpClient {
+impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
     /// Creates a new BootstrapTcpClient
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
@@ -27,7 +27,7 @@ impl BootstrapTcpClient {
     }
 
     /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
-    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn) -> &mut Self {
+    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
@@ -36,7 +36,7 @@ impl BootstrapTcpClient {
     pub async fn connect<A: ToSocketAddrs>(
         &mut self,
         addr: A,
-    ) -> Result<Arc<Pipeline>, std::io::Error> {
+    ) -> Result<Arc<Pipeline<BytesMut, W>>, std::io::Error> {
         let socket = TcpStream::connect(addr).await?;
 
         #[cfg(feature = "runtime-tokio")]
@@ -77,7 +77,7 @@ impl BootstrapTcpClient {
                                 }
 
                                 trace!("pipeline recv {} bytes", n);
-                                pipeline.read(Box::new(BytesMut::from(&buf[..n]))).await;
+                                pipeline.read(BytesMut::from(&buf[..n])).await;
                             }
                             Err(err) => {
                                 warn!("TcpStream read error {}", err);

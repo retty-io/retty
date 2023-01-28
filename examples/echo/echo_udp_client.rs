@@ -175,10 +175,10 @@ async fn main() -> anyhow::Result<()> {
             "" => break,
             line => {
                 pipeline
-                    .write(Box::new(TaggedString {
+                    .write(TaggedString {
                         transport,
                         message: format!("{}\r\n", line),
-                    }))
+                    })
                     .await;
                 if line == "bye" {
                     pipeline.close().await;

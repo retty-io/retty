@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::BytesMut;
 use clap::Parser;
 use std::collections::HashMap;
 use std::io::Write;
@@ -20,7 +21,7 @@ use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
-    peers: HashMap<SocketAddr, Arc<Pipeline>>,
+    peers: HashMap<SocketAddr, Arc<Pipeline<BytesMut, String>>>,
 }
 
 impl Shared {
@@ -31,7 +32,7 @@ impl Shared {
         }
     }
 
-    fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline>) {
+    fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline<BytesMut, String>>) {
         println!("{} joined", peer);
         self.peers.insert(peer, pipeline);
     }
@@ -46,7 +47,7 @@ impl Shared {
         print!("broadcast message: {}", message);
         for (peer, pipeline) in self.peers.iter() {
             if *peer != sender {
-                let _ = pipeline.write(Box::new(message.clone())).await;
+                let _ = pipeline.write(message.clone()).await;
             }
         }
     }

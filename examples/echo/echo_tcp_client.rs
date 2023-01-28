@@ -214,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
                     pipeline.close().await;
                     break;
                 }
-                pipeline.write(Box::new(format!("{}\r\n", line))).await;
+                pipeline.write(format!("{}\r\n", line)).await;
             }
         };
         buffer.clear();

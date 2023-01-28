@@ -1,5 +1,5 @@
-use std::any::Any;
 use std::error::Error;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -14,18 +14,34 @@ use crate::runtime::sync::Mutex;
 
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 /// over how an event is handled and how the Handlers in a pipeline interact with each other.
-#[derive(Default)]
-pub struct Pipeline {
+pub struct Pipeline<R, W> {
     inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
     outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
     outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
+
+    phantom_r: PhantomData<R>,
+    phantom_w: PhantomData<W>,
 }
 
-impl Pipeline {
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Default for Pipeline<R, W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     /// Creates a new Pipeline
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            inbound_contexts: Vec::new(),
+            inbound_handlers: Vec::new(),
+            outbound_contexts: Vec::new(),
+            outbound_handlers: Vec::new(),
+
+            phantom_r: PhantomData,
+            phantom_w: PhantomData,
+        }
     }
 
     /// Appends a [Handler] at the last position of this pipeline.
@@ -145,12 +161,12 @@ impl Pipeline {
     }
 
     /// Reads a message.
-    pub async fn read(&self, msg: Box<dyn Any + Send + Sync>) {
+    pub async fn read(&self, msg: R) {
         let (mut handler, mut ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_internal(&mut *ctx, msg).await;
+        handler.read_internal(&mut *ctx, Box::new(msg)).await;
     }
 
     /// Reads an Error exception in one of its inbound operations.
@@ -193,12 +209,12 @@ impl Pipeline {
     }
 
     /// Writes a message.
-    pub async fn write(&self, msg: Box<dyn Any + Send + Sync>) {
+    pub async fn write(&self, msg: W) {
         let (mut handler, mut ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_internal(&mut *ctx, msg).await;
+        handler.write_internal(&mut *ctx, Box::new(msg)).await;
     }
 
     /// Writes an Error exception from one of its outbound operations.

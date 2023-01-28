@@ -18,10 +18,10 @@ pub use bootstrap_udp_client::BootstrapUdpClient;
 pub use bootstrap_udp_server::BootstrapUdpServer;
 
 /// Creates a new [Pipeline]
-pub type PipelineFactoryFn = Box<
+pub type PipelineFactoryFn<R, W> = Box<
     dyn (Fn(
             Box<dyn AsyncTransportWrite + Send + Sync>,
-        ) -> Pin<Box<dyn Future<Output = Arc<Pipeline>> + Send + 'static>>)
+        ) -> Pin<Box<dyn Future<Output = Arc<Pipeline<R, W>>> + Send + 'static>>)
         + Send
         + Sync,
 >;
