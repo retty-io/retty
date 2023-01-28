@@ -16,13 +16,13 @@ use crate::runtime::sync::Mutex;
 /// Handles both inbound and outbound events and splits itself into InboundHandler and OutboundHandler
 pub trait Handler: Send + Sync {
     /// Associated input message type for [InboundHandler::read]
-    type Rin: Default + Send + Sync + 'static;
+    type Rin: Send + Sync + 'static;
     /// Associated output message type for [InboundHandler::read]
-    type Rout: Default + Send + Sync + 'static;
+    type Rout: Send + Sync + 'static;
     /// Associated input message type for [OutboundHandler::write]
-    type Win: Default + Send + Sync + 'static;
+    type Win: Send + Sync + 'static;
     /// Associated output message type for [OutboundHandler::write]
-    type Wout: Default + Send + Sync + 'static;
+    type Wout: Send + Sync + 'static;
 
     /// Returns handler name
     fn name(&self) -> &str;
@@ -71,9 +71,9 @@ pub trait Handler: Send + Sync {
 #[async_trait]
 pub trait InboundHandler: Send + Sync {
     /// Associated input message type for [InboundHandler::read]
-    type Rin: Default + Send + Sync + 'static;
+    type Rin: Send + Sync + 'static;
     /// Associated output message type for [InboundHandler::read]
-    type Rout: Default + Send + Sync + 'static;
+    type Rout: Send + Sync + 'static;
 
     /// Transport is active now, which means it is connected.
     async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
@@ -125,8 +125,8 @@ pub trait InboundHandler: Send + Sync {
 }
 
 #[async_trait]
-impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
-    InboundHandlerInternal for Box<dyn InboundHandler<Rin = Rin, Rout = Rout>>
+impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerInternal
+    for Box<dyn InboundHandler<Rin = Rin, Rout = Rout>>
 {
     async fn transport_active_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal) {
         if let Some(ctx) = ctx
@@ -247,9 +247,9 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
 #[async_trait]
 pub trait OutboundHandler: Send + Sync {
     /// Associated input message type for [OutboundHandler::write]
-    type Win: Default + Send + Sync + 'static;
+    type Win: Send + Sync + 'static;
     /// Associated output message type for [OutboundHandler::write]
-    type Wout: Default + Send + Sync + 'static;
+    type Wout: Send + Sync + 'static;
 
     /// Writes a message.
     async fn write(
@@ -272,8 +272,8 @@ pub trait OutboundHandler: Send + Sync {
 }
 
 #[async_trait]
-impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
-    OutboundHandlerInternal for Box<dyn OutboundHandler<Win = Win, Wout = Wout>>
+impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundHandlerInternal
+    for Box<dyn OutboundHandler<Win = Win, Wout = Wout>>
 {
     async fn write_internal(
         &mut self,
@@ -329,7 +329,6 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
 }
 
 /// Enables a [InboundHandler] to interact with its Pipeline and other handlers.
-#[derive(Default)]
 pub struct InboundHandlerContext<Rin, Rout> {
     name: String,
 
@@ -342,14 +341,19 @@ pub struct InboundHandlerContext<Rin, Rout> {
     phantom_rout: PhantomData<Rout>,
 }
 
-impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
-    InboundHandlerContext<Rin, Rout>
-{
+impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerContext<Rin, Rout> {
     /// Creates a new InboundHandlerContext
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            ..Default::default()
+
+            next_in_ctx: None,
+            next_in_handler: None,
+
+            next_out: OutboundHandlerContext::new(name),
+
+            phantom_rin: PhantomData,
+            phantom_rout: PhantomData,
         }
     }
 
@@ -455,8 +459,8 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
 }
 
 #[async_trait]
-impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static>
-    InboundHandlerContextInternal for InboundHandlerContext<Rin, Rout>
+impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerContextInternal
+    for InboundHandlerContext<Rin, Rout>
 {
     async fn fire_transport_active_internal(&mut self) {
         self.fire_transport_active().await;
@@ -530,7 +534,6 @@ impl<Rin, Rout> DerefMut for InboundHandlerContext<Rin, Rout> {
 }
 
 /// Enables a [OutboundHandler] to interact with its Pipeline and other handlers.
-#[derive(Default)]
 pub struct OutboundHandlerContext<Win, Wout> {
     name: String,
 
@@ -541,14 +544,17 @@ pub struct OutboundHandlerContext<Win, Wout> {
     phantom_wout: PhantomData<Wout>,
 }
 
-impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
-    OutboundHandlerContext<Win, Wout>
-{
+impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundHandlerContext<Win, Wout> {
     /// Creates a new OutboundHandlerContext
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            ..Default::default()
+
+            next_out_ctx: None,
+            next_out_handler: None,
+
+            phantom_win: PhantomData,
+            phantom_wout: PhantomData,
         }
     }
 
@@ -597,8 +603,8 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
 }
 
 #[async_trait]
-impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static>
-    OutboundHandlerContextInternal for OutboundHandlerContext<Win, Wout>
+impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundHandlerContextInternal
+    for OutboundHandlerContext<Win, Wout>
 {
     async fn fire_write_internal(&mut self, msg: Box<dyn Any + Send + Sync>) {
         if let Ok(msg) = msg.downcast::<Wout>() {
