@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
@@ -51,6 +52,32 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
         self.inbound_handlers.insert(0, inbound_handler);
         self.outbound_contexts.insert(0, outbound_context);
         self.outbound_handlers.insert(0, outbound_handler);
+    }
+
+    async fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
+        let mut to_be_removed_in_reverse_order = vec![];
+        for (index, context) in self.inbound_contexts.iter().rev().enumerate() {
+            let ctx = context.lock().await;
+            if ctx.name() == handler_name {
+                to_be_removed_in_reverse_order.push(index);
+            }
+        }
+
+        if !to_be_removed_in_reverse_order.is_empty() {
+            for index in to_be_removed_in_reverse_order {
+                self.inbound_contexts.remove(index);
+                self.inbound_handlers.remove(index);
+                self.outbound_contexts.remove(index);
+                self.outbound_handlers.remove(index);
+            }
+
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                ErrorKind::NotFound,
+                "No such handler in pipeline",
+            ))
+        }
     }
 
     async fn finalize(&self) {
@@ -241,14 +268,16 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.add_front(handler);
     }
 
-    /// Finalizes the pipeline
-    pub async fn finalize(self) -> Self {
-        {
-            let internal = self.internal.lock().await;
-            internal.finalize().await;
-        }
+    /// Remove a [Handler] from this pipeline based on handler_name.
+    pub async fn remove(&self, handler_name: &str) -> Result<(), std::io::Error> {
+        let mut internal = self.internal.lock().await;
+        internal.remove(handler_name).await
+    }
 
-        self
+    /// Finalizes the pipeline
+    pub async fn finalize(&self) {
+        let internal = self.internal.lock().await;
+        internal.finalize().await;
     }
 
     /// Transport is active now, which means it is connected.
