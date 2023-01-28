@@ -142,7 +142,7 @@
 //! let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
 //! bootstrap.pipeline(Box::new(
 //!     move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-//!         let mut pipeline = Pipeline::new();
+//!         let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 //!
 //!         let async_transport_handler = AsyncTransportTcp::new(sock);
 //!         let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
@@ -308,7 +308,7 @@
 //!                 pipeline.close().await;
 //!                 break;
 //!             }
-//!             pipeline.write(Box::new(format!("{}\r\n", line))).await;
+//!             pipeline.write(format!("{}\r\n", line)).await;
 //!         }
 //!     };
 //!     buffer.clear();
