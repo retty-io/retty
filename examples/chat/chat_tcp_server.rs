@@ -208,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
             pipeline.add_back(chat_handler);
 
             Box::pin(async move {
-                let pipeline = pipeline.finalize().await;
+                let pipeline = Arc::new(pipeline.finalize().await);
                 {
                     let mut s = state.lock().await;
                     s.join(peer, pipeline.clone());

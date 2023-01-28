@@ -153,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
             pipeline.add_back(string_codec_handler);
             pipeline.add_back(echo_handler);
 
-            Box::pin(async move { pipeline.finalize().await })
+            Box::pin(async move { Arc::new(pipeline.finalize().await) })
         },
     ));
 

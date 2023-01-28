@@ -65,7 +65,7 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     }
 
     /// Finalizes the pipeline
-    pub async fn finalize(self) -> Arc<Self> {
+    pub async fn finalize(self) -> Self {
         let mut enumerate = self.inbound_contexts.iter().enumerate();
         let ctx_pipe_len = self.inbound_contexts.len();
         for _ in 0..ctx_pipe_len {
@@ -139,7 +139,7 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
             }
         }
 
-        Arc::new(self)
+        self
     }
 
     /// Transport is active now, which means it is connected.
