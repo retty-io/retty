@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::BytesMut;
 use clap::Parser;
 use std::error::Error;
 use std::io::stdin;
@@ -149,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
-                let pipeline = Pipeline::new();
+                let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
                 let async_transport_handler = AsyncTransportTcp::new(sock);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(

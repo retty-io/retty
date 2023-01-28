@@ -188,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
-                let pipeline: Pipeline<TaggedBytesMut, String> = Pipeline::new();
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
                 let async_transport_handler = AsyncTransportUdp::new(sock);
                 let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(

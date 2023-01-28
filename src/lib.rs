@@ -4,14 +4,14 @@
 //! It's like [Netty](https://netty.io) or [Wangle](https://github.com/facebook/wangle), but in Rust.
 //!
 //! ### What is a Pipeline?
-//! The fundamental abstraction of Retty is the [Pipeline](crate::channel::Pipeline). Once you have fully understood this abstraction,
+//! The fundamental abstraction of Retty is the [Pipeline](crate::channel::Pipeline).
+//! It offers immense flexibility to customize how requests and responses are handled by your service.
+//! Once you have fully understood this abstraction,
 //! you will be able to write all sorts of sophisticated protocols, application clients/servers.
-//! The pipeline is the most important and powerful abstraction of Retty. It offers immense flexibility
-//! to customize how requests and responses are handled by your service.
 //!  
-//! A [Pipeline](crate::channel::Pipeline) is a chain of request/response [handlers](crate::channel::Handler) that handle [inbound](crate::channel::InboundHandler) (handling request) and
-//! [outbound](crate::channel::OutboundHandler) (handling response). Once you chain handlers together, it provides an agile way to convert
-//! a raw data stream into the desired message type (class) and the inverse -- desired message type to raw data stream.
+//! A [Pipeline](crate::channel::Pipeline) is a chain of request/response [handlers](crate::channel::Handler) that handle [inbound](crate::channel::InboundHandler) request and
+//! [outbound](crate::channel::OutboundHandler) response. Once you chain handlers together, it provides an agile way to convert
+//! a raw data stream into the desired message type and the inverse -- desired message type to raw data stream.
 //! Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 //! over how an event is handled and how the handlers in a pipeline interact with each other.
 //!
@@ -21,41 +21,41 @@
 //!
 //! ### How does an event flow in a Pipeline?
 //! ```text
-//!                                                  Write Request
-//!                                                       |
+//!                                                       | write()
 //!   +---------------------------------------------------+---------------+
 //!   |                             Pipeline              |               |
 //!   |                                                  \|/              |
 //!   |    +---------------------+            +-----------+----------+    |
-//!   |    |  InboundHandler  N  |            |  OutboundHandler  1  |    |
+//!   |    |  InboundHandler  N  |            |  OutboundHandler  N  |    |
 //!   |    +----------+----------+            +-----------+----------+    |
 //!   |              /|\          \                       |               |
 //!   |               |            \........              |               |
 //!   |               |                     \             |               |
 //!   |               |                     _\|          \|/              |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |    |  InboundHandler N-1 |            |  OutboundHandler  2  |    |
+//!   |    |  InboundHandler N-1 |            |  OutboundHandler N-1 |    |
 //!   |    +----------+----------+            +-----------+----------+    |
 //!   |              /|\          \                       |               |
-//!   |               |            \..                    |               |
-//!   |               |               \                   |               |
-//!   | InboundHandlerContext.fire_*() \  OutboundHandlerContext.fire_*() |
-//!   |        [ method call]           \           [method call]         |
-//!   |               |                  \..              |               |
+//!   |               |            \                      |               |
+//!   |               |           OutboundHandlerContext.fire_write()     |
+//!   |               |                  \                |               |
+//!   |               |                   \               |               |
+//!   |InboundHandlerContext.fire_read()   \              |               |
 //!   |               |                     \             |               |
 //!   |               |                     _\|          \|/              |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |    |  InboundHandler  2  |            |  OutboundHandler M-1 |    |
+//!   |    |  InboundHandler  2  |            |  OutboundHandler  2  |    |
 //!   |    +----------+----------+            +-----------+----------+    |
 //!   |              /|\          \                       |               |
 //!   |               |            \........              |               |
 //!   |               |                     \             |               |
 //!   |               |                     _\|          \|/              |
 //!   |    +----------+----------+            +-----------+----------+    |
-//!   |    |  InboundHandler  1  |            |  OutboundHandler  M  |    |
+//!   |    |  InboundHandler  1  |            |  OutboundHandler  1  |    |
 //!   |    +----------+----------+            +-----------+----------+    |
 //!   |              /|\                                  |               |
 //!   +---------------+-----------------------------------+---------------+
+//!                   | read()                            |
 //!                   |                                  \|/
 //!   +---------------+-----------------------------------+---------------+
 //!   |               |                                   |               |
@@ -276,7 +276,7 @@
 //! bootstrap.pipeline(Box::new(
 //!     move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
 //!         Box::pin(async move {
-//!             let pipeline = Pipeline::new();
+//!             let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 //!
 //!             let async_transport_handler = AsyncTransportTcp::new(sock);
 //!             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(

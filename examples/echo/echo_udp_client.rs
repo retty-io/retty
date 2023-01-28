@@ -16,7 +16,7 @@ use retty::codec::{
     string_codec::{TaggedString, TaggedStringCodec},
 };
 use retty::runtime::{default_runtime, sync::Mutex};
-use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TransportContext};
+use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -145,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
-                let pipeline = Pipeline::new();
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
                 let async_transport_handler = AsyncTransportUdp::new(sock);
                 let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(

@@ -193,7 +193,7 @@ async fn main() -> anyhow::Result<()> {
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let state = state.clone();
             Box::pin(async move {
-                let pipeline = Pipeline::new();
+                let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
                 let peer = sock.peer_addr().unwrap();
                 let chat_handler = ChatHandler::new(peer, state.clone());
