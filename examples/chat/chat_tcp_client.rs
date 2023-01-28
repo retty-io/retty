@@ -148,21 +148,23 @@ async fn main() -> anyhow::Result<()> {
     let mut bootstrap = BootstrapTcpClient::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
-            let mut pipeline = Pipeline::new();
+            Box::pin(async move {
+                let pipeline = Pipeline::new();
 
-            let async_transport_handler = AsyncTransportTcp::new(sock);
-            let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-            ));
-            let string_codec_handler = StringCodec::new();
-            let chat_handler = ChatHandler::new();
+                let async_transport_handler = AsyncTransportTcp::new(sock);
+                let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = StringCodec::new();
+                let chat_handler = ChatHandler::new();
 
-            pipeline.add_back(async_transport_handler);
-            pipeline.add_back(line_based_frame_decoder_handler);
-            pipeline.add_back(string_codec_handler);
-            pipeline.add_back(chat_handler);
+                pipeline.add_back(async_transport_handler).await;
+                pipeline.add_back(line_based_frame_decoder_handler).await;
+                pipeline.add_back(string_codec_handler).await;
+                pipeline.add_back(chat_handler).await;
 
-            Box::pin(async move { Arc::new(pipeline.finalize().await) })
+                Arc::new(pipeline.finalize().await)
+            })
         },
     ));
 
