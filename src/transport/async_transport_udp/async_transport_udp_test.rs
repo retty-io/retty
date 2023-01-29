@@ -53,7 +53,6 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
 
 #[tokio::test]
 async fn async_transport_udp_test_transport_active_inactive() -> Result<()> {
-    #[allow(unused_mut)]
     let (tx, _rx) = bounded(1);
     let sock = MockAsyncTransportWrite::new(tx);
     let active = Arc::new(AtomicUsize::new(0));

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod pipeline_test;
+
 use std::error::Error;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
@@ -296,39 +299,66 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     }
 
     /// Appends a [Handler] at the last position of this pipeline.
-    pub async fn add_back(&self, handler: impl Handler) {
-        let mut internal = self.internal.lock().await;
-        internal.add_back(handler);
+    pub async fn add_back(&self, handler: impl Handler) -> &Self {
+        {
+            let mut internal = self.internal.lock().await;
+            internal.add_back(handler);
+        }
+        self
     }
 
     /// Inserts a [Handler] at the first position of this pipeline.
-    pub async fn add_front(&self, handler: impl Handler) {
-        let mut internal = self.internal.lock().await;
-        internal.add_front(handler);
+    pub async fn add_front(&self, handler: impl Handler) -> &Self {
+        {
+            let mut internal = self.internal.lock().await;
+            internal.add_front(handler);
+        }
+        self
     }
 
     /// Removes a [Handler] at the last position of this pipeline.
-    pub async fn remove_back(&self) -> Result<(), std::io::Error> {
-        let mut internal = self.internal.lock().await;
-        internal.remove_back()
+    pub async fn remove_back(&self) -> Result<&Self, std::io::Error> {
+        let result = {
+            let mut internal = self.internal.lock().await;
+            internal.remove_back()
+        };
+        match result {
+            Ok(()) => Ok(self),
+            Err(err) => Err(err),
+        }
     }
 
     /// Removes a [Handler] at the first position of this pipeline.
-    pub async fn remove_front(&self) -> Result<(), std::io::Error> {
-        let mut internal = self.internal.lock().await;
-        internal.remove_front()
+    pub async fn remove_front(&self) -> Result<&Self, std::io::Error> {
+        let result = {
+            let mut internal = self.internal.lock().await;
+            internal.remove_front()
+        };
+        match result {
+            Ok(()) => Ok(self),
+            Err(err) => Err(err),
+        }
     }
 
     /// Remove a [Handler] from this pipeline based on handler_name.
-    pub async fn remove(&self, handler_name: &str) -> Result<(), std::io::Error> {
-        let mut internal = self.internal.lock().await;
-        internal.remove(handler_name)
+    pub async fn remove(&self, handler_name: &str) -> Result<&Self, std::io::Error> {
+        let result = {
+            let mut internal = self.internal.lock().await;
+            internal.remove(handler_name)
+        };
+        match result {
+            Ok(()) => Ok(self),
+            Err(err) => Err(err),
+        }
     }
 
     /// Finalizes the pipeline
-    pub async fn finalize(&self) {
-        let internal = self.internal.lock().await;
-        internal.finalize().await;
+    pub async fn finalize(&self) -> &Self {
+        {
+            let internal = self.internal.lock().await;
+            internal.finalize().await;
+        }
+        self
     }
 
     /// Transport is active now, which means it is connected.
