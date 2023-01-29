@@ -57,10 +57,10 @@ pub(crate) struct MockHandler<R, W> {
 }
 
 impl<R, W> MockHandler<R, W> {
-    pub fn new(name: String, active: Arc<AtomicUsize>, inactive: Arc<AtomicUsize>) -> Self {
+    pub fn new(name: &str, active: Arc<AtomicUsize>, inactive: Arc<AtomicUsize>) -> Self {
         MockHandler {
             decoder: MockDecoder {
-                name,
+                name: name.to_string(),
                 active,
                 inactive,
 

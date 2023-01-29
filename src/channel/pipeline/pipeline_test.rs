@@ -35,6 +35,8 @@ async fn pipeline_test_real_handlers_compile_tcp() -> Result<()> {
         .finalize()
         .await;
 
+    assert_eq!(3, pipeline.len().await);
+
     Ok(())
 }
 
@@ -61,6 +63,8 @@ async fn pipeline_test_real_handlers_compile_udp() -> Result<()> {
         .finalize()
         .await;
 
+    assert_eq!(3, pipeline.len().await);
+
     Ok(())
 }
 
@@ -72,13 +76,13 @@ async fn pipeline_test_dynamic_construction() -> Result<()> {
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
-            "handler1".to_string(),
+            "handler1",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
-            "handler2".to_string(),
+            "handler2",
             active.clone(),
             inactive.clone(),
         ))
@@ -88,31 +92,33 @@ async fn pipeline_test_dynamic_construction() -> Result<()> {
     // StI <-> ItS <-> StS <-> StS <-> StI <-> ItS
     pipeline
         .add_front(MockHandler::<usize, String>::new(
-            "handler3".to_string(),
+            "handler3",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_front(MockHandler::<String, usize>::new(
-            "handler4".to_string(),
+            "handler4",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<String, usize>::new(
-            "handler5".to_string(),
+            "handler5",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<usize, String>::new(
-            "handler6".to_string(),
+            "handler6",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .finalize()
         .await;
+
+    assert_eq!(6, pipeline.len().await);
 
     pipeline.read("TESTING INBOUND MESSAGE".to_owned()).await;
     pipeline.write("TESTING OUTBOUND MESSAGE".to_owned()).await;
@@ -221,13 +227,13 @@ async fn pipeline_test_remove_handler() -> Result<()> {
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
-            "handler1".to_string(),
+            "handler1",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
-            "handler2".to_string(),
+            "handler2",
             active.clone(),
             inactive.clone(),
         ))
@@ -237,25 +243,25 @@ async fn pipeline_test_remove_handler() -> Result<()> {
     // StI <-> ItS <-> StS <-> StS <-> StI <-> ItS
     pipeline
         .add_front(MockHandler::<usize, String>::new(
-            "handler3".to_string(),
+            "handler3",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_front(MockHandler::<String, usize>::new(
-            "handler4".to_string(),
+            "handler4",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<String, usize>::new(
-            "handler5".to_string(),
+            "handler5",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<usize, String>::new(
-            "handler6".to_string(),
+            "handler6",
             active.clone(),
             inactive.clone(),
         ))
@@ -272,6 +278,8 @@ async fn pipeline_test_remove_handler() -> Result<()> {
     pipeline.read("TESTING INBOUND MESSAGE".to_owned()).await;
     pipeline.write("TESTING OUTBOUND MESSAGE".to_owned()).await;
 
+    assert_eq!(2, pipeline.len().await);
+
     Ok(())
 }
 
@@ -283,19 +291,19 @@ async fn pipeline_test_remove_front_back() -> Result<()> {
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
-            "handler1".to_string(),
+            "handler1",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
-            "handler2".to_string(),
+            "handler2",
             active.clone(),
             inactive.clone(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
-            "handler3".to_string(),
+            "handler3",
             active.clone(),
             inactive.clone(),
         ))
@@ -311,10 +319,50 @@ async fn pipeline_test_remove_front_back() -> Result<()> {
         .finalize()
         .await;
 
+    assert_eq!(1, pipeline.len().await);
+
     pipeline.read("TESTING INBOUND MESSAGE".to_owned()).await;
     pipeline.write("TESTING OUTBOUND MESSAGE".to_owned()).await;
 
     pipeline.remove("handler2").await?;
+
+    assert_eq!(0, pipeline.len().await);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn pipeline_test_num_handlers() -> Result<()> {
+    let active = Arc::new(AtomicUsize::new(0));
+    let inactive = Arc::new(AtomicUsize::new(0));
+
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1",
+            active.clone(),
+            inactive.clone(),
+        ))
+        .await;
+    assert_eq!(1, pipeline.len().await);
+
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler2",
+            active.clone(),
+            inactive.clone(),
+        ))
+        .await;
+    assert_eq!(2, pipeline.len().await);
+
+    pipeline.finalize().await;
+    assert_eq!(2, pipeline.len().await);
+
+    pipeline.remove("handler1").await?;
+    assert_eq!(1, pipeline.len().await);
+
+    pipeline.remove("handler2").await?;
+    assert_eq!(0, pipeline.len().await);
 
     Ok(())
 }

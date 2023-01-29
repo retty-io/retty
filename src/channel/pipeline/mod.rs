@@ -122,6 +122,10 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
         }
     }
 
+    fn len(&self) -> usize {
+        self.handler_names.len()
+    }
+
     async fn finalize(&self) {
         let mut enumerate = self.inbound_contexts.iter().enumerate();
         let ctx_pipe_len = self.inbound_contexts.len();
@@ -340,7 +344,7 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         }
     }
 
-    /// Remove a [Handler] from this pipeline based on handler_name.
+    /// Removes a [Handler] from this pipeline based on handler_name.
     pub async fn remove(&self, handler_name: &str) -> Result<&Self, std::io::Error> {
         let result = {
             let mut internal = self.internal.lock().await;
@@ -352,7 +356,13 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         }
     }
 
-    /// Finalizes the pipeline
+    /// Returns the number of Handlers in this pipeline.
+    pub async fn len(&self) -> usize {
+        let internal = self.internal.lock().await;
+        internal.len()
+    }
+
+    /// Finalizes the pipeline.
     pub async fn finalize(&self) -> &Self {
         {
             let internal = self.internal.lock().await;
