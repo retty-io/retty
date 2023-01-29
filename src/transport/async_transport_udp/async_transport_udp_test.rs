@@ -59,7 +59,7 @@ async fn async_transport_udp_test_transport_active_inactive() -> Result<()> {
     let inactive = Arc::new(AtomicUsize::new(0));
 
     let handler: MockHandler<TaggedBytesMut, TaggedBytesMut> =
-        MockHandler::new(active.clone(), inactive.clone());
+        MockHandler::new("MockHandler".to_string(), active.clone(), inactive.clone());
     let pipeline: Pipeline<TaggedBytesMut, TaggedBytesMut> = Pipeline::new();
     pipeline
         .add_back(AsyncTransportUdp::new(Box::new(sock)))

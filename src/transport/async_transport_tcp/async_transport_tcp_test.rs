@@ -45,7 +45,7 @@ async fn async_transport_tcp_test_transport_active_inactive() -> Result<()> {
     let inactive = Arc::new(AtomicUsize::new(0));
 
     let handler: MockHandler<BytesMut, BytesMut> =
-        MockHandler::new(active.clone(), inactive.clone());
+        MockHandler::new("MockHandler".to_string(), active.clone(), inactive.clone());
     let pipeline: Pipeline<BytesMut, BytesMut> = Pipeline::new();
     pipeline
         .add_back(AsyncTransportTcp::new(Box::new(sock)))

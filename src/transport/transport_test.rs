@@ -40,6 +40,7 @@ impl AsyncTransportWrite for MockAsyncTransportWrite {
 }
 
 struct MockDecoder<Rin, Rout> {
+    name: String,
     active: Arc<AtomicUsize>,
     inactive: Arc<AtomicUsize>,
 
@@ -56,9 +57,10 @@ pub(crate) struct MockHandler<R, W> {
 }
 
 impl<R, W> MockHandler<R, W> {
-    pub fn new(active: Arc<AtomicUsize>, inactive: Arc<AtomicUsize>) -> Self {
+    pub fn new(name: String, active: Arc<AtomicUsize>, inactive: Arc<AtomicUsize>) -> Self {
         MockHandler {
             decoder: MockDecoder {
+                name,
                 active,
                 inactive,
 
@@ -124,7 +126,7 @@ impl<R: Default + Send + Sync + 'static, W: Default + Send + Sync + 'static> Han
     type Wout = R;
 
     fn name(&self) -> &str {
-        "MockHandler"
+        self.decoder.name.as_str()
     }
 
     fn split(

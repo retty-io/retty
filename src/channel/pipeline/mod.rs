@@ -97,15 +97,15 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
     }
 
     fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
-        let mut to_be_removed_in_reverse_order = vec![];
-        for (index, name) in self.handler_names.iter().rev().enumerate() {
+        let mut to_be_removed = vec![];
+        for (index, name) in self.handler_names.iter().enumerate() {
             if name == handler_name {
-                to_be_removed_in_reverse_order.push(index);
+                to_be_removed.push(index);
             }
         }
 
-        if !to_be_removed_in_reverse_order.is_empty() {
-            for index in to_be_removed_in_reverse_order {
+        if !to_be_removed.is_empty() {
+            for index in to_be_removed.into_iter().rev() {
                 self.handler_names.remove(index);
                 self.inbound_contexts.remove(index);
                 self.inbound_handlers.remove(index);
@@ -117,7 +117,7 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
         } else {
             Err(std::io::Error::new(
                 ErrorKind::NotFound,
-                "No such handler in pipeline",
+                format!("No such handler \"{}\" in pipeline", handler_name),
             ))
         }
     }
