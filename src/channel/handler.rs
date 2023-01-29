@@ -32,6 +32,7 @@ pub trait Handler: Send + Sync {
     fn generate(
         self,
     ) -> (
+        String,
         Arc<Mutex<dyn InboundHandlerContextInternal>>,
         Arc<Mutex<dyn InboundHandlerInternal>>,
         Arc<Mutex<dyn OutboundHandlerContextInternal>>,
@@ -40,6 +41,7 @@ pub trait Handler: Send + Sync {
     where
         Self: Sized,
     {
+        let handler_name = self.name().to_owned();
         let inbound_context: InboundHandlerContext<Self::Rin, Self::Rout> =
             InboundHandlerContext::new(self.name());
         let outbound_context: OutboundHandlerContext<Self::Win, Self::Wout> =
@@ -48,6 +50,7 @@ pub trait Handler: Send + Sync {
         let (inbound_handler, outbound_handler) = self.split();
 
         (
+            handler_name,
             Arc::new(Mutex::new(inbound_context)),
             inbound_handler,
             Arc::new(Mutex::new(outbound_context)),

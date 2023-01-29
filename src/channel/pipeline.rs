@@ -14,6 +14,7 @@ use crate::channel::{
 use crate::runtime::sync::Mutex;
 
 struct PipelineInternal<R, W> {
+    handler_names: Vec<String>,
     inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
     outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
@@ -26,6 +27,7 @@ struct PipelineInternal<R, W> {
 impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> {
     fn new() -> Self {
         Self {
+            handler_names: Vec::new(),
             inbound_contexts: Vec::new(),
             inbound_handlers: Vec::new(),
             outbound_contexts: Vec::new(),
@@ -37,8 +39,9 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
     }
 
     fn add_back(&mut self, handler: impl Handler) {
-        let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
+        let (handler_name, inbound_context, inbound_handler, outbound_context, outbound_handler) =
             handler.generate();
+        self.handler_names.push(handler_name);
         self.inbound_contexts.push(inbound_context);
         self.inbound_handlers.push(inbound_handler);
         self.outbound_contexts.push(outbound_context);
@@ -46,25 +49,61 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
     }
 
     fn add_front(&mut self, handler: impl Handler) {
-        let (inbound_context, inbound_handler, outbound_context, outbound_handler) =
+        let (handler_name, inbound_context, inbound_handler, outbound_context, outbound_handler) =
             handler.generate();
+        self.handler_names.insert(0, handler_name);
         self.inbound_contexts.insert(0, inbound_context);
         self.inbound_handlers.insert(0, inbound_handler);
         self.outbound_contexts.insert(0, outbound_context);
         self.outbound_handlers.insert(0, outbound_handler);
     }
 
-    async fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
+    fn remove_back(&mut self) -> Result<(), std::io::Error> {
+        let len = self.handler_names.len();
+        if len == 0 {
+            Err(std::io::Error::new(
+                ErrorKind::NotFound,
+                "No handlers in pipeline",
+            ))
+        } else {
+            self.handler_names.remove(len - 1);
+            self.inbound_contexts.remove(len - 1);
+            self.inbound_handlers.remove(len - 1);
+            self.outbound_contexts.remove(len - 1);
+            self.outbound_handlers.remove(len - 1);
+
+            Ok(())
+        }
+    }
+
+    fn remove_front(&mut self) -> Result<(), std::io::Error> {
+        if self.handler_names.is_empty() {
+            Err(std::io::Error::new(
+                ErrorKind::NotFound,
+                "No handlers in pipeline",
+            ))
+        } else {
+            self.handler_names.remove(0);
+            self.inbound_contexts.remove(0);
+            self.inbound_handlers.remove(0);
+            self.outbound_contexts.remove(0);
+            self.outbound_handlers.remove(0);
+
+            Ok(())
+        }
+    }
+
+    fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
         let mut to_be_removed_in_reverse_order = vec![];
-        for (index, context) in self.inbound_contexts.iter().rev().enumerate() {
-            let ctx = context.lock().await;
-            if ctx.name() == handler_name {
+        for (index, name) in self.handler_names.iter().rev().enumerate() {
+            if name == handler_name {
                 to_be_removed_in_reverse_order.push(index);
             }
         }
 
         if !to_be_removed_in_reverse_order.is_empty() {
             for index in to_be_removed_in_reverse_order {
+                self.handler_names.remove(index);
                 self.inbound_contexts.remove(index);
                 self.inbound_handlers.remove(index);
                 self.outbound_contexts.remove(index);
@@ -268,10 +307,22 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.add_front(handler);
     }
 
+    /// Removes a [Handler] at the last position of this pipeline.
+    pub async fn remove_back(&self) -> Result<(), std::io::Error> {
+        let mut internal = self.internal.lock().await;
+        internal.remove_back()
+    }
+
+    /// Removes a [Handler] at the first position of this pipeline.
+    pub async fn remove_front(&self) -> Result<(), std::io::Error> {
+        let mut internal = self.internal.lock().await;
+        internal.remove_front()
+    }
+
     /// Remove a [Handler] from this pipeline based on handler_name.
     pub async fn remove(&self, handler_name: &str) -> Result<(), std::io::Error> {
         let mut internal = self.internal.lock().await;
-        internal.remove(handler_name).await
+        internal.remove(handler_name)
     }
 
     /// Finalizes the pipeline
