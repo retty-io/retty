@@ -1,9 +1,11 @@
 use crate::channel::Pipeline;
 use crate::runtime::mpsc::bounded;
-use crate::transport::transport_test::MockAsyncTransportWrite;
+use crate::transport::transport_test::{MockAsyncTransportWrite, MockHandler};
 use crate::transport::AsyncTransportTcp;
 use anyhow::Result;
 use bytes::BytesMut;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
@@ -31,6 +33,33 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
 
     let result = rx.recv().await;
     assert!(result.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn async_transport_tcp_test_transport_active_inactive() -> Result<()> {
+    #[allow(unused_mut)]
+    let (tx, _rx) = bounded(1);
+    let sock = MockAsyncTransportWrite::new(tx);
+    let active = Arc::new(AtomicUsize::new(0));
+    let inactive = Arc::new(AtomicUsize::new(0));
+
+    let handler: MockHandler<BytesMut, BytesMut> =
+        MockHandler::new(active.clone(), inactive.clone());
+    let pipeline: Pipeline<BytesMut, BytesMut> = Pipeline::new();
+    pipeline
+        .add_back(AsyncTransportTcp::new(Box::new(sock)))
+        .await;
+    pipeline.add_back(handler).await;
+    pipeline.finalize().await;
+
+    pipeline.transport_active().await;
+    assert_eq!(1, active.load(Ordering::SeqCst));
+    pipeline.transport_inactive().await;
+    assert_eq!(1, inactive.load(Ordering::SeqCst));
+    pipeline.transport_active().await;
+    assert_eq!(2, active.load(Ordering::SeqCst));
 
     Ok(())
 }
