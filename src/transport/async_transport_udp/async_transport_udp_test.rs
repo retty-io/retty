@@ -1,6 +1,7 @@
+use crate::channel::pipeline::pipeline_test::{MockHandler, Stats};
 use crate::channel::Pipeline;
 use crate::runtime::mpsc::bounded;
-use crate::transport::transport_test::{MockAsyncTransportWrite, MockHandler};
+use crate::transport::transport_test::MockAsyncTransportWrite;
 use crate::transport::{AsyncTransportUdp, TaggedBytesMut, TransportAddress, TransportContext};
 use anyhow::Result;
 use bytes::BytesMut;
@@ -58,8 +59,14 @@ async fn async_transport_udp_test_transport_active_inactive() -> Result<()> {
     let active = Arc::new(AtomicUsize::new(0));
     let inactive = Arc::new(AtomicUsize::new(0));
 
-    let handler: MockHandler<TaggedBytesMut, TaggedBytesMut> =
-        MockHandler::new("MockHandler", active.clone(), inactive.clone());
+    let handler: MockHandler<TaggedBytesMut, TaggedBytesMut> = MockHandler::new(
+        "MockHandler",
+        Stats {
+            active: Some(active.clone()),
+            inactive: Some(inactive.clone()),
+            ..Default::default()
+        },
+    );
     let pipeline: Pipeline<TaggedBytesMut, TaggedBytesMut> = Pipeline::new();
     pipeline
         .add_back(AsyncTransportUdp::new(Box::new(sock)))

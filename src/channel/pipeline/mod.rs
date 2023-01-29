@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod pipeline_test;
+pub(crate) mod pipeline_test;
 
 use std::error::Error;
 use std::io::ErrorKind;

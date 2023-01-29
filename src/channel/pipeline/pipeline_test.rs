@@ -1,16 +1,129 @@
-use crate::channel::Pipeline;
+use crate::channel::{
+    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
+    Pipeline,
+};
 use crate::codec::byte_to_message_decoder::{
     ByteToMessageCodec, LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType,
 };
 use crate::codec::string_codec::{StringCodec, TaggedString, TaggedStringCodec};
 use crate::runtime::mpsc::bounded;
-use crate::transport::transport_test::{MockAsyncTransportWrite, MockHandler};
+use crate::transport::transport_test::MockAsyncTransportWrite;
 use crate::transport::{AsyncTransportTcp, AsyncTransportUdp, TaggedBytesMut};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use bytes::BytesMut;
-use std::sync::atomic::AtomicUsize;
+use std::marker::PhantomData;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+#[derive(Default)]
+pub(crate) struct Stats {
+    pub(crate) active: Option<Arc<AtomicUsize>>,
+    pub(crate) inactive: Option<Arc<AtomicUsize>>,
+}
+
+struct MockDecoder<Rin, Rout> {
+    name: String,
+    stats: Stats,
+
+    phantom_in: PhantomData<Rin>,
+    phantom_out: PhantomData<Rout>,
+}
+struct MockEncoder<Win, Wout> {
+    phantom_in: PhantomData<Win>,
+    phantom_out: PhantomData<Wout>,
+}
+pub(crate) struct MockHandler<R, W> {
+    decoder: MockDecoder<R, W>,
+    encoder: MockEncoder<W, R>,
+}
+
+impl<R, W> MockHandler<R, W> {
+    pub fn new(name: &str, stats: Stats) -> Self {
+        MockHandler {
+            decoder: MockDecoder {
+                name: name.to_string(),
+                stats,
+
+                phantom_in: PhantomData,
+                phantom_out: PhantomData,
+            },
+            encoder: MockEncoder {
+                phantom_in: PhantomData,
+                phantom_out: PhantomData,
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static> InboundHandler
+    for MockDecoder<Rin, Rout>
+{
+    type Rin = Rin;
+    type Rout = Rout;
+
+    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+        if let Some(active) = &self.stats.active {
+            active.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_transport_active().await;
+    }
+
+    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+        if let Some(inactive) = &self.stats.inactive {
+            inactive.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_transport_inactive().await;
+    }
+
+    async fn read(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        _msg: Self::Rin,
+    ) {
+        ctx.fire_read(Rout::default()).await;
+    }
+}
+
+#[async_trait]
+impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static> OutboundHandler
+    for MockEncoder<Win, Wout>
+{
+    type Win = Win;
+    type Wout = Wout;
+
+    async fn write(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        _msg: Self::Win,
+    ) {
+        ctx.fire_write(Wout::default()).await;
+    }
+}
+
+impl<R: Default + Send + Sync + 'static, W: Default + Send + Sync + 'static> Handler
+    for MockHandler<R, W>
+{
+    type Rin = R;
+    type Rout = W;
+    type Win = W;
+    type Wout = R;
+
+    fn name(&self) -> &str {
+        self.decoder.name.as_str()
+    }
+
+    fn split(
+        self,
+    ) -> (
+        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
+        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
+    ) {
+        (Box::new(self.decoder), Box::new(self.encoder))
+    }
+}
 
 #[tokio::test]
 async fn pipeline_test_real_handlers_compile_tcp() -> Result<()> {
@@ -70,21 +183,16 @@ async fn pipeline_test_real_handlers_compile_udp() -> Result<()> {
 
 #[tokio::test]
 async fn pipeline_test_dynamic_construction() -> Result<()> {
-    let active = Arc::new(AtomicUsize::new(0));
-    let inactive = Arc::new(AtomicUsize::new(0));
-
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
             "handler1",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
             "handler2",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await;
 
@@ -93,26 +201,22 @@ async fn pipeline_test_dynamic_construction() -> Result<()> {
     pipeline
         .add_front(MockHandler::<usize, String>::new(
             "handler3",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_front(MockHandler::<String, usize>::new(
             "handler4",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<String, usize>::new(
             "handler5",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<usize, String>::new(
             "handler6",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .finalize()
@@ -221,21 +325,16 @@ async fn pipeline_test_dynamic_construction_write_fail() -> Result<()> {
 
 #[tokio::test]
 async fn pipeline_test_remove_handler() -> Result<()> {
-    let active = Arc::new(AtomicUsize::new(0));
-    let inactive = Arc::new(AtomicUsize::new(0));
-
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
             "handler1",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
             "handler2",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await;
 
@@ -244,26 +343,22 @@ async fn pipeline_test_remove_handler() -> Result<()> {
     pipeline
         .add_front(MockHandler::<usize, String>::new(
             "handler3",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_front(MockHandler::<String, usize>::new(
             "handler4",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<String, usize>::new(
             "handler5",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<usize, String>::new(
             "handler6",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .finalize()
@@ -285,27 +380,21 @@ async fn pipeline_test_remove_handler() -> Result<()> {
 
 #[tokio::test]
 async fn pipeline_test_remove_front_back() -> Result<()> {
-    let active = Arc::new(AtomicUsize::new(0));
-    let inactive = Arc::new(AtomicUsize::new(0));
-
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
             "handler1",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
             "handler2",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .add_back(MockHandler::<String, String>::new(
             "handler3",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await
         .finalize()
@@ -333,15 +422,11 @@ async fn pipeline_test_remove_front_back() -> Result<()> {
 
 #[tokio::test]
 async fn pipeline_test_num_handlers() -> Result<()> {
-    let active = Arc::new(AtomicUsize::new(0));
-    let inactive = Arc::new(AtomicUsize::new(0));
-
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
             "handler1",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await;
     assert_eq!(1, pipeline.len().await);
@@ -349,8 +434,7 @@ async fn pipeline_test_num_handlers() -> Result<()> {
     pipeline
         .add_back(MockHandler::<String, String>::new(
             "handler2",
-            active.clone(),
-            inactive.clone(),
+            Stats::default(),
         ))
         .await;
     assert_eq!(2, pipeline.len().await);

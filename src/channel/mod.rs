@@ -2,7 +2,7 @@
 
 mod handler;
 mod handler_internal;
-mod pipeline;
+pub(crate) mod pipeline;
 
 pub use handler::{
     Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
