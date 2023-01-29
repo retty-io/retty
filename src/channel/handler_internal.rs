@@ -49,17 +49,17 @@ pub trait InboundHandlerContextInternal: Send + Sync {
 
     fn name(&self) -> &str;
     fn as_any(&mut self) -> &mut (dyn Any + Send + Sync);
-    fn set_next_in_ctx(
+    fn set_next_in_context(
         &mut self,
-        next_in_ctx: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
+        next_in_context: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
     );
     fn set_next_in_handler(
         &mut self,
         next_in_handler: Option<Arc<Mutex<dyn InboundHandlerInternal>>>,
     );
-    fn set_next_out_ctx(
+    fn set_next_out_context(
         &mut self,
-        next_out_ctx: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+        next_out_context: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
     );
     fn set_next_out_handler(
         &mut self,
@@ -92,9 +92,9 @@ pub trait OutboundHandlerContextInternal: Send + Sync {
 
     fn name(&self) -> &str;
     fn as_any(&mut self) -> &mut (dyn Any + Send + Sync);
-    fn set_next_out_ctx(
+    fn set_next_out_context(
         &mut self,
-        next_out_ctx: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+        next_out_context: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
     );
     fn set_next_out_handler(
         &mut self,

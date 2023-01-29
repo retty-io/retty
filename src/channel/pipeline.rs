@@ -133,11 +133,11 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
                 );
                 match (next_context, next_handler) {
                     (Some(next_ctx), Some(next_hdlr)) => {
-                        curr.set_next_in_ctx(Some(next_ctx.clone()));
+                        curr.set_next_in_context(Some(next_ctx.clone()));
                         curr.set_next_in_handler(Some(next_hdlr.clone()));
                     }
                     _ => {
-                        curr.set_next_in_ctx(None);
+                        curr.set_next_in_context(None);
                         curr.set_next_in_handler(None);
                     }
                 }
@@ -154,11 +154,11 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
                 };
                 match (prev_context, prev_handler) {
                     (Some(prev_ctx), Some(prev_hdlr)) => {
-                        curr.set_next_out_ctx(Some(prev_ctx.clone()));
+                        curr.set_next_out_context(Some(prev_ctx.clone()));
                         curr.set_next_out_handler(Some(prev_hdlr.clone()));
                     }
                     _ => {
-                        curr.set_next_out_ctx(None);
+                        curr.set_next_out_context(None);
                         curr.set_next_out_handler(None);
                     }
                 }
@@ -182,11 +182,11 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
                 };
                 match (prev_context, prev_handler) {
                     (Some(prev_ctx), Some(prev_hdlr)) => {
-                        curr.set_next_out_ctx(Some(prev_ctx.clone()));
+                        curr.set_next_out_context(Some(prev_ctx.clone()));
                         curr.set_next_out_handler(Some(prev_hdlr.clone()));
                     }
                     _ => {
-                        curr.set_next_out_ctx(None);
+                        curr.set_next_out_context(None);
                         curr.set_next_out_handler(None);
                     }
                 }
