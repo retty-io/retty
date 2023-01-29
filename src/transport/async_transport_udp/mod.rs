@@ -13,7 +13,7 @@ use crate::transport::{AsyncTransportWrite, TransportContext};
 
 struct AsyncTransportUdpDecoder;
 struct AsyncTransportUdpEncoder {
-    writer: Box<dyn AsyncTransportWrite + Send + Sync>,
+    writer: Option<Box<dyn AsyncTransportWrite + Send + Sync>>,
 }
 
 /// Asynchronous UDP transport handler for  that reads with input of TaggedBytesMut and output of TaggedBytesMut,
@@ -28,7 +28,9 @@ impl AsyncTransportUdp {
     pub fn new(writer: Box<dyn AsyncTransportWrite + Send + Sync>) -> Self {
         AsyncTransportUdp {
             decoder: AsyncTransportUdpDecoder {},
-            encoder: AsyncTransportUdpEncoder { writer },
+            encoder: AsyncTransportUdpEncoder {
+                writer: Some(writer),
+            },
         }
     }
 }
@@ -66,27 +68,33 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
         msg: Self::Win,
     ) {
-        if let Some(target) = msg.transport.peer_addr {
-            match self.writer.write(&msg.message, Some(target)).await {
-                Ok(n) => {
-                    trace!(
-                        "AsyncTransportUdpEncoder --> write {} of {} bytes",
-                        n,
-                        msg.message.len()
-                    );
+        if let Some(writer) = &mut self.writer {
+            if let Some(target) = msg.transport.peer_addr {
+                match writer.write(&msg.message, Some(target)).await {
+                    Ok(n) => {
+                        trace!(
+                            "AsyncTransportUdpEncoder --> write {} of {} bytes",
+                            n,
+                            msg.message.len()
+                        );
+                    }
+                    Err(err) => {
+                        warn!("AsyncTransportUdpEncoder write error: {}", err);
+                        ctx.fire_write_exception(err.into()).await;
+                    }
                 }
-                Err(err) => {
-                    warn!("AsyncTransportUdpEncoder write error: {}", err);
-                    ctx.fire_write_exception(err.into()).await;
-                }
+            } else {
+                let err = Box::new(std::io::Error::new(
+                    ErrorKind::NotConnected,
+                    String::from("Transport endpoint is not connected"),
+                ));
+                ctx.fire_write_exception(err).await;
             }
-        } else {
-            let err = Box::new(std::io::Error::new(
-                ErrorKind::NotConnected,
-                String::from("Transport endpoint is not connected"),
-            ));
-            ctx.fire_write_exception(err).await;
         }
+    }
+    async fn close(&mut self, _ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>) {
+        trace!("close socket");
+        self.writer.take();
     }
 }
 
