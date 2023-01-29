@@ -1,5 +1,8 @@
 //! Asynchronous transport abstraction for TCP and UDP
 
+#[cfg(test)]
+pub(crate) mod transport_test;
+
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -58,7 +61,6 @@ pub trait AsyncTransportWrite: TransportAddress {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#[async_trait]
 impl TransportAddress for OwnedReadHalf {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
         self.local_addr()
@@ -70,7 +72,6 @@ impl TransportAddress for OwnedReadHalf {
 }
 
 #[cfg(not(feature = "runtime-async-std"))]
-#[async_trait]
 impl TransportAddress for OwnedWriteHalf {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
         self.local_addr()
@@ -97,7 +98,6 @@ impl AsyncTransportWrite for OwnedWriteHalf {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
 impl TransportAddress for Arc<UdpSocket> {
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
         UdpSocket::local_addr(self)

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod async_transport_udp_test;
+
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::{trace, warn};
