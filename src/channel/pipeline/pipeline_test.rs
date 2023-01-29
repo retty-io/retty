@@ -9,6 +9,8 @@ use crate::codec::string_codec::{StringCodec, TaggedString, TaggedStringCodec};
 use crate::runtime::mpsc::bounded;
 use crate::transport::transport_test::MockAsyncTransportWrite;
 use crate::transport::{AsyncTransportTcp, AsyncTransportUdp, TaggedBytesMut};
+use std::error::Error;
+use std::io::ErrorKind;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -16,11 +18,20 @@ use bytes::BytesMut;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct Stats {
     pub(crate) active: Option<Arc<AtomicUsize>>,
     pub(crate) inactive: Option<Arc<AtomicUsize>>,
+    pub(crate) read: Option<Arc<AtomicUsize>>,
+    pub(crate) read_exception: Option<Arc<AtomicUsize>>,
+    pub(crate) read_eof: Option<Arc<AtomicUsize>>,
+    pub(crate) read_timeout: Option<Arc<AtomicUsize>>,
+    pub(crate) poll_timeout: Option<Arc<AtomicUsize>>,
+    pub(crate) write: Option<Arc<AtomicUsize>>,
+    pub(crate) write_exception: Option<Arc<AtomicUsize>>,
+    pub(crate) close: Option<Arc<AtomicUsize>>,
 }
 
 struct MockDecoder<Rin, Rout> {
@@ -31,6 +42,8 @@ struct MockDecoder<Rin, Rout> {
     phantom_out: PhantomData<Rout>,
 }
 struct MockEncoder<Win, Wout> {
+    stats: Stats,
+
     phantom_in: PhantomData<Win>,
     phantom_out: PhantomData<Wout>,
 }
@@ -44,12 +57,13 @@ impl<R, W> MockHandler<R, W> {
         MockHandler {
             decoder: MockDecoder {
                 name: name.to_string(),
-                stats,
+                stats: stats.clone(),
 
                 phantom_in: PhantomData,
                 phantom_out: PhantomData,
             },
             encoder: MockEncoder {
+                stats,
                 phantom_in: PhantomData,
                 phantom_out: PhantomData,
             },
@@ -70,7 +84,6 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
         ctx.fire_transport_active().await;
     }
-
     async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
         if let Some(inactive) = &self.stats.inactive {
             inactive.fetch_add(1, Ordering::SeqCst);
@@ -83,7 +96,47 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
         _msg: Self::Rin,
     ) {
+        if let Some(read) = &self.stats.read {
+            read.fetch_add(1, Ordering::SeqCst);
+        }
         ctx.fire_read(Rout::default()).await;
+    }
+    async fn read_exception(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        err: Box<dyn Error + Send + Sync>,
+    ) {
+        if let Some(read_exception) = &self.stats.read_exception {
+            read_exception.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_read_exception(err).await;
+    }
+    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+        if let Some(read_eof) = &self.stats.read_eof {
+            read_eof.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_read_eof().await;
+    }
+
+    async fn read_timeout(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        timeout: Instant,
+    ) {
+        if let Some(read_timeout) = &self.stats.read_timeout {
+            read_timeout.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_read_timeout(timeout).await;
+    }
+    async fn poll_timeout(
+        &mut self,
+        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        timeout: &mut Instant,
+    ) {
+        if let Some(poll_timeout) = &self.stats.poll_timeout {
+            poll_timeout.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_poll_timeout(timeout).await;
     }
 }
 
@@ -99,7 +152,26 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
         _msg: Self::Win,
     ) {
+        if let Some(write) = &self.stats.write {
+            write.fetch_add(1, Ordering::SeqCst);
+        }
         ctx.fire_write(Wout::default()).await;
+    }
+    async fn write_exception(
+        &mut self,
+        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
+        err: Box<dyn Error + Send + Sync>,
+    ) {
+        if let Some(write_exception) = &self.stats.write_exception {
+            write_exception.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_write_exception(err).await;
+    }
+    async fn close(&mut self, ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>) {
+        if let Some(close) = &self.stats.close {
+            close.fetch_add(1, Ordering::SeqCst);
+        }
+        ctx.fire_close().await;
     }
 }
 
@@ -181,6 +253,92 @@ async fn pipeline_test_real_handlers_compile_udp() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn pipeline_test_fire_actions() -> Result<()> {
+    let stats = Stats {
+        active: Some(Arc::new(AtomicUsize::new(0))),
+        inactive: Some(Arc::new(AtomicUsize::new(0))),
+        read: Some(Arc::new(AtomicUsize::new(0))),
+        read_exception: Some(Arc::new(AtomicUsize::new(0))),
+        read_eof: Some(Arc::new(AtomicUsize::new(0))),
+        read_timeout: Some(Arc::new(AtomicUsize::new(0))),
+        poll_timeout: Some(Arc::new(AtomicUsize::new(0))),
+        write: Some(Arc::new(AtomicUsize::new(0))),
+        write_exception: Some(Arc::new(AtomicUsize::new(0))),
+        close: Some(Arc::new(AtomicUsize::new(0))),
+    };
+
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1",
+            stats.clone(),
+        ))
+        .await
+        .add_back(MockHandler::<String, String>::new(
+            "handler2",
+            stats.clone(),
+        ))
+        .await
+        .finalize()
+        .await;
+
+    pipeline.read("TESTING".to_string()).await;
+    assert_eq!(2, stats.read.as_ref().unwrap().load(Ordering::SeqCst));
+
+    pipeline
+        .read_exception(Box::new(std::io::Error::new(
+            ErrorKind::NotFound,
+            "TESTING ERROR",
+        )))
+        .await;
+    assert_eq!(
+        2,
+        stats
+            .read_exception
+            .as_ref()
+            .unwrap()
+            .load(Ordering::SeqCst)
+    );
+
+    pipeline.read_eof().await;
+    assert_eq!(2, stats.read_eof.as_ref().unwrap().load(Ordering::SeqCst));
+
+    pipeline.read_timeout(Instant::now()).await;
+    assert_eq!(
+        2,
+        stats.read_timeout.as_ref().unwrap().load(Ordering::SeqCst)
+    );
+
+    pipeline.poll_timeout(&mut Instant::now()).await;
+    assert_eq!(
+        2,
+        stats.poll_timeout.as_ref().unwrap().load(Ordering::SeqCst)
+    );
+
+    pipeline.write("TESTING".to_string()).await;
+    assert_eq!(2, stats.write.as_ref().unwrap().load(Ordering::SeqCst));
+
+    pipeline
+        .write_exception(Box::new(std::io::Error::new(
+            ErrorKind::NotFound,
+            "TESTING ERROR",
+        )))
+        .await;
+    assert_eq!(
+        2,
+        stats
+            .write_exception
+            .as_ref()
+            .unwrap()
+            .load(Ordering::SeqCst)
+    );
+
+    pipeline.close().await;
+    assert_eq!(2, stats.close.as_ref().unwrap().load(Ordering::SeqCst));
+
+    Ok(())
+}
 #[tokio::test]
 async fn pipeline_test_dynamic_construction() -> Result<()> {
     let pipeline: Pipeline<String, String> = Pipeline::new();
