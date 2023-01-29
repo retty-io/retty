@@ -52,9 +52,9 @@ pub trait Handler: Send + Sync {
         (
             handler_name,
             Arc::new(Mutex::new(inbound_context)),
-            inbound_handler,
+            Arc::new(Mutex::new(inbound_handler)),
             Arc::new(Mutex::new(outbound_context)),
-            outbound_handler,
+            Arc::new(Mutex::new(outbound_handler)),
         )
     }
 
@@ -63,8 +63,8 @@ pub trait Handler: Send + Sync {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandlerInternal>>,
-        Arc<Mutex<dyn OutboundHandlerInternal>>,
+        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
+        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
     );
 }
 

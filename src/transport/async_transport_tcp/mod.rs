@@ -4,13 +4,10 @@ mod async_transport_tcp_test;
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::sync::Arc;
 
 use crate::channel::{
-    Handler, InboundHandler, InboundHandlerContext, InboundHandlerInternal, OutboundHandler,
-    OutboundHandlerContext, OutboundHandlerInternal,
+    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
 };
-use crate::runtime::sync::Mutex;
 use crate::transport::AsyncTransportWrite;
 
 struct AsyncTransportTcpDecoder;
@@ -96,17 +93,9 @@ impl Handler for AsyncTransportTcp {
     fn split(
         self,
     ) -> (
-        Arc<Mutex<dyn InboundHandlerInternal>>,
-        Arc<Mutex<dyn OutboundHandlerInternal>>,
+        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
+        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
     ) {
-        let inbound_handler: Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>> =
-            Box::new(self.decoder);
-        let outbound_handler: Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>> =
-            Box::new(self.encoder);
-
-        (
-            Arc::new(Mutex::new(inbound_handler)),
-            Arc::new(Mutex::new(outbound_handler)),
-        )
+        (Box::new(self.decoder), Box::new(self.encoder))
     }
 }
