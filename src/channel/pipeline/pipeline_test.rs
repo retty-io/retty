@@ -274,3 +274,47 @@ async fn pipeline_test_remove_handler() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn pipeline_test_remove_front_back() -> Result<()> {
+    let active = Arc::new(AtomicUsize::new(0));
+    let inactive = Arc::new(AtomicUsize::new(0));
+
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1".to_string(),
+            active.clone(),
+            inactive.clone(),
+        ))
+        .await
+        .add_back(MockHandler::<String, String>::new(
+            "handler2".to_string(),
+            active.clone(),
+            inactive.clone(),
+        ))
+        .await
+        .add_back(MockHandler::<String, String>::new(
+            "handler3".to_string(),
+            active.clone(),
+            inactive.clone(),
+        ))
+        .await
+        .finalize()
+        .await;
+
+    pipeline
+        .remove_front()
+        .await?
+        .remove_back()
+        .await?
+        .finalize()
+        .await;
+
+    pipeline.read("TESTING INBOUND MESSAGE".to_owned()).await;
+    pipeline.write("TESTING OUTBOUND MESSAGE".to_owned()).await;
+
+    pipeline.remove("handler2").await?;
+
+    Ok(())
+}
