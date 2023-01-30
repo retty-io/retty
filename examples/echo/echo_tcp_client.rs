@@ -216,5 +216,7 @@ async fn main() -> anyhow::Result<()> {
         buffer.clear();
     }
 
+    bootstrap.stop().await;
+
     Ok(())
 }
