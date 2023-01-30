@@ -303,6 +303,8 @@
 //!     };
 //!     buffer.clear();
 //! }
+//!
+//! bootstrap.stop().await;
 //! ```
 
 #![warn(rust_2018_idioms)]
