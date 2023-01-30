@@ -6,8 +6,11 @@ use std::time::{Duration, Instant};
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::channel::Pipeline;
 use crate::runtime::{
+    mpsc::{bounded, Receiver, Sender},
     net::{ToSocketAddrs, UdpSocket},
-    sleep, Runtime,
+    sleep,
+    sync::Mutex,
+    Runtime,
 };
 use crate::transport::{TaggedBytesMut, TransportContext};
 
@@ -16,6 +19,8 @@ pub struct BootstrapUdpClient<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     socket: Option<Arc<UdpSocket>>,
+    close_tx: Arc<Mutex<Option<Sender<()>>>>,
+    done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
 impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
@@ -25,6 +30,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
             pipeline_factory_fn: None,
             runtime,
             socket: None,
+            close_tx: Arc::new(Mutex::new(None)),
+            done_rx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -54,6 +61,21 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
 
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+
+        #[allow(unused_mut)]
+        let (close_tx, mut close_rx) = bounded(1);
+        {
+            let mut tx = self.close_tx.lock().await;
+            *tx = Some(close_tx);
+        }
+
+        let (done_tx, done_rx) = bounded(1);
+        let mut done_tx = Some(done_tx);
+        {
+            let mut rx = self.done_rx.lock().await;
+            *rx = Some(done_rx);
+        }
+
         let async_writer = Box::new(socket_wr);
         let pipeline_wr = (pipeline_factory_fn)(async_writer).await;
 
@@ -75,6 +97,11 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                 tokio::pin!(timer);
 
                 tokio::select! {
+                    _ = close_rx.recv() => {
+                        trace!("UdpSocket read exit loop");
+                        done_tx.take();
+                        break;
+                    }
                     _ = timer.as_mut() => {
                         pipeline.read_timeout(Instant::now()).await;
                     }
@@ -109,5 +136,20 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
         }));
 
         Ok(pipeline_wr)
+    }
+
+    /// Gracefully stop the client
+    pub async fn stop(&self) {
+        {
+            let mut tx = self.close_tx.lock().await;
+            tx.take();
+        }
+        {
+            let mut rx = self.done_rx.lock().await;
+            #[allow(unused_mut)]
+            if let Some(mut done_rx) = rx.take() {
+                let _ = done_rx.recv().await;
+            }
+        }
     }
 }

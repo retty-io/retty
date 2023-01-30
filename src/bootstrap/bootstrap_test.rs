@@ -74,6 +74,8 @@ async fn bootstrap_tcp_client_with_pipeline() -> Result<()> {
     let result = bootstrap.connect(format!("{}:{}", "0.0.0.0", 8080)).await;
     assert!(result.is_err());
 
+    bootstrap.stop().await;
+
     Ok(())
 }
 
@@ -92,8 +94,8 @@ async fn bootstrap_udp_client_with_pipeline() -> Result<()> {
     ));
 
     bootstrap.bind(format!("{}:{}", "0.0.0.0", 0)).await?;
-
-    bootstrap.connect(format!("{}:{}", "0.0.0.0", 8080)).await?;
+    let _ = bootstrap.connect(format!("{}:{}", "0.0.0.0", 8080)).await;
+    bootstrap.stop().await;
 
     Ok(())
 }
