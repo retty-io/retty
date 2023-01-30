@@ -1,6 +1,3 @@
-#[cfg(test)]
-pub(crate) mod pipeline_test;
-
 use std::error::Error;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
