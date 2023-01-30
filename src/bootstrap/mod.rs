@@ -1,5 +1,8 @@
 //! The helpful bootstrap APIs which enable an easy implementation of typical client side and server side pipeline initialization.
 
+#[cfg(test)]
+mod bootstrap_test;
+
 use crate::channel::Pipeline;
 use crate::transport::AsyncTransportWrite;
 
