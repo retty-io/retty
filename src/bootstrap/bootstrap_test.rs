@@ -30,6 +30,7 @@ async fn bootstrap_tcp_server_with_pipeline() -> Result<()> {
             })
         },
     ));
+
     bootstrap.bind(format!("{}:{}", "0.0.0.0", 0)).await?;
     bootstrap.stop().await;
 
@@ -49,8 +50,50 @@ async fn bootstrap_udp_server_with_pipeline() -> Result<()> {
             })
         },
     ));
+
     bootstrap.bind(format!("{}:{}", "0.0.0.0", 0)).await?;
     bootstrap.stop().await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn bootstrap_tcp_client_with_pipeline() -> Result<()> {
+    let mut bootstrap = BootstrapTcpClient::<String>::new(default_runtime().unwrap());
+    bootstrap.pipeline(Box::new(
+        move |_sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+            Box::pin(async move {
+                let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+                pipeline.add_back(StringCodec::new()).await;
+                pipeline.finalize().await;
+                Arc::new(pipeline)
+            })
+        },
+    ));
+
+    let result = bootstrap.connect(format!("{}:{}", "0.0.0.0", 8080)).await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn bootstrap_udp_client_with_pipeline() -> Result<()> {
+    let mut bootstrap = BootstrapUdpClient::<TaggedString>::new(default_runtime().unwrap());
+    bootstrap.pipeline(Box::new(
+        move |_sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+            Box::pin(async move {
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                pipeline.add_back(TaggedStringCodec::new()).await;
+                pipeline.finalize().await;
+                Arc::new(pipeline)
+            })
+        },
+    ));
+
+    bootstrap.bind(format!("{}:{}", "0.0.0.0", 0)).await?;
+
+    bootstrap.connect(format!("{}:{}", "0.0.0.0", 8080)).await?;
 
     Ok(())
 }
