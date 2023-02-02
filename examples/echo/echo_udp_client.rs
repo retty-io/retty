@@ -8,8 +8,7 @@ use std::sync::Arc;
 
 use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
-    Pipeline,
+    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
@@ -41,11 +40,7 @@ impl InboundHandler for TaggedEchoDecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    async fn read(
-        &mut self,
-        _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: Self::Rin,
-    ) {
+    async fn read(&mut self, _ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
             "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
@@ -58,11 +53,7 @@ impl OutboundHandler for TaggedEchoEncoder {
     type Win = TaggedString;
     type Wout = Self::Win;
 
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: Self::Win,
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
     }
 }

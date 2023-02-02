@@ -9,8 +9,7 @@ use std::sync::Arc;
 
 use retty::bootstrap::BootstrapTcpClient;
 use retty::channel::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
-    Pipeline,
+    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
 use retty::codec::{
     byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
@@ -42,22 +41,18 @@ impl InboundHandler for ChatDecoder {
     type Rin = String;
     type Rout = Self::Rin;
 
-    async fn read(
-        &mut self,
-        _ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: Self::Rin,
-    ) {
+    async fn read(&mut self, _ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!("received: {}", msg);
     }
     async fn read_exception(
         &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
+        ctx: &mut InboundContext<Self::Rin, Self::Rout>,
         err: Box<dyn Error + Send + Sync>,
     ) {
         println!("received exception: {}", err);
         ctx.fire_close().await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn read_eof(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
@@ -68,11 +63,7 @@ impl OutboundHandler for ChatEncoder {
     type Win = String;
     type Wout = Self::Win;
 
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: Self::Win,
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
     }
 }

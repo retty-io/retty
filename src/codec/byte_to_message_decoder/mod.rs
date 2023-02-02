@@ -3,9 +3,7 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
 
-use crate::channel::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
-};
+use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 
 mod line_based_frame_decoder;
 mod tagged;
@@ -51,19 +49,15 @@ impl InboundHandler for ByteToMessageDecoder {
     type Rin = BytesMut;
     type Rout = Self::Rin;
 
-    async fn transport_active(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn transport_active(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
         self.transport_active = true;
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>) {
+    async fn transport_inactive(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
         self.transport_active = false;
         ctx.fire_transport_inactive().await;
     }
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        mut msg: Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>, mut msg: Self::Rin) {
         while self.transport_active {
             match self.message_decoder.decode(&mut msg) {
                 Ok(message) => {
@@ -87,11 +81,7 @@ impl OutboundHandler for ByteToMessageEncoder {
     type Win = BytesMut;
     type Wout = Self::Win;
 
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: Self::Win,
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
     }
 }

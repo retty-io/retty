@@ -9,36 +9,36 @@ use crate::runtime::sync::Mutex;
 #[doc(hidden)]
 #[async_trait]
 pub trait InboundHandlerInternal: Send + Sync {
-    async fn transport_active_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal);
-    async fn transport_inactive_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal);
+    async fn transport_active_internal(&mut self, ctx: &mut dyn InboundContextInternal);
+    async fn transport_inactive_internal(&mut self, ctx: &mut dyn InboundContextInternal);
 
     async fn read_internal(
         &mut self,
-        ctx: &mut dyn InboundHandlerContextInternal,
+        ctx: &mut dyn InboundContextInternal,
         msg: Box<dyn Any + Send + Sync>,
     );
     async fn read_exception_internal(
         &mut self,
-        ctx: &mut dyn InboundHandlerContextInternal,
+        ctx: &mut dyn InboundContextInternal,
         err: Box<dyn Error + Send + Sync>,
     );
-    async fn read_eof_internal(&mut self, ctx: &mut dyn InboundHandlerContextInternal);
+    async fn read_eof_internal(&mut self, ctx: &mut dyn InboundContextInternal);
 
     async fn read_timeout_internal(
         &mut self,
-        ctx: &mut dyn InboundHandlerContextInternal,
+        ctx: &mut dyn InboundContextInternal,
         timeout: Instant,
     );
     async fn poll_timeout_internal(
         &mut self,
-        ctx: &mut dyn InboundHandlerContextInternal,
+        ctx: &mut dyn InboundContextInternal,
         timeout: &mut Instant,
     );
 }
 
 #[doc(hidden)]
 #[async_trait]
-pub trait InboundHandlerContextInternal: Send + Sync {
+pub trait InboundContextInternal: Send + Sync {
     async fn fire_transport_active_internal(&mut self);
     async fn fire_transport_inactive_internal(&mut self);
     async fn fire_read_internal(&mut self, msg: Box<dyn Any + Send + Sync>);
@@ -51,7 +51,7 @@ pub trait InboundHandlerContextInternal: Send + Sync {
     fn as_any(&mut self) -> &mut (dyn Any + Send + Sync);
     fn set_next_in_context(
         &mut self,
-        next_in_context: Option<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
+        next_in_context: Option<Arc<Mutex<dyn InboundContextInternal>>>,
     );
     fn set_next_in_handler(
         &mut self,
@@ -59,7 +59,7 @@ pub trait InboundHandlerContextInternal: Send + Sync {
     );
     fn set_next_out_context(
         &mut self,
-        next_out_context: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+        next_out_context: Option<Arc<Mutex<dyn OutboundContextInternal>>>,
     );
     fn set_next_out_handler(
         &mut self,
@@ -72,20 +72,20 @@ pub trait InboundHandlerContextInternal: Send + Sync {
 pub trait OutboundHandlerInternal: Send + Sync {
     async fn write_internal(
         &mut self,
-        ctx: &mut dyn OutboundHandlerContextInternal,
+        ctx: &mut dyn OutboundContextInternal,
         msg: Box<dyn Any + Send + Sync>,
     );
     async fn write_exception_internal(
         &mut self,
-        ctx: &mut dyn OutboundHandlerContextInternal,
+        ctx: &mut dyn OutboundContextInternal,
         err: Box<dyn Error + Send + Sync>,
     );
-    async fn close_internal(&mut self, ctx: &mut dyn OutboundHandlerContextInternal);
+    async fn close_internal(&mut self, ctx: &mut dyn OutboundContextInternal);
 }
 
 #[doc(hidden)]
 #[async_trait]
-pub trait OutboundHandlerContextInternal: Send + Sync {
+pub trait OutboundContextInternal: Send + Sync {
     async fn fire_write_internal(&mut self, msg: Box<dyn Any + Send + Sync>);
     async fn fire_write_exception_internal(&mut self, err: Box<dyn Error + Send + Sync>);
     async fn fire_close_internal(&mut self);
@@ -94,7 +94,7 @@ pub trait OutboundHandlerContextInternal: Send + Sync {
     fn as_any(&mut self) -> &mut (dyn Any + Send + Sync);
     fn set_next_out_context(
         &mut self,
-        next_out_context: Option<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+        next_out_context: Option<Arc<Mutex<dyn OutboundContextInternal>>>,
     );
     fn set_next_out_handler(
         &mut self,

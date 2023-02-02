@@ -5,9 +5,7 @@ mod tagged;
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 
-use crate::channel::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
-};
+use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 
 pub use tagged::{TaggedString, TaggedStringCodec};
 
@@ -42,11 +40,7 @@ impl InboundHandler for StringDecoder {
     type Rin = BytesMut;
     type Rout = String;
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         match String::from_utf8(msg.to_vec()) {
             Ok(message) => {
                 ctx.fire_read(message).await;
@@ -61,11 +55,7 @@ impl OutboundHandler for StringEncoder {
     type Win = String;
     type Wout = BytesMut;
 
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: Self::Win,
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         let mut buf = BytesMut::new();
         buf.put(msg.as_bytes());
         ctx.fire_write(buf).await;

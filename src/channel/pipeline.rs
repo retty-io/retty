@@ -7,7 +7,7 @@ use std::time::Instant;
 use crate::channel::{
     handler::Handler,
     handler_internal::{
-        InboundHandlerContextInternal, InboundHandlerInternal, OutboundHandlerContextInternal,
+        InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
         OutboundHandlerInternal,
     },
 };
@@ -15,9 +15,9 @@ use crate::runtime::sync::Mutex;
 
 struct PipelineInternal<R, W> {
     handler_names: Vec<String>,
-    inbound_contexts: Vec<Arc<Mutex<dyn InboundHandlerContextInternal>>>,
+    inbound_contexts: Vec<Arc<Mutex<dyn InboundContextInternal>>>,
     inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
-    outbound_contexts: Vec<Arc<Mutex<dyn OutboundHandlerContextInternal>>>,
+    outbound_contexts: Vec<Arc<Mutex<dyn OutboundContextInternal>>>,
     outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 
     phantom_r: PhantomData<R>,

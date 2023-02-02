@@ -3,9 +3,7 @@ use bytes::BytesMut;
 use log::{trace, warn};
 use std::io::ErrorKind;
 
-use crate::channel::{
-    Handler, InboundHandler, InboundHandlerContext, OutboundHandler, OutboundHandlerContext,
-};
+use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 use crate::transport::{AsyncTransportWrite, TransportContext};
 
 struct AsyncTransportUdpDecoder;
@@ -46,11 +44,7 @@ impl InboundHandler for AsyncTransportUdpDecoder {
     type Rin = TaggedBytesMut;
     type Rout = Self::Rin;
 
-    async fn read(
-        &mut self,
-        ctx: &mut InboundHandlerContext<Self::Rin, Self::Rout>,
-        msg: Self::Rin,
-    ) {
+    async fn read(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         ctx.fire_read(msg).await;
     }
 }
@@ -60,11 +54,7 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
     type Win = TaggedBytesMut;
     type Wout = Self::Win;
 
-    async fn write(
-        &mut self,
-        ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>,
-        msg: Self::Win,
-    ) {
+    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         if let Some(writer) = &mut self.writer {
             if let Some(target) = msg.transport.peer_addr {
                 match writer.write(&msg.message, Some(target)).await {
@@ -89,7 +79,7 @@ impl OutboundHandler for AsyncTransportUdpEncoder {
             }
         }
     }
-    async fn close(&mut self, _ctx: &mut OutboundHandlerContext<Self::Win, Self::Wout>) {
+    async fn close(&mut self, _ctx: &mut OutboundContext<Self::Win, Self::Wout>) {
         trace!("close socket");
         self.writer.take();
     }
