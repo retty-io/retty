@@ -306,7 +306,7 @@
 //!
 //! bootstrap.stop().await;
 //! ```
-
+#![doc(html_logo_url = "https://raw.githubusercontent.com/retty-io/retty/master/docs/retty.io.jpg")]
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 #![warn(missing_docs)]
