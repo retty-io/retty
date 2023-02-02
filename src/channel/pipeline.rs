@@ -246,12 +246,12 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
         handler.read_timeout_internal(&*ctx, now).await;
     }
 
-    async fn poll_timeout(&self, timeout: &mut Instant) {
+    async fn poll_timeout(&self, eto: &mut Instant) {
         let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.poll_timeout_internal(&*ctx, timeout).await;
+        handler.poll_timeout_internal(&*ctx, eto).await;
     }
 
     async fn write(&self, msg: W) {
@@ -404,13 +404,10 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.read_timeout(now).await;
     }
 
-    /// Polls timout event in its inbound operations.
-    /// If any inbound handler has timeout event to trigger in future,
-    /// it should compare its own timeout event with the provided timout event and
-    /// update the provided timeout event with the minimal of these two timeout events.
-    pub async fn poll_timeout(&self, timeout: &mut Instant) {
+    /// Polls earliest timeout (eto) in its inbound operations.
+    pub async fn poll_timeout(&self, eto: &mut Instant) {
         let internal = self.internal.lock().await;
-        internal.poll_timeout(timeout).await;
+        internal.poll_timeout(eto).await;
     }
 
     /// Writes a message.

@@ -25,11 +25,7 @@ pub trait InboundHandlerInternal: Send + Sync {
     async fn read_eof_internal(&mut self, ctx: &dyn InboundContextInternal);
 
     async fn read_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant);
-    async fn poll_timeout_internal(
-        &mut self,
-        ctx: &dyn InboundContextInternal,
-        timeout: &mut Instant,
-    );
+    async fn poll_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, eto: &mut Instant);
 }
 
 #[doc(hidden)]
@@ -41,7 +37,7 @@ pub trait InboundContextInternal: Send + Sync {
     async fn fire_read_exception_internal(&self, err: Box<dyn Error + Send + Sync>);
     async fn fire_read_eof_internal(&self);
     async fn fire_read_timeout_internal(&self, now: Instant);
-    async fn fire_poll_timeout_internal(&self, timeout: &mut Instant);
+    async fn fire_poll_timeout_internal(&self, eto: &mut Instant);
 
     fn name(&self) -> &str;
     fn as_any(&self) -> &(dyn Any + Send + Sync);

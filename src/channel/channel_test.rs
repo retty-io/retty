@@ -122,12 +122,12 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     async fn poll_timeout(
         &mut self,
         ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: &mut Instant,
+        eto: &mut Instant,
     ) {
         if let Some(poll_timeout) = &self.stats.poll_timeout {
             poll_timeout.fetch_add(1, Ordering::SeqCst);
         }
-        ctx.fire_poll_timeout(timeout).await;
+        ctx.fire_poll_timeout(eto).await;
     }
 }
 

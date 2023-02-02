@@ -76,10 +76,10 @@ impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
 
             pipeline.transport_active().await;
             loop {
-                let mut timeout = Instant::now() + Duration::from_secs(MAX_DURATION);
-                pipeline.poll_timeout(&mut timeout).await;
+                let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION);
+                pipeline.poll_timeout(&mut eto).await;
 
-                let timer = if let Some(duration) = timeout.checked_duration_since(Instant::now()) {
+                let timer = if let Some(duration) = eto.checked_duration_since(Instant::now()) {
                     sleep(duration)
                 } else {
                     sleep(Duration::from_secs(0))

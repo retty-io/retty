@@ -106,16 +106,13 @@ pub trait InboundHandler: Send + Sync {
     async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
         ctx.fire_read_timeout(now).await;
     }
-    /// Polls timout event in its inbound operations.
-    /// If any inbound handler has timeout event to trigger in future,
-    /// it should compare its own timeout event with the provided timout event and
-    /// update the provided timeout event with the minimal of these two timeout events.
+    /// Polls earliest timeout (eto) in its inbound operations.
     async fn poll_timeout(
         &mut self,
         ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: &mut Instant,
+        eto: &mut Instant,
     ) {
-        ctx.fire_poll_timeout(timeout).await;
+        ctx.fire_poll_timeout(eto).await;
     }
 }
 
@@ -197,13 +194,9 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerInte
             );
         }
     }
-    async fn poll_timeout_internal(
-        &mut self,
-        ctx: &dyn InboundContextInternal,
-        timeout: &mut Instant,
-    ) {
+    async fn poll_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, eto: &mut Instant) {
         if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
-            self.poll_timeout(ctx, timeout).await;
+            self.poll_timeout(ctx, eto).await;
         } else {
             panic!(
                 "ctx can't downcast_ref::<InboundContext<Rin, Rout>> in {} handler",
@@ -388,19 +381,14 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         }
     }
 
-    /// Polls timout event in its inbound operations.
-    /// If any inbound handler has timeout event to trigger in future,
-    /// it should compare its own timeout event with the provided timout event and
-    /// update the provided timeout event with the minimal of these two timeout events.
-    pub async fn fire_poll_timeout(&self, timeout: &mut Instant) {
+    /// Polls earliest timeout (eto) in its inbound operations.
+    pub async fn fire_poll_timeout(&self, eto: &mut Instant) {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
             let (mut next_handler, next_ctx) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler
-                .poll_timeout_internal(&*next_ctx, timeout)
-                .await;
+            next_handler.poll_timeout_internal(&*next_ctx, eto).await;
         } else {
             trace!("poll_timeout reached end of pipeline");
         }
@@ -433,8 +421,8 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContextInte
     async fn fire_read_timeout_internal(&self, now: Instant) {
         self.fire_read_timeout(now).await;
     }
-    async fn fire_poll_timeout_internal(&self, timeout: &mut Instant) {
-        self.fire_poll_timeout(timeout).await;
+    async fn fire_poll_timeout_internal(&self, eto: &mut Instant) {
+        self.fire_poll_timeout(eto).await;
     }
 
     fn name(&self) -> &str {

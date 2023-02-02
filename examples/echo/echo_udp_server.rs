@@ -82,10 +82,10 @@ impl InboundHandler for TaggedEchoDecoder {
     async fn poll_timeout(
         &mut self,
         _ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: &mut Instant,
+        eto: &mut Instant,
     ) {
-        if self.last_transport.is_some() && self.timeout < *timeout {
-            *timeout = self.timeout;
+        if self.last_transport.is_some() && self.timeout < *eto {
+            *eto = self.timeout;
         }
 
         //last handler, no need to fire_poll_timeout

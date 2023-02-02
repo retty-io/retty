@@ -80,10 +80,10 @@ impl InboundHandler for EchoDecoder {
     async fn poll_timeout(
         &mut self,
         _ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: &mut Instant,
+        eto: &mut Instant,
     ) {
-        if self.timeout < *timeout {
-            *timeout = self.timeout
+        if self.timeout < *eto {
+            *eto = self.timeout
         }
 
         //last handler, no need to fire_poll_timeout
