@@ -64,14 +64,10 @@ impl InboundHandler for EchoDecoder {
         ctx.fire_close().await;
     }
 
-    async fn read_timeout(
-        &mut self,
-        ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: Instant,
-    ) {
-        if timeout >= self.timeout {
+    async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        if now >= self.timeout {
             println!("EchoHandler timeout at: {:?}", self.timeout);
-            self.timeout = Instant::now() + self.interval;
+            self.timeout = now + self.interval;
             ctx.fire_write(format!(
                 "Keep-alive message: next one at {:?}\r\n",
                 self.timeout

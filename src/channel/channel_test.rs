@@ -113,15 +113,11 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx.fire_read_eof().await;
     }
 
-    async fn read_timeout(
-        &mut self,
-        ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: Instant,
-    ) {
+    async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
         if let Some(read_timeout) = &self.stats.read_timeout {
             read_timeout.fetch_add(1, Ordering::SeqCst);
         }
-        ctx.fire_read_timeout(timeout).await;
+        ctx.fire_read_timeout(now).await;
     }
     async fn poll_timeout(
         &mut self,

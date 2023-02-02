@@ -64,14 +64,10 @@ impl InboundHandler for TaggedEchoDecoder {
         }
     }
 
-    async fn read_timeout(
-        &mut self,
-        ctx: &InboundContext<Self::Rin, Self::Rout>,
-        timeout: Instant,
-    ) {
-        if self.last_transport.is_some() && self.timeout <= timeout {
+    async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        if self.last_transport.is_some() && self.timeout <= now {
             println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
-            self.timeout = Instant::now() + self.interval;
+            self.timeout = now + self.interval;
             if let Some(transport) = &self.last_transport {
                 ctx.fire_write(TaggedString {
                     transport: *transport,
