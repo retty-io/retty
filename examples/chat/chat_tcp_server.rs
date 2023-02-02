@@ -77,13 +77,13 @@ impl InboundHandler for ChatDecoder {
     type Rin = String;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, _ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!("received: {}", msg);
 
         let mut s = self.state.lock().await;
         s.broadcast(self.peer, format!("{}\r\n", msg)).await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
+    async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         // first leave itself from state, otherwise, it may still receive message from broadcast,
         // which may cause data racing.
         {
@@ -99,7 +99,7 @@ impl OutboundHandler for ChatEncoder {
     type Win = String;
     type Wout = Self::Win;
 
-    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
     }
 }

@@ -77,20 +77,20 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     type Rin = Rin;
     type Rout = Rout;
 
-    async fn transport_active(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
+    async fn transport_active(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         if let Some(active) = &self.stats.active {
             active.fetch_add(1, Ordering::SeqCst);
         }
         ctx.fire_transport_active().await;
     }
-    async fn transport_inactive(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
+    async fn transport_inactive(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         if let Some(inactive) = &self.stats.inactive {
             inactive.fetch_add(1, Ordering::SeqCst);
         }
         ctx.fire_transport_inactive().await;
     }
 
-    async fn read(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>, _msg: Self::Rin) {
+    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, _msg: Self::Rin) {
         if let Some(read) = &self.stats.read {
             read.fetch_add(1, Ordering::SeqCst);
         }
@@ -98,7 +98,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
     async fn read_exception(
         &mut self,
-        ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+        ctx: &InboundContext<Self::Rin, Self::Rout>,
         err: Box<dyn Error + Send + Sync>,
     ) {
         if let Some(read_exception) = &self.stats.read_exception {
@@ -106,7 +106,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         }
         ctx.fire_read_exception(err).await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
+    async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         if let Some(read_eof) = &self.stats.read_eof {
             read_eof.fetch_add(1, Ordering::SeqCst);
         }
@@ -115,7 +115,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
 
     async fn read_timeout(
         &mut self,
-        ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+        ctx: &InboundContext<Self::Rin, Self::Rout>,
         timeout: Instant,
     ) {
         if let Some(read_timeout) = &self.stats.read_timeout {
@@ -125,7 +125,7 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
     }
     async fn poll_timeout(
         &mut self,
-        ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+        ctx: &InboundContext<Self::Rin, Self::Rout>,
         timeout: &mut Instant,
     ) {
         if let Some(poll_timeout) = &self.stats.poll_timeout {
@@ -142,7 +142,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     type Win = Win;
     type Wout = Wout;
 
-    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, _msg: Self::Win) {
+    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, _msg: Self::Win) {
         if let Some(write) = &self.stats.write {
             write.fetch_add(1, Ordering::SeqCst);
         }
@@ -150,7 +150,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
     }
     async fn write_exception(
         &mut self,
-        ctx: &mut OutboundContext<Self::Win, Self::Wout>,
+        ctx: &OutboundContext<Self::Win, Self::Wout>,
         err: Box<dyn Error + Send + Sync>,
     ) {
         if let Some(write_exception) = &self.stats.write_exception {
@@ -158,7 +158,7 @@ impl<Win: Default + Send + Sync + 'static, Wout: Default + Send + Sync + 'static
         }
         ctx.fire_write_exception(err).await;
     }
-    async fn close(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>) {
+    async fn close(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>) {
         if let Some(close) = &self.stats.close {
             close.fetch_add(1, Ordering::SeqCst);
         }

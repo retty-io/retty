@@ -40,7 +40,7 @@ impl InboundHandler for TaggedEchoDecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, _ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
             "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
@@ -53,7 +53,7 @@ impl OutboundHandler for TaggedEchoEncoder {
     type Win = TaggedString;
     type Wout = Self::Win;
 
-    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
     }
 }

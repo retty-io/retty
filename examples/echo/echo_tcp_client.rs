@@ -48,25 +48,25 @@ impl InboundHandler for EchoDecoder {
     type Rin = String;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, _ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!("received back: {}", msg);
     }
     async fn read_exception(
         &mut self,
-        ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+        ctx: &InboundContext<Self::Rin, Self::Rout>,
         err: Box<dyn Error + Send + Sync>,
     ) {
         println!("received exception: {}", err);
         ctx.fire_close().await;
     }
-    async fn read_eof(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
+    async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
 
     async fn read_timeout(
         &mut self,
-        ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+        ctx: &InboundContext<Self::Rin, Self::Rout>,
         timeout: Instant,
     ) {
         if timeout >= self.timeout {
@@ -83,7 +83,7 @@ impl InboundHandler for EchoDecoder {
     }
     async fn poll_timeout(
         &mut self,
-        _ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+        _ctx: &InboundContext<Self::Rin, Self::Rout>,
         timeout: &mut Instant,
     ) {
         if self.timeout < *timeout {
@@ -99,7 +99,7 @@ impl OutboundHandler for EchoEncoder {
     type Win = String;
     type Wout = Self::Win;
 
-    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
     }
 }

@@ -34,7 +34,7 @@ impl InboundHandler for AsyncTransportTcpDecoder {
     type Rin = BytesMut;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         ctx.fire_read(msg).await;
     }
 }
@@ -44,7 +44,7 @@ impl OutboundHandler for AsyncTransportTcpEncoder {
     type Win = BytesMut;
     type Wout = Self::Win;
 
-    async fn write(&mut self, ctx: &mut OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         if let Some(writer) = &mut self.writer {
             match writer.write(&msg, None).await {
                 Ok(n) => {
@@ -61,7 +61,7 @@ impl OutboundHandler for AsyncTransportTcpEncoder {
             };
         }
     }
-    async fn close(&mut self, _ctx: &mut OutboundContext<Self::Win, Self::Wout>) {
+    async fn close(&mut self, _ctx: &OutboundContext<Self::Win, Self::Wout>) {
         trace!("close socket");
         self.writer.take();
     }

@@ -199,83 +199,83 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
     }
 
     async fn transport_active(&self) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_active_internal(&mut *ctx).await;
+        handler.transport_active_internal(&*ctx).await;
     }
 
     async fn transport_inactive(&self) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_inactive_internal(&mut *ctx).await;
+        handler.transport_inactive_internal(&*ctx).await;
     }
 
     async fn read(&self, msg: R) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_internal(&mut *ctx, Box::new(msg)).await;
+        handler.read_internal(&*ctx, Box::new(msg)).await;
     }
 
     async fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_exception_internal(&mut *ctx, err).await;
+        handler.read_exception_internal(&*ctx, err).await;
     }
 
     async fn read_eof(&self) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_eof_internal(&mut *ctx).await;
+        handler.read_eof_internal(&*ctx).await;
     }
 
     async fn read_timeout(&self, timeout: Instant) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_timeout_internal(&mut *ctx, timeout).await;
+        handler.read_timeout_internal(&*ctx, timeout).await;
     }
 
     async fn poll_timeout(&self, timeout: &mut Instant) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.poll_timeout_internal(&mut *ctx, timeout).await;
+        handler.poll_timeout_internal(&*ctx, timeout).await;
     }
 
     async fn write(&self, msg: W) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_internal(&mut *ctx, Box::new(msg)).await;
+        handler.write_internal(&*ctx, Box::new(msg)).await;
     }
 
     async fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_exception_internal(&mut *ctx, err).await;
+        handler.write_exception_internal(&*ctx, err).await;
     }
 
     async fn close(&self) {
-        let (mut handler, mut ctx) = (
+        let (mut handler, ctx) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.close_internal(&mut *ctx).await;
+        handler.close_internal(&*ctx).await;
     }
 }
 

@@ -86,7 +86,7 @@
 //!
 //!     async fn read(
 //!         &mut self,
-//!         ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+//!         ctx: &InboundContext<Self::Rin, Self::Rout>,
 //!         msg: Self::Rin,
 //!     ) {
 //!         println!("handling {}", msg);
@@ -101,7 +101,7 @@
 //!
 //!     async fn write(
 //!         &mut self,
-//!         ctx: &mut OutboundContext<Self::Win, Self::Wout>,
+//!         ctx: &OutboundContext<Self::Win, Self::Wout>,
 //!         msg: Self::Win,
 //!     ) {
 //!         ctx.fire_write(msg).await;
@@ -195,20 +195,20 @@
 //!
 //!     async fn read(
 //!         &mut self,
-//!         _ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+//!         _ctx: &InboundContext<Self::Rin, Self::Rout>,
 //!         msg: Self::Rin,
 //!     ) {
 //!         println!("received back: {}", msg);
 //!     }
 //!     async fn read_exception(
 //!         &mut self,
-//!         ctx: &mut InboundContext<Self::Rin, Self::Rout>,
+//!         ctx: &InboundContext<Self::Rin, Self::Rout>,
 //!         err: Box<dyn Error + Send + Sync>,
 //!     ) {
 //!         println!("received exception: {}", err);
 //!         ctx.fire_close().await;
 //!     }
-//!     async fn read_eof(&mut self, ctx: &mut InboundContext<Self::Rin, Self::Rout>) {
+//!     async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
 //!         println!("EOF received :(");
 //!         ctx.fire_close().await;
 //!     }
@@ -221,7 +221,7 @@
 //!
 //!     async fn write(
 //!         &mut self,
-//!         ctx: &mut OutboundContext<Self::Win, Self::Wout>,
+//!         ctx: &OutboundContext<Self::Win, Self::Wout>,
 //!         msg: Self::Win,
 //!     ) {
 //!         ctx.fire_write(msg).await;
