@@ -2,10 +2,24 @@
 #[cfg(test)]
 pub(crate) mod channel_test;
 
-mod handler;
-mod handler_internal;
-mod pipeline;
+#[cfg(not(feature = "sans-io"))]
+mod async_channel;
+#[cfg(not(feature = "sans-io"))]
+pub use async_channel::handler::{
+    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler,
+};
+#[cfg(not(feature = "sans-io"))]
+pub use async_channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
+#[cfg(not(feature = "sans-io"))]
+pub use async_channel::pipeline::Pipeline;
 
-pub use handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
-pub use handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
-pub use pipeline::Pipeline;
+#[cfg(feature = "sans-io")]
+mod sansio_channel;
+#[cfg(feature = "sans-io")]
+pub use sansio_channel::handler::{
+    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler,
+};
+#[cfg(feature = "sans-io")]
+pub use sansio_channel::handler_internal::{InboundHandlerInternal, OutboundHandlerInternal};
+#[cfg(feature = "sans-io")]
+pub use sansio_channel::pipeline::Pipeline;

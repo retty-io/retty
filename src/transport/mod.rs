@@ -4,6 +4,7 @@
 pub(crate) mod transport_test;
 
 use async_trait::async_trait;
+use bytes::BytesMut;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -11,11 +12,17 @@ use std::sync::Arc;
 use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
 use crate::runtime::net::{OwnedReadHalf, OwnedWriteHalf, UdpSocket};
 
-mod async_transport_tcp;
-mod async_transport_udp;
+#[cfg(not(feature = "sans-io"))]
+mod async_transport;
+#[cfg(not(feature = "sans-io"))]
+pub use async_transport::async_transport_tcp::AsyncTransportTcp;
+#[cfg(not(feature = "sans-io"))]
+pub use async_transport::async_transport_udp::AsyncTransportUdp;
 
-pub use async_transport_tcp::AsyncTransportTcp;
-pub use async_transport_udp::{AsyncTransportUdp, TaggedBytesMut};
+#[cfg(feature = "sans-io")]
+mod sansio_transport;
+#[cfg(feature = "sans-io")]
+pub use sansio_transport::AsyncTransport;
 
 /// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -33,6 +40,15 @@ impl Default for TransportContext {
             peer_addr: None,
         }
     }
+}
+
+/// A tagged [BytesMut](bytes::BytesMut) with [TransportContext]
+#[derive(Default)]
+pub struct TaggedBytesMut {
+    /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
+    pub transport: TransportContext,
+    /// Message body with [BytesMut](bytes::BytesMut) type
+    pub message: BytesMut,
 }
 
 /// Obtains local address and peer address

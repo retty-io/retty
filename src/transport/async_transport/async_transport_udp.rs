@@ -1,10 +1,9 @@
 use async_trait::async_trait;
-use bytes::BytesMut;
 use log::{trace, warn};
 use std::io::ErrorKind;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
-use crate::transport::{AsyncTransportWrite, TransportContext};
+use crate::transport::{AsyncTransportWrite, TaggedBytesMut};
 
 struct AsyncTransportUdpDecoder;
 struct AsyncTransportUdpEncoder {
@@ -28,15 +27,6 @@ impl AsyncTransportUdp {
             },
         }
     }
-}
-
-/// A tagged [BytesMut](bytes::BytesMut) with [TransportContext]
-#[derive(Default)]
-pub struct TaggedBytesMut {
-    /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
-    pub transport: TransportContext,
-    /// Message body with [BytesMut](bytes::BytesMut) type
-    pub message: BytesMut,
 }
 
 #[async_trait]
