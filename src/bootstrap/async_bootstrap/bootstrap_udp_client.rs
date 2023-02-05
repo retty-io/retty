@@ -12,7 +12,7 @@ use crate::runtime::{
     sync::Mutex,
     Runtime,
 };
-use crate::transport::{TaggedBytesMut, TransportContext};
+use crate::transport::{AsyncTransportRead, TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
 pub struct BootstrapUdpClient<W> {
@@ -58,7 +58,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
     ) -> Result<Arc<Pipeline<TaggedBytesMut, W>>, std::io::Error> {
         let socket = Arc::clone(self.socket.as_ref().unwrap());
         socket.connect(addr).await?;
-        let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
+        let (mut socket_rd, socket_wr) = (Arc::clone(&socket), socket);
 
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
@@ -98,14 +98,14 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
 
                 tokio::select! {
                     _ = close_rx.recv() => {
-                        trace!("UdpSocket read exit loop");
+                        trace!("pipeline socket exit loop");
                         done_tx.take();
                         break;
                     }
                     _ = timer.as_mut() => {
                         pipeline.read_timeout(Instant::now()).await;
                     }
-                    res = socket_rd.recv_from(&mut buf) => {
+                    res = socket_rd.read(&mut buf) => {
                         match res {
                             Ok((n, peer_addr)) => {
                                 if n == 0 {
@@ -113,19 +113,19 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                                     break;
                                 }
 
-                                trace!("pipeline recv {} bytes", n);
+                                trace!("socket read {} bytes", n);
                                 pipeline
                                     .read(TaggedBytesMut {
                                         transport: TransportContext {
                                             local_addr,
-                                            peer_addr: Some(peer_addr),
+                                            peer_addr,
                                         },
                                         message: BytesMut::from(&buf[..n]),
                                     })
                                     .await;
                             }
                             Err(err) => {
-                                warn!("UdpSocket read error {}", err);
+                                warn!("socket read error {}", err);
                                 break;
                             }
                         };

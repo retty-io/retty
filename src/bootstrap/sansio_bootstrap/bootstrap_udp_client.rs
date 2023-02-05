@@ -77,7 +77,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
             *rx = Some(done_rx);
         }
 
-        let (sender, mut receiver) = channel(8); //TODO:
+        let (sender, mut receiver) = channel(8); //TODO: make it configurable?
         let pipeline_wr = (pipeline_factory_fn)(sender).await;
 
         let local_addr = socket_rd.local_addr()?;
@@ -87,12 +87,19 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
 
             pipeline.transport_active().await;
             loop {
-                while let Ok(transmit) = receiver.try_recv() {
-                    //TODO:
-                    let _ = socket_wr
+                if let Ok(transmit) = receiver.try_recv() {
+                    match socket_wr
                         .write(&transmit.message, transmit.transport.peer_addr)
-                        .await;
-                    continue;
+                        .await {
+                        Ok(n) => {
+                            trace!("socket write {} bytes", n);
+                            continue;
+                        }
+                        Err(err) => {
+                            warn!("socket write error {}", err);
+                            break;
+                        }
+                    }
                 }
 
                 let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION);
@@ -107,7 +114,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
 
                 tokio::select! {
                     _ = close_rx.recv() => {
-                        trace!("UdpSocket read exit loop");
+                        trace!("pipeline socket exit loop");
                         done_tx.take();
                         break;
                     }
@@ -117,11 +124,19 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                     res = receiver.recv() => {
                         match res {
                             Ok(transmit) => {
-                                //TODO:
-                                let _ = socket_wr.write(&transmit.message, transmit.transport.peer_addr).await;
+                                match socket_wr.write(&transmit.message, transmit.transport.peer_addr).await {
+                                    Ok(n) => {
+                                        trace!("socket write {} bytes", n);
+                                        continue;
+                                    }
+                                    Err(err) => {
+                                        warn!("socket write error {}", err);
+                                        break;
+                                    }
+                                }
                             }
                             Err(err) => {
-                                warn!("UdpSocket write error {}", err);
+                                warn!("pipeline recv error {}", err);
                                 break;
                             }
                         }
@@ -134,7 +149,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                                     break;
                                 }
 
-                                trace!("pipeline recv {} bytes", n);
+                                trace!("socket read {} bytes", n);
                                 pipeline
                                     .read(TaggedBytesMut {
                                         transport: TransportContext {
@@ -146,7 +161,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                                     .await;
                             }
                             Err(err) => {
-                                warn!("UdpSocket read error {}", err);
+                                warn!("socket read error {}", err);
                                 break;
                             }
                         };

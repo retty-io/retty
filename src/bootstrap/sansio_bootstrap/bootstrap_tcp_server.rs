@@ -73,7 +73,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
             loop {
                 tokio::select! {
                     _ = close_rx.recv() => {
-                        trace!("TcpStream accept exit loop");
+                        trace!("pipeline listener exit loop");
                         break;
                     }
 
@@ -133,15 +133,22 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
         #[cfg(feature = "runtime-async-std")]
         let (mut socket_rd, mut socket_wr) = (socket.clone(), socket);
 
-        let (sender, mut receiver) = channel(8); //TODO:
+        let (sender, mut receiver) = channel(8); //TODO: make it configurable?
         let pipeline = (pipeline_factory_fn)(sender).await;
 
         pipeline.transport_active().await;
         loop {
-            while let Ok(transmit) = receiver.try_recv() {
-                //TODO:
-                let _ = socket_wr.write(&transmit, None).await;
-                continue;
+            if let Ok(transmit) = receiver.try_recv() {
+                match socket_wr.write(&transmit, None).await {
+                    Ok(n) => {
+                        trace!("socket write {} bytes", n);
+                        continue;
+                    }
+                    Err(err) => {
+                        warn!("socket write error {}", err);
+                        break;
+                    }
+                }
             }
 
             let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION);
@@ -156,7 +163,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
 
             tokio::select! {
                 _ = close_rx.recv() => {
-                    trace!("TcpStream read exit loop");
+                    trace!("pipeline socket exit loop");
                     break;
                 }
                 _ = timer.as_mut() => {
@@ -165,11 +172,19 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
                 res = receiver.recv() => {
                     match res {
                         Ok(transmit) => {
-                            //TODO:
-                            let _ = socket_wr.write(&transmit, None).await;
+                            match socket_wr.write(&transmit, None).await {
+                                Ok(n) => {
+                                    trace!("socket write {} bytes", n);
+                                    continue;
+                                }
+                                Err(err) => {
+                                    warn!("socket write error {}", err);
+                                    break;
+                                }
+                            }
                         }
                         Err(err) => {
-                            warn!("TcpStream write error {}", err);
+                            warn!("pipeline recv error {}", err);
                             break;
                         }
                     }
@@ -182,11 +197,11 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
                                 break;
                             }
 
-                            trace!("pipeline recv {} bytes", n);
+                            trace!("socket read {} bytes", n);
                             pipeline.read(BytesMut::from(&buf[..n])).await;
                         }
                         Err(err) => {
-                            warn!("TcpStream read error {}", err);
+                            warn!("socket read error {}", err);
                             break;
                         }
                     };

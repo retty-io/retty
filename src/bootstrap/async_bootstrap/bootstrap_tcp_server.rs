@@ -6,13 +6,13 @@ use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
 use crate::runtime::{
-    io::AsyncReadExt,
     mpsc::{bounded, Receiver, Sender},
     net::{TcpListener, TcpStream, ToSocketAddrs},
     sleep,
     sync::Mutex,
     Runtime,
 };
+use crate::transport::AsyncTransportRead;
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapTcpServer<W> {
@@ -72,7 +72,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
             loop {
                 tokio::select! {
                     _ = close_rx.recv() => {
-                        trace!("TcpStream accept exit loop");
+                        trace!("pipeline listener exit loop");
                         break;
                     }
 
@@ -149,7 +149,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
 
             tokio::select! {
                 _ = close_rx.recv() => {
-                    trace!("TcpStream read exit loop");
+                    trace!("pipeline socket exit loop");
                     break;
                 }
                 _ = timer.as_mut() => {
@@ -157,17 +157,17 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
                 }
                 res = socket_rd.read(&mut buf) => {
                     match res {
-                        Ok(n) => {
+                        Ok((n,_)) => {
                             if n == 0 {
                                 pipeline.read_eof().await;
                                 break;
                             }
 
-                            trace!("pipeline recv {} bytes", n);
+                            trace!("socket read {} bytes", n);
                             pipeline.read(BytesMut::from(&buf[..n])).await;
                         }
                         Err(err) => {
-                            warn!("TcpStream read error {}", err);
+                            warn!("socket read error {}", err);
                             break;
                         }
                     };
