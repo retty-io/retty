@@ -1,3 +1,4 @@
+#[cfg(not(feature = "sans-io"))]
 use async_trait::async_trait;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
@@ -31,6 +32,7 @@ impl TaggedByteToMessageCodec {
     }
 }
 
+#[cfg(not(feature = "sans-io"))]
 #[async_trait]
 impl InboundHandler for TaggedByteToMessageDecoder {
     type Rin = TaggedBytesMut;
@@ -67,6 +69,7 @@ impl InboundHandler for TaggedByteToMessageDecoder {
     }
 }
 
+#[cfg(not(feature = "sans-io"))]
 #[async_trait]
 impl OutboundHandler for TaggedByteToMessageEncoder {
     type Win = TaggedBytesMut;
@@ -74,6 +77,51 @@ impl OutboundHandler for TaggedByteToMessageEncoder {
 
     async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg).await;
+    }
+}
+
+#[cfg(feature = "sans-io")]
+impl InboundHandler for TaggedByteToMessageDecoder {
+    type Rin = TaggedBytesMut;
+    type Rout = Self::Rin;
+
+    fn transport_active(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
+        self.transport_active = true;
+        ctx.fire_transport_active();
+    }
+    fn transport_inactive(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
+        self.transport_active = false;
+        ctx.fire_transport_inactive();
+    }
+    fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, mut msg: Self::Rin) {
+        while self.transport_active {
+            match self.message_decoder.decode(&mut msg.message) {
+                Ok(message) => {
+                    if let Some(message) = message {
+                        ctx.fire_read(TaggedBytesMut {
+                            transport: msg.transport,
+                            message,
+                        });
+                    } else {
+                        return;
+                    }
+                }
+                Err(err) => {
+                    ctx.fire_read_exception(Box::new(err));
+                    return;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "sans-io")]
+impl OutboundHandler for TaggedByteToMessageEncoder {
+    type Win = TaggedBytesMut;
+    type Wout = Self::Win;
+
+    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+        ctx.fire_write(msg);
     }
 }
 

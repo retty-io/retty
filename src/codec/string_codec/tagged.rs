@@ -1,3 +1,4 @@
+#[cfg(not(feature = "sans-io"))]
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 
@@ -39,6 +40,7 @@ pub struct TaggedString {
     pub message: String,
 }
 
+#[cfg(not(feature = "sans-io"))]
 #[async_trait]
 impl InboundHandler for TaggedStringDecoder {
     type Rin = TaggedBytesMut;
@@ -58,6 +60,7 @@ impl InboundHandler for TaggedStringDecoder {
     }
 }
 
+#[cfg(not(feature = "sans-io"))]
 #[async_trait]
 impl OutboundHandler for TaggedStringEncoder {
     type Win = TaggedString;
@@ -71,6 +74,39 @@ impl OutboundHandler for TaggedStringEncoder {
             message: buf,
         })
         .await;
+    }
+}
+
+#[cfg(feature = "sans-io")]
+impl InboundHandler for TaggedStringDecoder {
+    type Rin = TaggedBytesMut;
+    type Rout = TaggedString;
+
+    fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+        match String::from_utf8(msg.message.to_vec()) {
+            Ok(message) => {
+                ctx.fire_read(TaggedString {
+                    transport: msg.transport,
+                    message,
+                });
+            }
+            Err(err) => ctx.fire_read_exception(err.into()),
+        }
+    }
+}
+
+#[cfg(feature = "sans-io")]
+impl OutboundHandler for TaggedStringEncoder {
+    type Win = TaggedString;
+    type Wout = TaggedBytesMut;
+
+    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+        let mut buf = BytesMut::new();
+        buf.put(msg.message.as_bytes());
+        ctx.fire_write(TaggedBytesMut {
+            transport: msg.transport,
+            message: buf,
+        });
     }
 }
 

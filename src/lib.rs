@@ -313,6 +313,6 @@
 
 //pub mod bootstrap;
 pub mod channel;
-//pub mod codec;
+pub mod codec;
 pub mod runtime;
 pub mod transport;

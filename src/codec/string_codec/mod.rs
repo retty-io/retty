@@ -2,6 +2,7 @@
 
 mod tagged;
 
+#[cfg(not(feature = "sans-io"))]
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 
@@ -35,6 +36,7 @@ impl StringCodec {
     }
 }
 
+#[cfg(not(feature = "sans-io"))]
 #[async_trait]
 impl InboundHandler for StringDecoder {
     type Rin = BytesMut;
@@ -50,6 +52,7 @@ impl InboundHandler for StringDecoder {
     }
 }
 
+#[cfg(not(feature = "sans-io"))]
 #[async_trait]
 impl OutboundHandler for StringEncoder {
     type Win = String;
@@ -59,6 +62,33 @@ impl OutboundHandler for StringEncoder {
         let mut buf = BytesMut::new();
         buf.put(msg.as_bytes());
         ctx.fire_write(buf).await;
+    }
+}
+
+#[cfg(feature = "sans-io")]
+impl InboundHandler for StringDecoder {
+    type Rin = BytesMut;
+    type Rout = String;
+
+    fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+        match String::from_utf8(msg.to_vec()) {
+            Ok(message) => {
+                ctx.fire_read(message);
+            }
+            Err(err) => ctx.fire_read_exception(err.into()),
+        }
+    }
+}
+
+#[cfg(feature = "sans-io")]
+impl OutboundHandler for StringEncoder {
+    type Win = String;
+    type Wout = BytesMut;
+
+    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
+        let mut buf = BytesMut::new();
+        buf.put(msg.as_bytes());
+        ctx.fire_write(buf);
     }
 }
 
