@@ -43,7 +43,7 @@ impl Default for TransportContext {
 }
 
 /// A tagged [BytesMut](bytes::BytesMut) with [TransportContext]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TaggedBytesMut {
     /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
     pub transport: TransportContext,

@@ -4,27 +4,45 @@
 mod bootstrap_test;
 
 use crate::channel::Pipeline;
-use crate::transport::AsyncTransportWrite;
 
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-mod bootstrap_tcp_client;
-mod bootstrap_tcp_server;
-mod bootstrap_udp_client;
-mod bootstrap_udp_server;
+#[cfg(not(feature = "sans-io"))]
+use crate::transport::AsyncTransportWrite;
+#[cfg(not(feature = "sans-io"))]
+mod async_bootstrap;
+#[cfg(not(feature = "sans-io"))]
+pub use async_bootstrap::{
+    bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
+    bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
+};
 
-pub use bootstrap_tcp_client::BootstrapTcpClient;
-pub use bootstrap_tcp_server::BootstrapTcpServer;
-pub use bootstrap_udp_client::BootstrapUdpClient;
-pub use bootstrap_udp_server::BootstrapUdpServer;
+#[cfg(feature = "sans-io")]
+use tokio::sync::broadcast::Sender;
+#[cfg(feature = "sans-io")]
+mod sansio_bootstrap;
+#[cfg(feature = "sans-io")]
+pub use sansio_bootstrap::{
+    bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
+    bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
+};
 
 /// Creates a new [Pipeline]
+#[cfg(not(feature = "sans-io"))]
 pub type PipelineFactoryFn<R, W> = Box<
     dyn (Fn(
             Box<dyn AsyncTransportWrite + Send + Sync>,
         ) -> Pin<Box<dyn Future<Output = Arc<Pipeline<R, W>>> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+
+/// Creates a new [Pipeline]
+#[cfg(feature = "sans-io")]
+pub type PipelineFactoryFn<R, W> = Box<
+    dyn (Fn(Sender<R>) -> Pin<Box<dyn Future<Output = Arc<Pipeline<R, W>>> + Send + 'static>>)
         + Send
         + Sync,
 >;
