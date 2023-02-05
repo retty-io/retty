@@ -6,7 +6,7 @@ use crate::codec::byte_to_message_decoder::{
 };
 use crate::codec::string_codec::{StringCodec, TaggedString, TaggedStringCodec};
 use crate::runtime::mpsc::bounded;
-use crate::transport::transport_test::MockAsyncTransportWrite;
+use crate::transport::async_transport::async_transport_test::MockAsyncTransportWrite;
 use crate::transport::{AsyncTransportTcp, AsyncTransportUdp, TaggedBytesMut};
 use std::error::Error;
 use std::io::ErrorKind;

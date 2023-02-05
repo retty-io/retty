@@ -1,8 +1,5 @@
 //! Asynchronous transport abstraction for TCP and UDP
 
-#[cfg(test)]
-pub(crate) mod transport_test;
-
 use async_trait::async_trait;
 use bytes::BytesMut;
 use std::net::SocketAddr;
@@ -13,14 +10,14 @@ use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
 use crate::runtime::net::{OwnedReadHalf, OwnedWriteHalf, UdpSocket};
 
 #[cfg(not(feature = "sans-io"))]
-mod async_transport;
+pub(crate) mod async_transport;
 #[cfg(not(feature = "sans-io"))]
 pub use async_transport::async_transport_tcp::AsyncTransportTcp;
 #[cfg(not(feature = "sans-io"))]
 pub use async_transport::async_transport_udp::AsyncTransportUdp;
 
 #[cfg(feature = "sans-io")]
-mod sansio_transport;
+pub(crate) mod sansio_transport;
 #[cfg(feature = "sans-io")]
 pub use sansio_transport::AsyncTransport;
 

@@ -1,8 +1,5 @@
 //! The helpful bootstrap APIs which enable an easy implementation of typical client side and server side pipeline initialization.
 
-#[cfg(test)]
-mod bootstrap_test;
-
 use crate::channel::Pipeline;
 
 use std::future::Future;
@@ -12,7 +9,7 @@ use std::sync::Arc;
 #[cfg(not(feature = "sans-io"))]
 use crate::transport::AsyncTransportWrite;
 #[cfg(not(feature = "sans-io"))]
-mod async_bootstrap;
+pub(crate) mod async_bootstrap;
 #[cfg(not(feature = "sans-io"))]
 pub use async_bootstrap::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
@@ -22,7 +19,7 @@ pub use async_bootstrap::{
 #[cfg(feature = "sans-io")]
 use tokio::sync::broadcast::Sender;
 #[cfg(feature = "sans-io")]
-mod sansio_bootstrap;
+pub(crate) mod sansio_bootstrap;
 #[cfg(feature = "sans-io")]
 pub use sansio_bootstrap::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
