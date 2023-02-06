@@ -10,16 +10,16 @@ use crate::runtime::io::{AsyncReadExt, AsyncWriteExt};
 use crate::runtime::net::{OwnedReadHalf, OwnedWriteHalf, UdpSocket};
 
 #[cfg(not(feature = "sans-io"))]
-pub(crate) mod async_transport;
+pub(crate) mod async_io;
 #[cfg(not(feature = "sans-io"))]
-pub use async_transport::async_transport_tcp::AsyncTransportTcp;
-#[cfg(not(feature = "sans-io"))]
-pub use async_transport::async_transport_udp::AsyncTransportUdp;
+pub use self::async_io::{
+    async_transport_tcp::AsyncTransportTcp, async_transport_udp::AsyncTransportUdp,
+};
 
 #[cfg(feature = "sans-io")]
-pub(crate) mod sansio_transport;
+pub(crate) mod sans_io;
 #[cfg(feature = "sans-io")]
-pub use sansio_transport::AsyncTransport;
+pub use sans_io::AsyncTransport;
 
 /// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

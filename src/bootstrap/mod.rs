@@ -9,9 +9,9 @@ use std::sync::Arc;
 #[cfg(not(feature = "sans-io"))]
 use crate::transport::AsyncTransportWrite;
 #[cfg(not(feature = "sans-io"))]
-pub(crate) mod async_bootstrap;
+pub(crate) mod async_io;
 #[cfg(not(feature = "sans-io"))]
-pub use async_bootstrap::{
+pub use self::async_io::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
     bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
 };
@@ -19,9 +19,9 @@ pub use async_bootstrap::{
 #[cfg(feature = "sans-io")]
 use tokio::sync::broadcast::Sender;
 #[cfg(feature = "sans-io")]
-pub(crate) mod sansio_bootstrap;
+pub(crate) mod sans_io;
 #[cfg(feature = "sans-io")]
-pub use sansio_bootstrap::{
+pub use sans_io::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
     bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
 };

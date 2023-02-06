@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::time::Instant;
 
-use crate::channel::sansio_channel::{
+use crate::channel::sans_io::{
     handler::Handler,
     handler_internal::{
         InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,

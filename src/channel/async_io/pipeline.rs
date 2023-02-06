@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::channel::async_channel::{
+use crate::channel::async_io::{
     handler::Handler,
     handler_internal::{
         InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,

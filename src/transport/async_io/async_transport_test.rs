@@ -1,4 +1,4 @@
-use crate::channel::async_channel::async_channel_test::{MockHandler, Stats};
+use crate::channel::async_io::async_channel_test::{MockHandler, Stats};
 use crate::channel::Pipeline;
 use crate::runtime::mpsc::{bounded, Sender};
 use crate::transport::{
