@@ -121,7 +121,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
                                 }
                             }
                             Err(err) => {
-                                warn!("socket write error {}", err);
+                                warn!("pipeline recv error {}", err);
                                 break;
                             }
                         }

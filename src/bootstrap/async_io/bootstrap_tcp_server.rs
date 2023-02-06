@@ -72,7 +72,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
             loop {
                 tokio::select! {
                     _ = close_rx.recv() => {
-                        trace!("pipeline listener exit loop");
+                        trace!("listener exit loop");
                         break;
                     }
 
@@ -105,7 +105,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
                                 }));
                             }
                             Err(err) => {
-                                warn!("TcpListener accept error {}", err);
+                                warn!("listener accept error {}", err);
                                 break;
                             }
                         };
