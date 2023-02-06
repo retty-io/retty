@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod async_bootstrap_test;
+mod bootstrap_test;
 
 pub(crate) mod bootstrap_tcp_client;
 pub(crate) mod bootstrap_tcp_server;
