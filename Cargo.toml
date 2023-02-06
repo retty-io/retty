@@ -1,6 +1,6 @@
 [package]
 name = "retty"
-version = "0.15.2"
+version = "0.15.3"
 authors = ["Rusty Rain <y@liu.mx>"]
 edition = "2021"
 description = "Retty — an asynchronous Rust networking framework that makes it easy to build protocols, application clients/servers."
@@ -33,7 +33,7 @@ futures = "0.3.26"
 chrono = "0.4.23"
 env_logger = "0.10.0"
 clap = { version = "4.1.4", features = ["derive"] }
-anyhow = "1.0.68"
+anyhow = "1.0.69"
 
 [[example]]
 name = "echo_tcp_server"
