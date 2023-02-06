@@ -32,7 +32,7 @@ impl<T> AsyncTransport<T> {
     }
 }
 
-impl<T: Send + 'static> InboundHandler for AsyncTransportDecoder<T> {
+impl<T: 'static> InboundHandler for AsyncTransportDecoder<T> {
     type Rin = T;
     type Rout = Self::Rin;
 
@@ -41,7 +41,7 @@ impl<T: Send + 'static> InboundHandler for AsyncTransportDecoder<T> {
     }
 }
 
-impl<T: Send + 'static> OutboundHandler for AsyncTransportEncoder<T> {
+impl<T: 'static> OutboundHandler for AsyncTransportEncoder<T> {
     type Win = T;
     type Wout = Self::Win;
 
@@ -62,7 +62,7 @@ impl<T: Send + 'static> OutboundHandler for AsyncTransportEncoder<T> {
     }
 }
 
-impl<T: Send + 'static> Handler for AsyncTransport<T> {
+impl<T: 'static> Handler for AsyncTransport<T> {
     type Rin = T;
     type Rout = Self::Rin;
     type Win = Self::Rin;

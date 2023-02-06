@@ -228,7 +228,7 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
         handler.read_internal(&*ctx, Box::new(msg));
     }
 
-    fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
+    fn read_exception(&self, err: Box<dyn Error>) {
         let (mut handler, ctx) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
@@ -268,7 +268,7 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
         handler.write_internal(&*ctx, Box::new(msg));
     }
 
-    fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
+    fn write_exception(&self, err: Box<dyn Error>) {
         let (mut handler, ctx) = (
             self.outbound_handlers.last().unwrap().borrow_mut(),
             self.outbound_contexts.last().unwrap().borrow(),
