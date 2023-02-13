@@ -40,7 +40,6 @@ impl Default for TransportContext {
     }
 }
 
-
 /// Explicit congestion notification codepoint
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

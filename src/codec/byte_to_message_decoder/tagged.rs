@@ -1,6 +1,6 @@
-use std::time::Instant;
 #[cfg(not(feature = "sans-io"))]
 use async_trait::async_trait;
+use std::time::Instant;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 use crate::codec::byte_to_message_decoder::MessageDecoder;
