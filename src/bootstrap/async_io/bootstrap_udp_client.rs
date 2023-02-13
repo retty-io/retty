@@ -116,10 +116,12 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                                 trace!("socket read {} bytes", n);
                                 pipeline
                                     .read(TaggedBytesMut {
+                                        now: Instant::now(),
                                         transport: TransportContext {
                                             local_addr,
                                             peer_addr,
                                         },
+                                        ecn: None,
                                         message: BytesMut::from(&buf[..n]),
                                     })
                                     .await;

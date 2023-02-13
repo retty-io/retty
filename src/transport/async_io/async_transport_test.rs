@@ -12,6 +12,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 pub(crate) struct MockAsyncTransportWrite {
     tx: Sender<BytesMut>,
@@ -126,7 +127,9 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
     let expected = "TESTING MESSAGE".to_string();
     pipeline
         .write(TaggedBytesMut {
+            now: Instant::now(),
             transport,
+            ecn: None,
             message: BytesMut::from(expected.as_bytes()),
         })
         .await;
@@ -140,7 +143,9 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
 
     pipeline
         .write(TaggedBytesMut {
+            now: Instant::now(),
             transport,
+            ecn: None,
             message: BytesMut::from(expected.as_bytes()),
         })
         .await;

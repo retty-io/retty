@@ -1,6 +1,7 @@
 #[cfg(not(feature = "sans-io"))]
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
+use std::time::Instant;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 use crate::transport::{TaggedBytesMut, TransportContext};
@@ -70,7 +71,9 @@ impl OutboundHandler for TaggedStringEncoder {
         let mut buf = BytesMut::new();
         buf.put(msg.message.as_bytes());
         ctx.fire_write(TaggedBytesMut {
+            now: Instant::now(),
             transport: msg.transport,
+            ecn: None,
             message: buf,
         })
         .await;
@@ -104,7 +107,9 @@ impl OutboundHandler for TaggedStringEncoder {
         let mut buf = BytesMut::new();
         buf.put(msg.message.as_bytes());
         ctx.fire_write(TaggedBytesMut {
+            now: Instant::now(),
             transport: msg.transport,
+            ecn: None,
             message: buf,
         });
     }

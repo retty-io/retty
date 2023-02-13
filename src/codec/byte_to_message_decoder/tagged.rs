@@ -1,3 +1,4 @@
+use std::time::Instant;
 #[cfg(not(feature = "sans-io"))]
 use async_trait::async_trait;
 
@@ -52,7 +53,9 @@ impl InboundHandler for TaggedByteToMessageDecoder {
                 Ok(message) => {
                     if let Some(message) = message {
                         ctx.fire_read(TaggedBytesMut {
+                            now: Instant::now(),
                             transport: msg.transport,
+                            ecn: None,
                             message,
                         })
                         .await;
@@ -99,7 +102,9 @@ impl InboundHandler for TaggedByteToMessageDecoder {
                 Ok(message) => {
                     if let Some(message) = message {
                         ctx.fire_read(TaggedBytesMut {
+                            now: Instant::now(),
                             transport: msg.transport,
+                            ecn: None,
                             message,
                         });
                     } else {
