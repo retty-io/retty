@@ -16,10 +16,12 @@ use crate::runtime;
 
 struct PipelineInternal<R, W> {
     handler_names: Vec<String>,
-    inbound_contexts: Vec<Rc<RefCell<dyn InboundContextInternal>>>,
+
     inbound_handlers: Vec<Rc<RefCell<dyn InboundHandlerInternal>>>,
-    outbound_contexts: Vec<Rc<RefCell<dyn OutboundContextInternal>>>,
+    inbound_contexts: Vec<Rc<RefCell<dyn InboundContextInternal>>>,
+
     outbound_handlers: Vec<Rc<RefCell<dyn OutboundHandlerInternal>>>,
+    outbound_contexts: Vec<Rc<RefCell<dyn OutboundContextInternal>>>,
 
     phantom: PhantomData<(R, W)>,
 }
@@ -33,33 +35,39 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     fn new() -> Self {
         Self {
             handler_names: Vec::new(),
-            inbound_contexts: Vec::new(),
+
             inbound_handlers: Vec::new(),
-            outbound_contexts: Vec::new(),
+            inbound_contexts: Vec::new(),
+
             outbound_handlers: Vec::new(),
+            outbound_contexts: Vec::new(),
 
             phantom: PhantomData,
         }
     }
 
     fn add_back(&mut self, handler: impl Handler) {
-        let (handler_name, inbound_context, inbound_handler, outbound_context, outbound_handler) =
+        let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         self.handler_names.push(handler_name);
-        self.inbound_contexts.push(inbound_context);
+
         self.inbound_handlers.push(inbound_handler);
-        self.outbound_contexts.push(outbound_context);
+        self.inbound_contexts.push(inbound_context);
+
         self.outbound_handlers.push(outbound_handler);
+        self.outbound_contexts.push(outbound_context);
     }
 
     fn add_front(&mut self, handler: impl Handler) {
-        let (handler_name, inbound_context, inbound_handler, outbound_context, outbound_handler) =
+        let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         self.handler_names.insert(0, handler_name);
-        self.inbound_contexts.insert(0, inbound_context);
+
         self.inbound_handlers.insert(0, inbound_handler);
-        self.outbound_contexts.insert(0, outbound_context);
+        self.inbound_contexts.insert(0, inbound_context);
+
         self.outbound_handlers.insert(0, outbound_handler);
+        self.outbound_contexts.insert(0, outbound_context);
     }
 
     fn remove_back(&mut self) -> Result<(), std::io::Error> {
@@ -71,10 +79,12 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
             ))
         } else {
             self.handler_names.remove(len - 1);
-            self.inbound_contexts.remove(len - 1);
+
             self.inbound_handlers.remove(len - 1);
-            self.outbound_contexts.remove(len - 1);
+            self.inbound_contexts.remove(len - 1);
+
             self.outbound_handlers.remove(len - 1);
+            self.outbound_contexts.remove(len - 1);
 
             Ok(())
         }
@@ -88,10 +98,12 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
             ))
         } else {
             self.handler_names.remove(0);
-            self.inbound_contexts.remove(0);
+
             self.inbound_handlers.remove(0);
-            self.outbound_contexts.remove(0);
+            self.inbound_contexts.remove(0);
+
             self.outbound_handlers.remove(0);
+            self.outbound_contexts.remove(0);
 
             Ok(())
         }
@@ -108,10 +120,12 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
         if !to_be_removed.is_empty() {
             for index in to_be_removed.into_iter().rev() {
                 self.handler_names.remove(index);
-                self.inbound_contexts.remove(index);
+
                 self.inbound_handlers.remove(index);
-                self.outbound_contexts.remove(index);
+                self.inbound_contexts.remove(index);
+
                 self.outbound_handlers.remove(index);
+                self.outbound_contexts.remove(index);
             }
 
             Ok(())
@@ -203,83 +217,83 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     }
 
     fn transport_active(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.transport_active_internal(&*ctx);
+        handler.transport_active_internal(&*context);
     }
 
     fn transport_inactive(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.transport_inactive_internal(&*ctx);
+        handler.transport_inactive_internal(&*context);
     }
 
     fn read(&self, msg: R) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.read_internal(&*ctx, Box::new(msg));
+        handler.read_internal(&*context, Box::new(msg));
     }
 
     fn read_exception(&self, err: Box<dyn Error>) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.read_exception_internal(&*ctx, err);
+        handler.read_exception_internal(&*context, err);
     }
 
     fn read_eof(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.read_eof_internal(&*ctx);
+        handler.read_eof_internal(&*context);
     }
 
     fn read_timeout(&self, now: Instant) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.read_timeout_internal(&*ctx, now);
+        handler.read_timeout_internal(&*context, now);
     }
 
     fn poll_timeout(&self, eto: &mut Instant) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.poll_timeout_internal(&*ctx, eto);
+        handler.poll_timeout_internal(&*context, eto);
     }
 
     fn write(&self, msg: W) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.outbound_handlers.last().unwrap().borrow_mut(),
             self.outbound_contexts.last().unwrap().borrow(),
         );
-        handler.write_internal(&*ctx, Box::new(msg));
+        handler.write_internal(&*context, Box::new(msg));
     }
 
     fn write_exception(&self, err: Box<dyn Error>) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.outbound_handlers.last().unwrap().borrow_mut(),
             self.outbound_contexts.last().unwrap().borrow(),
         );
-        handler.write_exception_internal(&*ctx, err);
+        handler.write_exception_internal(&*context, err);
     }
 
     fn close(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.outbound_handlers.last().unwrap().borrow_mut(),
             self.outbound_contexts.last().unwrap().borrow(),
         );
-        handler.close_internal(&*ctx);
+        handler.close_internal(&*context);
     }
 }
 

@@ -15,10 +15,12 @@ use crate::runtime::sync::Mutex;
 
 struct PipelineInternal<R, W> {
     handler_names: Vec<String>,
-    inbound_contexts: Vec<Arc<Mutex<dyn InboundContextInternal>>>,
+
     inbound_handlers: Vec<Arc<Mutex<dyn InboundHandlerInternal>>>,
-    outbound_contexts: Vec<Arc<Mutex<dyn OutboundContextInternal>>>,
+    inbound_contexts: Vec<Arc<Mutex<dyn InboundContextInternal>>>,
+
     outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
+    outbound_contexts: Vec<Arc<Mutex<dyn OutboundContextInternal>>>,
 
     phantom: PhantomData<(R, W)>,
 }
@@ -27,33 +29,39 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
     fn new() -> Self {
         Self {
             handler_names: Vec::new(),
-            inbound_contexts: Vec::new(),
+
             inbound_handlers: Vec::new(),
-            outbound_contexts: Vec::new(),
+            inbound_contexts: Vec::new(),
+
             outbound_handlers: Vec::new(),
+            outbound_contexts: Vec::new(),
 
             phantom: PhantomData,
         }
     }
 
     fn add_back(&mut self, handler: impl Handler) {
-        let (handler_name, inbound_context, inbound_handler, outbound_context, outbound_handler) =
+        let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         self.handler_names.push(handler_name);
-        self.inbound_contexts.push(inbound_context);
+
         self.inbound_handlers.push(inbound_handler);
-        self.outbound_contexts.push(outbound_context);
+        self.inbound_contexts.push(inbound_context);
+
         self.outbound_handlers.push(outbound_handler);
+        self.outbound_contexts.push(outbound_context);
     }
 
     fn add_front(&mut self, handler: impl Handler) {
-        let (handler_name, inbound_context, inbound_handler, outbound_context, outbound_handler) =
+        let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         self.handler_names.insert(0, handler_name);
-        self.inbound_contexts.insert(0, inbound_context);
+
         self.inbound_handlers.insert(0, inbound_handler);
-        self.outbound_contexts.insert(0, outbound_context);
+        self.inbound_contexts.insert(0, inbound_context);
+
         self.outbound_handlers.insert(0, outbound_handler);
+        self.outbound_contexts.insert(0, outbound_context);
     }
 
     fn remove_back(&mut self) -> Result<(), std::io::Error> {
@@ -65,10 +73,12 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
             ))
         } else {
             self.handler_names.remove(len - 1);
-            self.inbound_contexts.remove(len - 1);
+
             self.inbound_handlers.remove(len - 1);
-            self.outbound_contexts.remove(len - 1);
+            self.inbound_contexts.remove(len - 1);
+
             self.outbound_handlers.remove(len - 1);
+            self.outbound_contexts.remove(len - 1);
 
             Ok(())
         }
@@ -82,10 +92,12 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
             ))
         } else {
             self.handler_names.remove(0);
-            self.inbound_contexts.remove(0);
+
             self.inbound_handlers.remove(0);
-            self.outbound_contexts.remove(0);
+            self.inbound_contexts.remove(0);
+
             self.outbound_handlers.remove(0);
+            self.outbound_contexts.remove(0);
 
             Ok(())
         }
@@ -102,10 +114,12 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
         if !to_be_removed.is_empty() {
             for index in to_be_removed.into_iter().rev() {
                 self.handler_names.remove(index);
-                self.inbound_contexts.remove(index);
+
                 self.inbound_handlers.remove(index);
-                self.outbound_contexts.remove(index);
+                self.inbound_contexts.remove(index);
+
                 self.outbound_handlers.remove(index);
+                self.outbound_contexts.remove(index);
             }
 
             Ok(())
@@ -197,83 +211,83 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
     }
 
     async fn transport_active(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_active_internal(&*ctx).await;
+        handler.transport_active_internal(&*context).await;
     }
 
     async fn transport_inactive(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.transport_inactive_internal(&*ctx).await;
+        handler.transport_inactive_internal(&*context).await;
     }
 
     async fn read(&self, msg: R) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_internal(&*ctx, Box::new(msg)).await;
+        handler.read_internal(&*context, Box::new(msg)).await;
     }
 
     async fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_exception_internal(&*ctx, err).await;
+        handler.read_exception_internal(&*context, err).await;
     }
 
     async fn read_eof(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_eof_internal(&*ctx).await;
+        handler.read_eof_internal(&*context).await;
     }
 
     async fn read_timeout(&self, now: Instant) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.read_timeout_internal(&*ctx, now).await;
+        handler.read_timeout_internal(&*context, now).await;
     }
 
     async fn poll_timeout(&self, eto: &mut Instant) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().lock().await,
             self.inbound_contexts.first().unwrap().lock().await,
         );
-        handler.poll_timeout_internal(&*ctx, eto).await;
+        handler.poll_timeout_internal(&*context, eto).await;
     }
 
     async fn write(&self, msg: W) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_internal(&*ctx, Box::new(msg)).await;
+        handler.write_internal(&*context, Box::new(msg)).await;
     }
 
     async fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.write_exception_internal(&*ctx, err).await;
+        handler.write_exception_internal(&*context, err).await;
     }
 
     async fn close(&self) {
-        let (mut handler, ctx) = (
+        let (mut handler, context) = (
             self.outbound_handlers.last().unwrap().lock().await,
             self.outbound_contexts.last().unwrap().lock().await,
         );
-        handler.close_internal(&*ctx).await;
+        handler.close_internal(&*context).await;
     }
 }
 

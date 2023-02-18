@@ -32,10 +32,10 @@ pub trait Handler {
         self,
     ) -> (
         String,
-        Rc<RefCell<dyn InboundContextInternal>>,
         Rc<RefCell<dyn InboundHandlerInternal>>,
-        Rc<RefCell<dyn OutboundContextInternal>>,
+        Rc<RefCell<dyn InboundContextInternal>>,
         Rc<RefCell<dyn OutboundHandlerInternal>>,
+        Rc<RefCell<dyn OutboundContextInternal>>,
     )
     where
         Self: Sized,
@@ -50,10 +50,10 @@ pub trait Handler {
 
         (
             handler_name,
-            Rc::new(RefCell::new(inbound_context)),
             Rc::new(RefCell::new(inbound_handler)),
-            Rc::new(RefCell::new(outbound_context)),
+            Rc::new(RefCell::new(inbound_context)),
             Rc::new(RefCell::new(outbound_handler)),
+            Rc::new(RefCell::new(outbound_context)),
         )
     }
 
@@ -281,9 +281,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.transport_active_internal(&*next_ctx);
+            next_handler.transport_active_internal(&*next_context);
         }
     }
 
@@ -292,9 +292,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.transport_inactive_internal(&*next_ctx);
+            next_handler.transport_inactive_internal(&*next_context);
         }
     }
 
@@ -303,9 +303,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.read_internal(&*next_ctx, Box::new(msg));
+            next_handler.read_internal(&*next_context, Box::new(msg));
         } else {
             warn!("read reached end of pipeline");
         }
@@ -316,9 +316,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.read_exception_internal(&*next_ctx, err);
+            next_handler.read_exception_internal(&*next_context, err);
         } else {
             warn!("read_exception reached end of pipeline");
         }
@@ -329,9 +329,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.read_eof_internal(&*next_ctx);
+            next_handler.read_eof_internal(&*next_context);
         } else {
             warn!("read_eof reached end of pipeline");
         }
@@ -342,9 +342,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.read_timeout_internal(&*next_ctx, now);
+            next_handler.read_timeout_internal(&*next_context, now);
         } else {
             warn!("read reached end of pipeline");
         }
@@ -355,9 +355,9 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.poll_timeout_internal(&*next_ctx, eto);
+            next_handler.poll_timeout_internal(&*next_context, eto);
         } else {
             trace!("poll_timeout reached end of pipeline");
         }
@@ -464,9 +464,9 @@ impl<Win: 'static, Wout: 'static> OutboundContext<Win, Wout> {
         if let (Some(next_out_handler), Some(next_out_context)) =
             (&self.next_out_handler, &self.next_out_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_out_handler.borrow_mut(), next_out_context.borrow());
-            next_handler.write_internal(&*next_ctx, Box::new(msg));
+            next_handler.write_internal(&*next_context, Box::new(msg));
         } else {
             warn!("write reached end of pipeline");
         }
@@ -477,9 +477,9 @@ impl<Win: 'static, Wout: 'static> OutboundContext<Win, Wout> {
         if let (Some(next_out_handler), Some(next_out_context)) =
             (&self.next_out_handler, &self.next_out_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_out_handler.borrow_mut(), next_out_context.borrow());
-            next_handler.write_exception_internal(&*next_ctx, err);
+            next_handler.write_exception_internal(&*next_context, err);
         } else {
             warn!("write_exception reached end of pipeline");
         }
@@ -490,9 +490,9 @@ impl<Win: 'static, Wout: 'static> OutboundContext<Win, Wout> {
         if let (Some(next_out_handler), Some(next_out_context)) =
             (&self.next_out_handler, &self.next_out_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_out_handler.borrow_mut(), next_out_context.borrow());
-            next_handler.close_internal(&*next_ctx);
+            next_handler.close_internal(&*next_context);
         } else {
             warn!("close reached end of pipeline");
         }

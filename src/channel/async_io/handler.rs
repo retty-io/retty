@@ -33,10 +33,10 @@ pub trait Handler: Send + Sync {
         self,
     ) -> (
         String,
-        Arc<Mutex<dyn InboundContextInternal>>,
         Arc<Mutex<dyn InboundHandlerInternal>>,
-        Arc<Mutex<dyn OutboundContextInternal>>,
+        Arc<Mutex<dyn InboundContextInternal>>,
         Arc<Mutex<dyn OutboundHandlerInternal>>,
+        Arc<Mutex<dyn OutboundContextInternal>>,
     )
     where
         Self: Sized,
@@ -51,10 +51,10 @@ pub trait Handler: Send + Sync {
 
         (
             handler_name,
-            Arc::new(Mutex::new(inbound_context)),
             Arc::new(Mutex::new(inbound_handler)),
-            Arc::new(Mutex::new(outbound_context)),
+            Arc::new(Mutex::new(inbound_context)),
             Arc::new(Mutex::new(outbound_handler)),
+            Arc::new(Mutex::new(outbound_context)),
         )
     }
 
@@ -310,9 +310,9 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.transport_active_internal(&*next_ctx).await;
+            next_handler.transport_active_internal(&*next_context).await;
         }
     }
 
@@ -321,9 +321,11 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.transport_inactive_internal(&*next_ctx).await;
+            next_handler
+                .transport_inactive_internal(&*next_context)
+                .await;
         }
     }
 
@@ -332,9 +334,11 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.read_internal(&*next_ctx, Box::new(msg)).await;
+            next_handler
+                .read_internal(&*next_context, Box::new(msg))
+                .await;
         } else {
             warn!("read reached end of pipeline");
         }
@@ -345,9 +349,11 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.read_exception_internal(&*next_ctx, err).await;
+            next_handler
+                .read_exception_internal(&*next_context, err)
+                .await;
         } else {
             warn!("read_exception reached end of pipeline");
         }
@@ -358,9 +364,9 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.read_eof_internal(&*next_ctx).await;
+            next_handler.read_eof_internal(&*next_context).await;
         } else {
             warn!("read_eof reached end of pipeline");
         }
@@ -371,9 +377,11 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.read_timeout_internal(&*next_ctx, now).await;
+            next_handler
+                .read_timeout_internal(&*next_context, now)
+                .await;
         } else {
             warn!("read reached end of pipeline");
         }
@@ -384,9 +392,11 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
-            next_handler.poll_timeout_internal(&*next_ctx, eto).await;
+            next_handler
+                .poll_timeout_internal(&*next_context, eto)
+                .await;
         } else {
             trace!("poll_timeout reached end of pipeline");
         }
@@ -496,9 +506,11 @@ impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundContext<Wi
         if let (Some(next_out_handler), Some(next_out_context)) =
             (&self.next_out_handler, &self.next_out_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_out_handler.lock().await, next_out_context.lock().await);
-            next_handler.write_internal(&*next_ctx, Box::new(msg)).await;
+            next_handler
+                .write_internal(&*next_context, Box::new(msg))
+                .await;
         } else {
             warn!("write reached end of pipeline");
         }
@@ -509,9 +521,11 @@ impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundContext<Wi
         if let (Some(next_out_handler), Some(next_out_context)) =
             (&self.next_out_handler, &self.next_out_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_out_handler.lock().await, next_out_context.lock().await);
-            next_handler.write_exception_internal(&*next_ctx, err).await;
+            next_handler
+                .write_exception_internal(&*next_context, err)
+                .await;
         } else {
             warn!("write_exception reached end of pipeline");
         }
@@ -522,9 +536,9 @@ impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundContext<Wi
         if let (Some(next_out_handler), Some(next_out_context)) =
             (&self.next_out_handler, &self.next_out_context)
         {
-            let (mut next_handler, next_ctx) =
+            let (mut next_handler, next_context) =
                 (next_out_handler.lock().await, next_out_context.lock().await);
-            next_handler.close_internal(&*next_ctx).await;
+            next_handler.close_internal(&*next_context).await;
         } else {
             warn!("close reached end of pipeline");
         }
