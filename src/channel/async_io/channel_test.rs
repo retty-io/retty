@@ -37,14 +37,12 @@ struct MockDecoder<Rin, Rout> {
     name: String,
     stats: Stats,
 
-    phantom_in: PhantomData<Rin>,
-    phantom_out: PhantomData<Rout>,
+    phantom: PhantomData<(Rin, Rout)>,
 }
 struct MockEncoder<Win, Wout> {
     stats: Stats,
 
-    phantom_in: PhantomData<Win>,
-    phantom_out: PhantomData<Wout>,
+    phantom: PhantomData<(Win, Wout)>,
 }
 pub(crate) struct MockHandler<R, W> {
     decoder: MockDecoder<R, W>,
@@ -58,13 +56,11 @@ impl<R, W> MockHandler<R, W> {
                 name: name.to_string(),
                 stats: stats.clone(),
 
-                phantom_in: PhantomData,
-                phantom_out: PhantomData,
+                phantom: PhantomData,
             },
             encoder: MockEncoder {
                 stats,
-                phantom_in: PhantomData,
-                phantom_out: PhantomData,
+                phantom: PhantomData,
             },
         }
     }

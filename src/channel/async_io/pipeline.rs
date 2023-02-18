@@ -20,8 +20,7 @@ struct PipelineInternal<R, W> {
     outbound_contexts: Vec<Arc<Mutex<dyn OutboundContextInternal>>>,
     outbound_handlers: Vec<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 
-    phantom_r: PhantomData<R>,
-    phantom_w: PhantomData<W>,
+    phantom: PhantomData<(R, W)>,
 }
 
 impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> {
@@ -33,8 +32,7 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> PipelineInternal<R, W> 
             outbound_contexts: Vec::new(),
             outbound_handlers: Vec::new(),
 
-            phantom_r: PhantomData,
-            phantom_w: PhantomData,
+            phantom: PhantomData,
         }
     }
 

@@ -287,8 +287,7 @@ pub struct InboundContext<Rin, Rout> {
 
     next_out: OutboundContext<Rout, Rin>,
 
-    phantom_rin: PhantomData<Rin>,
-    phantom_rout: PhantomData<Rout>,
+    phantom: PhantomData<(Rin, Rout)>,
 }
 
 impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin, Rout> {
@@ -302,8 +301,7 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
 
             next_out: OutboundContext::new(name),
 
-            phantom_rin: PhantomData,
-            phantom_rout: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -477,8 +475,7 @@ pub struct OutboundContext<Win, Wout> {
     next_out_context: Option<Arc<Mutex<dyn OutboundContextInternal>>>,
     next_out_handler: Option<Arc<Mutex<dyn OutboundHandlerInternal>>>,
 
-    phantom_win: PhantomData<Win>,
-    phantom_wout: PhantomData<Wout>,
+    phantom: PhantomData<(Win, Wout)>,
 }
 
 impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundContext<Win, Wout> {
@@ -490,8 +487,7 @@ impl<Win: Send + Sync + 'static, Wout: Send + Sync + 'static> OutboundContext<Wi
             next_out_context: None,
             next_out_handler: None,
 
-            phantom_win: PhantomData,
-            phantom_wout: PhantomData,
+            phantom: PhantomData,
         }
     }
 

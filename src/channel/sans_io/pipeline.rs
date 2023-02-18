@@ -21,8 +21,7 @@ struct PipelineInternal<R, W> {
     outbound_contexts: Vec<Rc<RefCell<dyn OutboundContextInternal>>>,
     outbound_handlers: Vec<Rc<RefCell<dyn OutboundHandlerInternal>>>,
 
-    phantom_r: PhantomData<R>,
-    phantom_w: PhantomData<W>,
+    phantom: PhantomData<(R, W)>,
 }
 
 // Since PipelineInternal is already protected by asynchronous runtime::sync::Mutex in
@@ -39,8 +38,7 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
             outbound_contexts: Vec::new(),
             outbound_handlers: Vec::new(),
 
-            phantom_r: PhantomData,
-            phantom_w: PhantomData,
+            phantom: PhantomData,
         }
     }
 
