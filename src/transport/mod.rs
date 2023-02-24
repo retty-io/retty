@@ -135,7 +135,10 @@ impl AsyncTransportRead for OwnedReadHalf {
         _bufs: &mut [IoSliceMut<'_>],
         _meta: &mut [RecvMeta],
     ) -> std::io::Result<usize> {
-        unimplemented!()
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            String::from("Unsupported recv"),
+        ))
     }
 }
 
@@ -146,7 +149,10 @@ impl AsyncTransportWrite for OwnedWriteHalf {
     }
 
     async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
-        unimplemented!()
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            String::from("Unsupported send"),
+        ))
     }
 }
 
@@ -173,7 +179,10 @@ impl AsyncTransportRead for Arc<UdpSocket> {
         _bufs: &mut [IoSliceMut<'_>],
         _meta: &mut [RecvMeta],
     ) -> std::io::Result<usize> {
-        unimplemented!()
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            String::from("Unsupported recv"),
+        ))
     }
 }
 
@@ -190,7 +199,10 @@ impl AsyncTransportWrite for Arc<UdpSocket> {
     }
 
     async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
-        unimplemented!()
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            String::from("Unsupported send"),
+        ))
     }
 }
 
@@ -208,7 +220,10 @@ impl TransportAddress for Arc<async_transport::UdpSocket> {
 #[async_trait]
 impl AsyncTransportRead for Arc<async_transport::UdpSocket> {
     async fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
-        unimplemented!()
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            String::from("Unsupported read"),
+        ))
     }
 
     async fn recv(
@@ -223,7 +238,10 @@ impl AsyncTransportRead for Arc<async_transport::UdpSocket> {
 #[async_trait]
 impl AsyncTransportWrite for Arc<async_transport::UdpSocket> {
     async fn write(&mut self, _buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
-        unimplemented!()
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            String::from("Unsupported write"),
+        ))
     }
 
     async fn send(&mut self, transmits: &[Transmit]) -> std::io::Result<usize> {
