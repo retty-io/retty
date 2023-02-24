@@ -1,7 +1,9 @@
 //! Asynchronous transport abstraction for TCP and UDP
 
 use async_trait::async_trait;
+use async_transport::{EcnCodepoint, RecvMeta, Transmit};
 use bytes::BytesMut;
+use std::io::IoSliceMut;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,33 +39,6 @@ impl Default for TransportContext {
             local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
             peer_addr: None,
         }
-    }
-}
-
-/// Explicit congestion notification codepoint
-#[repr(u8)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum EcnCodepoint {
-    #[doc(hidden)]
-    Ect0 = 0b10,
-    #[doc(hidden)]
-    Ect1 = 0b01,
-    #[doc(hidden)]
-    Ce = 0b11,
-}
-
-impl EcnCodepoint {
-    /// Create EcnCodepoint from the given bits
-    pub fn from_bits(x: u8) -> Option<Self> {
-        use self::EcnCodepoint::*;
-        Some(match x & 0b11 {
-            0b10 => Ect0,
-            0b01 => Ect1,
-            0b11 => Ce,
-            _ => {
-                return None;
-            }
-        })
     }
 }
 
@@ -105,6 +80,13 @@ pub trait AsyncTransportRead: TransportAddress {
     /// Reads data from an asynchronous transport into the provided buffer.
     /// On success, returns the number of bytes read and the origin.
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)>;
+
+    /// Receives data into the provided buffers and meta data like ECN information.
+    async fn recv(
+        &mut self,
+        _bufs: &mut [IoSliceMut<'_>],
+        _meta: &mut [RecvMeta],
+    ) -> std::io::Result<usize>;
 }
 
 /// Write half of an asynchronous transport
@@ -113,6 +95,9 @@ pub trait AsyncTransportWrite: TransportAddress {
     /// Sends data to an asynchronous transport to the given address, optional for TCP transport.
     /// On success, returns the number of bytes written.
     async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize>;
+
+    /// Send data from transmits
+    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,12 +129,24 @@ impl AsyncTransportRead for OwnedReadHalf {
         let n = AsyncReadExt::read(&mut self, buf).await?;
         Ok((n, None))
     }
+
+    async fn recv(
+        &mut self,
+        _bufs: &mut [IoSliceMut<'_>],
+        _meta: &mut [RecvMeta],
+    ) -> std::io::Result<usize> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]
 impl AsyncTransportWrite for OwnedWriteHalf {
     async fn write(&mut self, buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
         AsyncWriteExt::write(&mut self, buf).await
+    }
+
+    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
+        unimplemented!()
     }
 }
 
@@ -170,6 +167,14 @@ impl AsyncTransportRead for Arc<UdpSocket> {
         let (len, addr) = self.recv_from(buf).await?;
         Ok((len, Some(addr)))
     }
+
+    async fn recv(
+        &mut self,
+        _bufs: &mut [IoSliceMut<'_>],
+        _meta: &mut [RecvMeta],
+    ) -> std::io::Result<usize> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]
@@ -182,5 +187,9 @@ impl AsyncTransportWrite for Arc<UdpSocket> {
             )
         })?;
         self.send_to(buf, target).await
+    }
+
+    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
+        unimplemented!()
     }
 }
