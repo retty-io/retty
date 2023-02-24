@@ -26,7 +26,7 @@ async-io = { version = "1.12.0", optional = true }
 async-std = { version = "1.12.0", optional = true }
 futures-lite = { version = "1.12.0", optional = true}
 tokio = { version = "1.25.0", features = ["macros"] }
-async-transport = "0.2.1"
+async-transport = "0.2.2"
 
 [dev-dependencies]
 tokio = { version = "1.25.0", features = ["rt", "rt-multi-thread", "signal"] }

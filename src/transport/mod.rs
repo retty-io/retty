@@ -1,7 +1,7 @@
 //! Asynchronous transport abstraction for TCP and UDP
 
 use async_trait::async_trait;
-use async_transport::{EcnCodepoint, RecvMeta, Transmit};
+use async_transport::{AsyncUdpSocket, EcnCodepoint, RecvMeta, Transmit, UdpState};
 use bytes::BytesMut;
 use std::io::IoSliceMut;
 use std::net::SocketAddr;
@@ -191,5 +191,43 @@ impl AsyncTransportWrite for Arc<UdpSocket> {
 
     async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
         unimplemented!()
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+impl TransportAddress for Arc<async_transport::UdpSocket> {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        async_transport::UdpSocket::local_addr(self)
+    }
+
+    fn peer_addr(&self) -> std::io::Result<SocketAddr> {
+        async_transport::UdpSocket::peer_addr(self)
+    }
+}
+
+#[async_trait]
+impl AsyncTransportRead for Arc<async_transport::UdpSocket> {
+    async fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
+        unimplemented!()
+    }
+
+    async fn recv(
+        &mut self,
+        bufs: &mut [IoSliceMut<'_>],
+        meta: &mut [RecvMeta],
+    ) -> std::io::Result<usize> {
+        async_transport::UdpSocket::recv(self, bufs, meta).await
+    }
+}
+
+#[async_trait]
+impl AsyncTransportWrite for Arc<async_transport::UdpSocket> {
+    async fn write(&mut self, _buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
+        unimplemented!()
+    }
+
+    async fn send(&mut self, transmits: &[Transmit]) -> std::io::Result<usize> {
+        let state = UdpState::new();
+        async_transport::UdpSocket::send(self, &state, transmits).await
     }
 }
