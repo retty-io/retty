@@ -33,12 +33,24 @@ impl TaggedStringCodec {
 }
 
 /// A tagged String with [TransportContext]
-#[derive(Default)]
+#[derive(Clone)]
 pub struct TaggedString {
+    /// Received/Sent time
+    pub now: Instant,
     /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
     pub transport: TransportContext,
     /// Message body with String type
     pub message: String,
+}
+
+impl Default for TaggedString {
+    fn default() -> Self {
+        Self {
+            now: Instant::now(),
+            transport: TransportContext::default(),
+            message: String::new(),
+        }
+    }
 }
 
 #[cfg(not(feature = "sans-io"))]
@@ -51,6 +63,7 @@ impl InboundHandler for TaggedStringDecoder {
         match String::from_utf8(msg.message.to_vec()) {
             Ok(message) => {
                 ctx.fire_read(TaggedString {
+                    now: msg.now,
                     transport: msg.transport,
                     message,
                 })
@@ -88,6 +101,7 @@ impl InboundHandler for TaggedStringDecoder {
         match String::from_utf8(msg.message.to_vec()) {
             Ok(message) => {
                 ctx.fire_read(TaggedString {
+                    now: msg.now,
                     transport: msg.transport,
                     message,
                 });

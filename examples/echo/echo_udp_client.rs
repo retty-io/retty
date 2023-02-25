@@ -5,6 +5,7 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
@@ -163,6 +164,7 @@ async fn main() -> anyhow::Result<()> {
             line => {
                 pipeline
                     .write(TaggedString {
+                        now: Instant::now(),
                         transport,
                         message: format!("{}\r\n", line),
                     })

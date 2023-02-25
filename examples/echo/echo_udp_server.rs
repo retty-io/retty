@@ -57,6 +57,7 @@ impl InboundHandler for TaggedEchoDecoder {
         } else {
             self.last_transport = Some(msg.transport);
             ctx.fire_write(TaggedString {
+                now: Instant::now(),
                 transport: msg.transport,
                 message: format!("{}\r\n", msg.message),
             })
@@ -70,6 +71,7 @@ impl InboundHandler for TaggedEchoDecoder {
             self.timeout = now + self.interval;
             if let Some(transport) = &self.last_transport {
                 ctx.fire_write(TaggedString {
+                    now: Instant::now(),
                     transport: *transport,
                     message: format!("Keep-alive message: next one at {:?}\r\n", self.timeout),
                 })
