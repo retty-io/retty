@@ -1,7 +1,7 @@
 //! Asynchronous transport abstraction for TCP and UDP
 
 use async_trait::async_trait;
-use async_transport::{AsyncUdpSocket, EcnCodepoint, RecvMeta, Transmit, UdpState};
+use async_transport::{AsyncUdpSocket, Capabilities, EcnCodepoint, RecvMeta, Transmit};
 use bytes::BytesMut;
 use std::io::IoSliceMut;
 use std::net::SocketAddr;
@@ -97,7 +97,11 @@ pub trait AsyncTransportWrite: TransportAddress {
     async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize>;
 
     /// Send data from transmits
-    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize>;
+    async fn send(
+        &mut self,
+        _capabilities: &Capabilities,
+        _transmits: &[Transmit],
+    ) -> std::io::Result<usize>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +152,11 @@ impl AsyncTransportWrite for OwnedWriteHalf {
         AsyncWriteExt::write(&mut self, buf).await
     }
 
-    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
+    async fn send(
+        &mut self,
+        _capabilities: &Capabilities,
+        _transmits: &[Transmit],
+    ) -> std::io::Result<usize> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             String::from("Unsupported send"),
@@ -198,7 +206,11 @@ impl AsyncTransportWrite for Arc<UdpSocket> {
         self.send_to(buf, target).await
     }
 
-    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
+    async fn send(
+        &mut self,
+        _capabilities: &Capabilities,
+        _transmits: &[Transmit],
+    ) -> std::io::Result<usize> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             String::from("Unsupported send"),
@@ -244,8 +256,11 @@ impl AsyncTransportWrite for Arc<async_transport::UdpSocket> {
         ))
     }
 
-    async fn send(&mut self, transmits: &[Transmit]) -> std::io::Result<usize> {
-        let state = UdpState::new();
-        async_transport::UdpSocket::send(self, &state, transmits).await
+    async fn send(
+        &mut self,
+        capabilities: &Capabilities,
+        transmits: &[Transmit],
+    ) -> std::io::Result<usize> {
+        async_transport::UdpSocket::send(self, capabilities, transmits).await
     }
 }
