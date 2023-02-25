@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use async_transport::EcnCodepoint;
 use clap::Parser;
 use std::io::stdin;
 use std::io::Write;
@@ -164,7 +165,11 @@ async fn main() -> anyhow::Result<()> {
                 pipeline
                     .write(TaggedString {
                         now: Instant::now(),
-                        transport,
+                        transport: TransportContext {
+                            local_addr: transport.local_addr,
+                            peer_addr: transport.peer_addr,
+                            ecn: EcnCodepoint::from_bits(0x3),
+                        },
                         message: format!("{}\r\n", line),
                     })
                     .await;
