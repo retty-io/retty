@@ -17,6 +17,7 @@ pub(crate) mod async_io;
 #[cfg(not(feature = "sans-io"))]
 pub use self::async_io::{
     async_transport_tcp::AsyncTransportTcp, async_transport_udp::AsyncTransportUdp,
+    async_transport_udp_ecn::AsyncTransportUdpEcn,
 };
 
 #[cfg(feature = "sans-io")]
