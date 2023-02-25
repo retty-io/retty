@@ -32,6 +32,8 @@ pub struct TransportContext {
     pub local_addr: SocketAddr,
     /// Optional peer socket address, either IPv4 or IPv6
     pub peer_addr: Option<SocketAddr>,
+    /// Explicit congestion notification bits to set on the packet
+    pub ecn: Option<EcnCodepoint>,
 }
 
 impl Default for TransportContext {
@@ -39,6 +41,7 @@ impl Default for TransportContext {
         Self {
             local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
             peer_addr: None,
+            ecn: None,
         }
     }
 }
@@ -50,8 +53,6 @@ pub struct TaggedBytesMut {
     pub now: Instant,
     /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
     pub transport: TransportContext,
-    /// Explicit congestion notification bits to set on the packet
-    pub ecn: Option<EcnCodepoint>,
     /// Message body with [BytesMut](bytes::BytesMut) type
     pub message: BytesMut,
 }
@@ -61,7 +62,6 @@ impl Default for TaggedBytesMut {
         Self {
             now: Instant::now(),
             transport: TransportContext::default(),
-            ecn: None,
             message: BytesMut::default(),
         }
     }

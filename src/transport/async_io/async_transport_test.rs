@@ -128,6 +128,7 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
     let transport = TransportContext {
         local_addr: sock.local_addr().unwrap(),
         peer_addr: Some(sock.peer_addr().unwrap()),
+        ecn: None,
     };
 
     let pipeline: Pipeline<TaggedBytesMut, TaggedBytesMut> = Pipeline::new();
@@ -141,7 +142,6 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
         .write(TaggedBytesMut {
             now: Instant::now(),
             transport,
-            ecn: None,
             message: BytesMut::from(expected.as_bytes()),
         })
         .await;
@@ -157,7 +157,6 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
         .write(TaggedBytesMut {
             now: Instant::now(),
             transport,
-            ecn: None,
             message: BytesMut::from(expected.as_bytes()),
         })
         .await;

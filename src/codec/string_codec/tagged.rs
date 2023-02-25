@@ -73,7 +73,6 @@ impl OutboundHandler for TaggedStringEncoder {
         ctx.fire_write(TaggedBytesMut {
             now: Instant::now(),
             transport: msg.transport,
-            ecn: None,
             message: buf,
         })
         .await;
@@ -109,7 +108,6 @@ impl OutboundHandler for TaggedStringEncoder {
         ctx.fire_write(TaggedBytesMut {
             now: Instant::now(),
             transport: msg.transport,
-            ecn: None,
             message: buf,
         });
     }

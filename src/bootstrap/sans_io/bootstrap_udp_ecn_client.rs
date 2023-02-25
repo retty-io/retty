@@ -112,7 +112,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnClient<W> {
                     if let Some(target) = msg.transport.peer_addr {
                         let transmit = Transmit {
                             destination: target,
-                            ecn: msg.ecn,
+                            ecn: msg.transport.ecn,
                             contents: msg.message.to_vec(),
                             segment_size: None,
                             src_ip: Some(msg.transport.local_addr.ip()),
@@ -158,7 +158,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnClient<W> {
                                 if let Some(target) = msg.transport.peer_addr {
                                     let transmit = Transmit {
                                         destination: target,
-                                        ecn: msg.ecn,
+                                        ecn: msg.transport.ecn,
                                         contents: msg.message.to_vec(),
                                         segment_size: None,
                                         src_ip: Some(msg.transport.local_addr.ip()),
@@ -201,8 +201,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnClient<W> {
                                                 transport: TransportContext {
                                                     local_addr,
                                                     peer_addr: Some(meta.addr),
+                                                    ecn: meta.ecn,
                                                 },
-                                                ecn: meta.ecn,
                                                 message,
                                             })
                                             .await;

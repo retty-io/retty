@@ -141,8 +141,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnClient<W> {
                                                 transport: TransportContext {
                                                     local_addr,
                                                     peer_addr: Some(meta.addr),
+                                                    ecn: meta.ecn,
                                                 },
-                                                ecn: meta.ecn,
                                                 message,
                                             })
                                             .await;

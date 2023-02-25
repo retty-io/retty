@@ -120,8 +120,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                                         transport: TransportContext {
                                             local_addr,
                                             peer_addr,
+                                            ecn: None,
                                         },
-                                        ecn: None,
                                         message: BytesMut::from(&buf[..n]),
                                     })
                                     .await;

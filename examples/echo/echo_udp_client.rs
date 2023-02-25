@@ -122,6 +122,7 @@ async fn main() -> anyhow::Result<()> {
     let transport = TransportContext {
         local_addr: SocketAddr::from_str("0.0.0.0:0")?,
         peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
+        ecn: None,
     };
 
     let mut bootstrap = BootstrapUdpClient::new(default_runtime().unwrap());

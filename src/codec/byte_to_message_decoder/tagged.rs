@@ -55,7 +55,6 @@ impl InboundHandler for TaggedByteToMessageDecoder {
                         ctx.fire_read(TaggedBytesMut {
                             now: Instant::now(),
                             transport: msg.transport,
-                            ecn: None,
                             message,
                         })
                         .await;
@@ -104,7 +103,6 @@ impl InboundHandler for TaggedByteToMessageDecoder {
                         ctx.fire_read(TaggedBytesMut {
                             now: Instant::now(),
                             transport: msg.transport,
-                            ecn: None,
                             message,
                         });
                     } else {
