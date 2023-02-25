@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Instant;
 
 use retty::bootstrap::BootstrapUdpEcnServer;
@@ -37,10 +37,10 @@ impl Shared {
         self.peers.contains_key(peer)
     }
 
-    /*TODO:fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline<TaggedBytesMut, TaggedString>>) {
+    fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline<TaggedBytesMut, TaggedString>>) {
         println!("{} joined", peer);
         self.peers.insert(peer, pipeline);
-    }*/
+    }
 
     fn leave(&mut self, peer: &SocketAddr) {
         println!("{} left", peer);
@@ -65,6 +65,7 @@ impl Shared {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ChatDecoder {
+    pipeline: Weak<Pipeline<TaggedBytesMut, TaggedString>>,
     state: Arc<Mutex<Shared>>,
 }
 struct ChatEncoder;
@@ -74,9 +75,12 @@ struct ChatHandler {
 }
 
 impl ChatHandler {
-    fn new(state: Arc<Mutex<Shared>>) -> Self {
+    fn new(
+        pipeline: Weak<Pipeline<TaggedBytesMut, TaggedString>>,
+        state: Arc<Mutex<Shared>>,
+    ) -> Self {
         ChatHandler {
-            decoder: ChatDecoder { state },
+            decoder: ChatDecoder { pipeline, state },
             encoder: ChatEncoder,
         }
     }
@@ -100,10 +104,9 @@ impl InboundHandler for ChatDecoder {
             s.leave(&peer);
         } else {
             if !s.contains(&peer) {
-                /*TODO:let pipeline: Weak<Pipeline<TaggedBytesMut, TaggedString>> = ctx.get_pipeline();
-                if let Some(pipeline) = pipeline.upgrade() {
+                if let Some(pipeline) = self.pipeline.upgrade() {
                     s.join(peer, pipeline);
-                }*/
+                }
             }
             s.broadcast(
                 peer,
@@ -204,20 +207,22 @@ async fn main() -> anyhow::Result<()> {
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let state = state.clone();
             Box::pin(async move {
-                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                let pipeline: Arc<Pipeline<TaggedBytesMut, TaggedString>> =
+                    Pipeline::new().finalize().await;
+                let weak_pipeline = Arc::downgrade(&pipeline);
 
                 let async_transport_handler = AsyncTransportUdpEcn::new(sock);
                 let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
                 let string_codec_handler = TaggedStringCodec::new();
-                let chat_handler = ChatHandler::new(state.clone());
+                let chat_handler = ChatHandler::new(weak_pipeline, state);
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
                 pipeline.add_back(chat_handler).await;
-                pipeline.finalize().await
+                pipeline.update().await
             })
         },
     ));
