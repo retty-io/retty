@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Instant;
 
 use retty::bootstrap::BootstrapUdpEcnServer;
@@ -37,10 +37,10 @@ impl Shared {
         self.peers.contains_key(peer)
     }
 
-    fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline<TaggedBytesMut, TaggedString>>) {
+    /*TODO:fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline<TaggedBytesMut, TaggedString>>) {
         println!("{} joined", peer);
         self.peers.insert(peer, pipeline);
-    }
+    }*/
 
     fn leave(&mut self, peer: &SocketAddr) {
         println!("{} left", peer);
@@ -87,7 +87,7 @@ impl InboundHandler for ChatDecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
             "received: {} from {:?} with ECN {:?} to {:?}",
             msg.message, msg.transport.peer_addr, msg.transport.ecn, msg.transport.local_addr
@@ -100,10 +100,10 @@ impl InboundHandler for ChatDecoder {
             s.leave(&peer);
         } else {
             if !s.contains(&peer) {
-                let pipeline: Weak<Pipeline<TaggedBytesMut, TaggedString>> = ctx.get_pipeline();
+                /*TODO:let pipeline: Weak<Pipeline<TaggedBytesMut, TaggedString>> = ctx.get_pipeline();
                 if let Some(pipeline) = pipeline.upgrade() {
                     s.join(peer, pipeline);
-                }
+                }*/
             }
             s.broadcast(
                 peer,
@@ -217,14 +217,7 @@ async fn main() -> anyhow::Result<()> {
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
                 pipeline.add_back(chat_handler).await;
-                pipeline.finalize().await;
-
-                let pipeline = Arc::new(pipeline);
-                /*TODO:{
-                    let mut s = state.lock().await;
-                    s.join(peer, pipeline.clone());
-                }*/
-                pipeline
+                pipeline.finalize().await
             })
         },
     ));

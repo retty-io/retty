@@ -190,9 +190,7 @@ async fn main() -> anyhow::Result<()> {
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
                 pipeline.add_back(chat_handler).await;
-                pipeline.finalize().await;
-
-                let pipeline = Arc::new(pipeline);
+                let pipeline = pipeline.finalize().await;
                 {
                     let mut s = state.lock().await;
                     s.join(peer, pipeline.clone());

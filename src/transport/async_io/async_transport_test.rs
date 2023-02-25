@@ -64,11 +64,11 @@ async fn async_transport_tcp_test_write_err_on_shutdown() -> Result<()> {
     let (tx, mut rx) = bounded(1);
     let sock = MockAsyncTransportWrite::new(tx);
 
-    let pipeline: Pipeline<BytesMut, BytesMut> = Pipeline::new();
+    let pipeline = Pipeline::<BytesMut, BytesMut>::new();
     pipeline
         .add_back(AsyncTransportTcp::new(Box::new(sock)))
         .await;
-    pipeline.finalize().await;
+    let pipeline = pipeline.finalize().await;
 
     let expected = "TESTING MESSAGE".to_string();
     pipeline.write(BytesMut::from(expected.as_bytes())).await;
@@ -108,7 +108,7 @@ async fn async_transport_tcp_test_transport_active_inactive() -> Result<()> {
         .add_back(AsyncTransportTcp::new(Box::new(sock)))
         .await;
     pipeline.add_back(handler).await;
-    pipeline.finalize().await;
+    let pipeline = pipeline.finalize().await;
 
     pipeline.transport_active().await;
     assert_eq!(1, active.load(Ordering::SeqCst));
@@ -135,7 +135,7 @@ async fn async_transport_udp_test_write_err_on_shutdown() -> Result<()> {
     pipeline
         .add_back(AsyncTransportUdp::new(Box::new(sock)))
         .await;
-    pipeline.finalize().await;
+    let pipeline = pipeline.finalize().await;
 
     let expected = "TESTING MESSAGE".to_string();
     pipeline
@@ -187,7 +187,7 @@ async fn async_transport_udp_test_transport_active_inactive() -> Result<()> {
         .add_back(AsyncTransportUdp::new(Box::new(sock)))
         .await;
     pipeline.add_back(handler).await;
-    pipeline.finalize().await;
+    let pipeline = pipeline.finalize().await;
 
     pipeline.transport_active().await;
     assert_eq!(1, active.load(Ordering::SeqCst));

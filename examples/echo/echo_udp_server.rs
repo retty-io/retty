@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use clap::Parser;
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use retty::bootstrap::BootstrapUdpServer;
@@ -182,9 +181,7 @@ async fn main() -> anyhow::Result<()> {
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
                 pipeline.add_back(echo_handler).await;
-                pipeline.finalize().await;
-
-                Arc::new(pipeline)
+                pipeline.finalize().await
             })
         },
     ));

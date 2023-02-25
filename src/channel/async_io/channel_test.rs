@@ -199,9 +199,9 @@ async fn pipeline_test_real_handlers_compile_tcp() -> Result<()> {
         .add_back(line_based_frame_decoder_handler)
         .await
         .add_back(string_codec_handler)
-        .await
-        .finalize()
         .await;
+
+    let pipeline = pipeline.finalize().await;
 
     assert_eq!(3, pipeline.len().await);
 
@@ -227,9 +227,8 @@ async fn pipeline_test_real_handlers_compile_udp() -> Result<()> {
         .add_back(line_based_frame_decoder_handler)
         .await
         .add_back(string_codec_handler)
-        .await
-        .finalize()
         .await;
+    let pipeline = pipeline.finalize().await;
 
     assert_eq!(3, pipeline.len().await);
 
@@ -262,9 +261,8 @@ async fn pipeline_test_fire_actions() -> Result<()> {
             "handler2",
             stats.clone(),
         ))
-        .await
-        .finalize()
         .await;
+    let pipeline = pipeline.finalize().await;
 
     pipeline.read("TESTING".to_string()).await;
     assert_eq!(2, stats.read.as_ref().unwrap().load(Ordering::SeqCst));
@@ -359,9 +357,8 @@ async fn pipeline_test_dynamic_construction() -> Result<()> {
             "handler6",
             Stats::default(),
         ))
-        .await
-        .finalize()
         .await;
+    let pipeline = pipeline.finalize().await;
 
     assert_eq!(6, pipeline.len().await);
 
@@ -501,15 +498,14 @@ async fn pipeline_test_remove_handler() -> Result<()> {
             "handler6",
             Stats::default(),
         ))
-        .await
-        .finalize()
         .await;
+    let pipeline = pipeline.finalize().await;
 
     pipeline.remove("handler3").await?;
     pipeline.remove("handler4").await?;
     pipeline.remove("handler5").await?;
     pipeline.remove("handler6").await?;
-    pipeline.finalize().await;
+    let pipeline = pipeline.update().await;
 
     pipeline.read("TESTING INBOUND MESSAGE".to_owned()).await;
     pipeline.write("TESTING OUTBOUND MESSAGE".to_owned()).await;
@@ -537,17 +533,11 @@ async fn pipeline_test_remove_front_back() -> Result<()> {
             "handler3",
             Stats::default(),
         ))
-        .await
-        .finalize()
         .await;
+    let pipeline = pipeline.finalize().await;
 
-    pipeline
-        .remove_front()
-        .await?
-        .remove_back()
-        .await?
-        .finalize()
-        .await;
+    pipeline.remove_front().await?.remove_back().await?;
+    let pipeline = pipeline.update().await;
 
     assert_eq!(1, pipeline.len().await);
 
@@ -580,7 +570,7 @@ async fn pipeline_test_num_handlers() -> Result<()> {
         .await;
     assert_eq!(2, pipeline.len().await);
 
-    pipeline.finalize().await;
+    let pipeline = pipeline.finalize().await;
     assert_eq!(2, pipeline.len().await);
 
     pipeline.remove("handler1").await?;

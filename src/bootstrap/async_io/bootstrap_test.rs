@@ -7,7 +7,6 @@ use crate::runtime::default_runtime;
 use crate::transport::{AsyncTransportWrite, TaggedBytesMut};
 use anyhow::Result;
 use bytes::BytesMut;
-use std::sync::Arc;
 
 #[tokio::test]
 async fn bootstrap_basic() -> Result<()> {
@@ -28,8 +27,7 @@ async fn bootstrap_tcp_server_with_pipeline() -> Result<()> {
             Box::pin(async move {
                 let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
                 pipeline.add_back(StringCodec::new()).await;
-                pipeline.finalize().await;
-                Arc::new(pipeline)
+                pipeline.finalize().await
             })
         },
     ));
@@ -48,8 +46,7 @@ async fn bootstrap_udp_server_with_pipeline() -> Result<()> {
             Box::pin(async move {
                 let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
                 pipeline.add_back(TaggedStringCodec::new()).await;
-                pipeline.finalize().await;
-                Arc::new(pipeline)
+                pipeline.finalize().await
             })
         },
     ));
@@ -68,8 +65,7 @@ async fn bootstrap_tcp_client_with_pipeline() -> Result<()> {
             Box::pin(async move {
                 let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
                 pipeline.add_back(StringCodec::new()).await;
-                pipeline.finalize().await;
-                Arc::new(pipeline)
+                pipeline.finalize().await
             })
         },
     ));
@@ -90,8 +86,7 @@ async fn bootstrap_udp_client_with_pipeline() -> Result<()> {
             Box::pin(async move {
                 let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
                 pipeline.add_back(TaggedStringCodec::new()).await;
-                pipeline.finalize().await;
-                Arc::new(pipeline)
+                pipeline.finalize().await
             })
         },
     ));

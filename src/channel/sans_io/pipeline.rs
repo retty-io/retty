@@ -3,6 +3,7 @@ use std::error::Error;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::channel::sans_io::{
@@ -377,13 +378,19 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.len()
     }
 
-    /// Finalizes the pipeline.
-    pub async fn finalize(&self) -> &Self {
+    /// Updates the Arc version's pipeline.
+    pub async fn update(self: Arc<Self>) -> Arc<Self> {
         {
             let internal = self.internal.lock().await;
             internal.finalize();
         }
         self
+    }
+
+    /// Finalizes the pipeline.
+    pub async fn finalize(self) -> Arc<Self> {
+        let pipeline = Arc::new(self);
+        pipeline.update().await
     }
 
     /// Transport is active now, which means it is connected.

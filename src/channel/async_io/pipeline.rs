@@ -371,13 +371,19 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.len()
     }
 
-    /// Finalizes the pipeline.
-    pub async fn finalize(&self) -> &Self {
+    /// Updates the Arc version's pipeline.
+    pub async fn update(self: Arc<Self>) -> Arc<Self> {
         {
             let internal = self.internal.lock().await;
             internal.finalize().await;
         }
         self
+    }
+
+    /// Finalizes the pipeline.
+    pub async fn finalize(self) -> Arc<Self> {
+        let pipeline = Arc::new(self);
+        pipeline.update().await
     }
 
     /// Transport is active now, which means it is connected.
