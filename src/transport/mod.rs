@@ -231,11 +231,9 @@ impl TransportAddress for Arc<async_transport::UdpSocket> {
 
 #[async_trait]
 impl AsyncTransportRead for Arc<async_transport::UdpSocket> {
-    async fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            String::from("Unsupported read"),
-        ))
+    async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, Option<SocketAddr>)> {
+        let (len, addr) = self.recv_from(buf).await?;
+        Ok((len, Some(addr)))
     }
 
     async fn recv(
@@ -249,11 +247,14 @@ impl AsyncTransportRead for Arc<async_transport::UdpSocket> {
 
 #[async_trait]
 impl AsyncTransportWrite for Arc<async_transport::UdpSocket> {
-    async fn write(&mut self, _buf: &[u8], _target: Option<SocketAddr>) -> std::io::Result<usize> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            String::from("Unsupported write"),
-        ))
+    async fn write(&mut self, buf: &[u8], target: Option<SocketAddr>) -> std::io::Result<usize> {
+        let target = target.ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::AddrNotAvailable,
+                "SocketAddr is required for UdpSocket write".to_string(),
+            )
+        })?;
+        self.send_to(buf, target).await
     }
 
     async fn send(
