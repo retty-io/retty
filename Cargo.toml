@@ -69,3 +69,11 @@ required-features = ["sans-io"]
 name = "sans_io_udp_client"
 path = "examples/sans-io/sans_io_udp_client.rs"
 required-features = ["sans-io"]
+
+[[example]]
+name = "chat_udp_ecn_client"
+path = "examples/chat/chat_udp_ecn_client.rs"
+
+[[example]]
+name = "chat_udp_ecn_server"
+path = "examples/chat/chat_udp_ecn_server.rs"
