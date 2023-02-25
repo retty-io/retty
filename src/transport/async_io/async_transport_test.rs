@@ -7,7 +7,7 @@ use crate::transport::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use async_transport::Transmit;
+use async_transport::{Capabilities, Transmit};
 use bytes::BytesMut;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -46,7 +46,11 @@ impl AsyncTransportWrite for MockAsyncTransportWrite {
         Ok(buf.len())
     }
 
-    async fn send(&mut self, _transmits: &[Transmit]) -> std::io::Result<usize> {
+    async fn send(
+        &mut self,
+        _capabilities: &Capabilities,
+        _transmits: &[Transmit],
+    ) -> std::io::Result<usize> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             String::from("Unsupported send"),
