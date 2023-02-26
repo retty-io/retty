@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::time::Instant;
 
-use crate::channel::sans_io::handler_internal::{
+use crate::channel::sync_io::handler_internal::{
     InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
     OutboundHandlerInternal,
 };

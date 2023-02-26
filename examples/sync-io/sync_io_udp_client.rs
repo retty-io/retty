@@ -19,22 +19,22 @@ use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedSansIODecoder;
-struct TaggedSansIOEncoder;
-struct TaggedSansIOHandler {
-    decoder: TaggedSansIODecoder,
-    encoder: TaggedSansIOEncoder,
+struct TaggedSyncIODecoder;
+struct TaggedSyncIOEncoder;
+struct TaggedSyncIOHandler {
+    decoder: TaggedSyncIODecoder,
+    encoder: TaggedSyncIOEncoder,
 }
 
-impl TaggedSansIOHandler {
+impl TaggedSyncIOHandler {
     fn new() -> Self {
-        TaggedSansIOHandler {
-            decoder: TaggedSansIODecoder,
-            encoder: TaggedSansIOEncoder,
+        TaggedSyncIOHandler {
+            decoder: TaggedSyncIODecoder,
+            encoder: TaggedSyncIOEncoder,
         }
     }
 }
-impl InboundHandler for TaggedSansIODecoder {
+impl InboundHandler for TaggedSyncIODecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
@@ -46,7 +46,7 @@ impl InboundHandler for TaggedSansIODecoder {
     }
 }
 
-impl OutboundHandler for TaggedSansIOEncoder {
+impl OutboundHandler for TaggedSyncIOEncoder {
     type Win = TaggedString;
     type Wout = Self::Win;
 
@@ -55,14 +55,14 @@ impl OutboundHandler for TaggedSansIOEncoder {
     }
 }
 
-impl Handler for TaggedSansIOHandler {
+impl Handler for TaggedSyncIOHandler {
     type Rin = TaggedString;
     type Rout = Self::Rin;
     type Win = TaggedString;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "TaggedSansIOHandler"
+        "TaggedSyncIOHandler"
     }
 
     fn split(
@@ -76,10 +76,10 @@ impl Handler for TaggedSansIOHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "SansIO UDP Client")]
+#[command(name = "SyncIO UDP Client")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of sans-io udp client", long_about = None)]
+#[command(about = "An example of sync-io udp client", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -131,12 +131,12 @@ async fn main() -> anyhow::Result<()> {
                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = TaggedStringCodec::new();
-            let sans_io_handler = TaggedSansIOHandler::new();
+            let sync_io_handler = TaggedSyncIOHandler::new();
 
             pipeline.add_back(async_transport_handler).await;
             pipeline.add_back(line_based_frame_decoder_handler).await;
             pipeline.add_back(string_codec_handler).await;
-            pipeline.add_back(sans_io_handler).await;
+            pipeline.add_back(sync_io_handler).await;
             pipeline.finalize().await;
 
             Arc::new(pipeline)

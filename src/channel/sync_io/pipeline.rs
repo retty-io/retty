@@ -3,17 +3,16 @@ use std::error::Error;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::channel::sans_io::{
+use crate::channel::sync_io::{
     handler::Handler,
     handler_internal::{
         InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
         OutboundHandlerInternal,
     },
 };
-use crate::runtime;
 
 struct PipelineInternal<R, W> {
     handler_names: Vec<String>,
@@ -301,7 +300,7 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 /// over how an event is handled and how the Handlers in a pipeline interact with each other.
 pub struct Pipeline<R, W> {
-    internal: runtime::sync::Mutex<PipelineInternal<R, W>>,
+    internal: Mutex<PipelineInternal<R, W>>,
 }
 
 impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Default for Pipeline<R, W> {
@@ -314,32 +313,32 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     /// Creates a new Pipeline
     pub fn new() -> Self {
         Self {
-            internal: runtime::sync::Mutex::new(PipelineInternal::new()),
+            internal: Mutex::new(PipelineInternal::new()),
         }
     }
 
     /// Appends a [Handler] at the last position of this pipeline.
-    pub async fn add_back(&self, handler: impl Handler) -> &Self {
+    pub fn add_back(&self, handler: impl Handler) -> &Self {
         {
-            let mut internal = self.internal.lock().await;
+            let mut internal = self.internal.lock().unwrap();
             internal.add_back(handler);
         }
         self
     }
 
     /// Inserts a [Handler] at the first position of this pipeline.
-    pub async fn add_front(&self, handler: impl Handler) -> &Self {
+    pub fn add_front(&self, handler: impl Handler) -> &Self {
         {
-            let mut internal = self.internal.lock().await;
+            let mut internal = self.internal.lock().unwrap();
             internal.add_front(handler);
         }
         self
     }
 
     /// Removes a [Handler] at the last position of this pipeline.
-    pub async fn remove_back(&self) -> Result<&Self, std::io::Error> {
+    pub fn remove_back(&self) -> Result<&Self, std::io::Error> {
         let result = {
-            let mut internal = self.internal.lock().await;
+            let mut internal = self.internal.lock().unwrap();
             internal.remove_back()
         };
         match result {
@@ -349,9 +348,9 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     }
 
     /// Removes a [Handler] at the first position of this pipeline.
-    pub async fn remove_front(&self) -> Result<&Self, std::io::Error> {
+    pub fn remove_front(&self) -> Result<&Self, std::io::Error> {
         let result = {
-            let mut internal = self.internal.lock().await;
+            let mut internal = self.internal.lock().unwrap();
             internal.remove_front()
         };
         match result {
@@ -361,9 +360,9 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     }
 
     /// Removes a [Handler] from this pipeline based on handler_name.
-    pub async fn remove(&self, handler_name: &str) -> Result<&Self, std::io::Error> {
+    pub fn remove(&self, handler_name: &str) -> Result<&Self, std::io::Error> {
         let result = {
-            let mut internal = self.internal.lock().await;
+            let mut internal = self.internal.lock().unwrap();
             internal.remove(handler_name)
         };
         match result {
@@ -372,84 +371,85 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         }
     }
 
+    #[allow(clippy::len_without_is_empty)]
     /// Returns the number of Handlers in this pipeline.
-    pub async fn len(&self) -> usize {
-        let internal = self.internal.lock().await;
+    pub fn len(&self) -> usize {
+        let internal = self.internal.lock().unwrap();
         internal.len()
     }
 
     /// Updates the Arc version's pipeline.
-    pub async fn update(self: Arc<Self>) -> Arc<Self> {
+    pub fn update(self: Arc<Self>) -> Arc<Self> {
         {
-            let internal = self.internal.lock().await;
+            let internal = self.internal.lock().unwrap();
             internal.finalize();
         }
         self
     }
 
     /// Finalizes the pipeline.
-    pub async fn finalize(self) -> Arc<Self> {
+    pub fn finalize(self) -> Arc<Self> {
         let pipeline = Arc::new(self);
-        pipeline.update().await
+        pipeline.update()
     }
 
     /// Transport is active now, which means it is connected.
-    pub async fn transport_active(&self) {
-        let internal = self.internal.lock().await;
+    pub fn transport_active(&self) {
+        let internal = self.internal.lock().unwrap();
         internal.transport_active();
     }
 
     /// Transport is inactive now, which means it is disconnected.
-    pub async fn transport_inactive(&self) {
-        let internal = self.internal.lock().await;
+    pub fn transport_inactive(&self) {
+        let internal = self.internal.lock().unwrap();
         internal.transport_inactive();
     }
 
     /// Reads a message.
-    pub async fn read(&self, msg: R) {
-        let internal = self.internal.lock().await;
+    pub fn read(&self, msg: R) {
+        let internal = self.internal.lock().unwrap();
         internal.read(msg);
     }
 
     /// Reads an Error exception in one of its inbound operations.
-    pub async fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let internal = self.internal.lock().await;
+    pub fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
+        let internal = self.internal.lock().unwrap();
         internal.read_exception(err);
     }
 
     /// Reads an EOF event.
-    pub async fn read_eof(&self) {
-        let internal = self.internal.lock().await;
+    pub fn read_eof(&self) {
+        let internal = self.internal.lock().unwrap();
         internal.read_eof();
     }
 
     /// Reads a timeout event.
-    pub async fn read_timeout(&self, now: Instant) {
-        let internal = self.internal.lock().await;
+    pub fn read_timeout(&self, now: Instant) {
+        let internal = self.internal.lock().unwrap();
         internal.read_timeout(now);
     }
 
     /// Polls earliest timeout (eto) in its inbound operations.
-    pub async fn poll_timeout(&self, eto: &mut Instant) {
-        let internal = self.internal.lock().await;
+    pub fn poll_timeout(&self, eto: &mut Instant) {
+        let internal = self.internal.lock().unwrap();
         internal.poll_timeout(eto);
     }
 
     /// Writes a message.
-    pub async fn write(&self, msg: W) {
-        let internal = self.internal.lock().await;
+    pub fn write(&self, msg: W) {
+        let internal = self.internal.lock().unwrap();
         internal.write(msg);
     }
 
     /// Writes an Error exception from one of its outbound operations.
-    pub async fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let internal = self.internal.lock().await;
+    pub fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
+        let internal = self.internal.lock().unwrap();
         internal.write_exception(err);
     }
 
     /// Writes a close event.
-    pub async fn close(&self) {
-        let internal = self.internal.lock().await;
+    pub fn close(&self) {
+        let internal = self.internal.lock().unwrap();
         internal.close();
     }
 }

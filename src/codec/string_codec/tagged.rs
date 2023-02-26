@@ -1,4 +1,4 @@
-#[cfg(not(feature = "sans-io"))]
+#[cfg(not(feature = "sync-io"))]
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 use std::time::Instant;
@@ -53,7 +53,7 @@ impl Default for TaggedString {
     }
 }
 
-#[cfg(not(feature = "sans-io"))]
+#[cfg(not(feature = "sync-io"))]
 #[async_trait]
 impl InboundHandler for TaggedStringDecoder {
     type Rin = TaggedBytesMut;
@@ -74,7 +74,7 @@ impl InboundHandler for TaggedStringDecoder {
     }
 }
 
-#[cfg(not(feature = "sans-io"))]
+#[cfg(not(feature = "sync-io"))]
 #[async_trait]
 impl OutboundHandler for TaggedStringEncoder {
     type Win = TaggedString;
@@ -92,7 +92,7 @@ impl OutboundHandler for TaggedStringEncoder {
     }
 }
 
-#[cfg(feature = "sans-io")]
+#[cfg(feature = "sync-io")]
 impl InboundHandler for TaggedStringDecoder {
     type Rin = TaggedBytesMut;
     type Rout = TaggedString;
@@ -111,7 +111,7 @@ impl InboundHandler for TaggedStringDecoder {
     }
 }
 
-#[cfg(feature = "sans-io")]
+#[cfg(feature = "sync-io")]
 impl OutboundHandler for TaggedStringEncoder {
     type Win = TaggedString;
     type Wout = TaggedBytesMut;

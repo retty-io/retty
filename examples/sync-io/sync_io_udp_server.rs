@@ -18,31 +18,31 @@ use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedSansIODecoder {
+struct TaggedSyncIODecoder {
     interval: Duration,
     timeout: Instant,
     last_transport: Option<TransportContext>,
 }
-struct TaggedSansIOEncoder;
-struct TaggedSansIOHandler {
-    decoder: TaggedSansIODecoder,
-    encoder: TaggedSansIOEncoder,
+struct TaggedSyncIOEncoder;
+struct TaggedSyncIOHandler {
+    decoder: TaggedSyncIODecoder,
+    encoder: TaggedSyncIOEncoder,
 }
 
-impl TaggedSansIOHandler {
+impl TaggedSyncIOHandler {
     fn new(interval: Duration) -> Self {
-        TaggedSansIOHandler {
-            decoder: TaggedSansIODecoder {
+        TaggedSyncIOHandler {
+            decoder: TaggedSyncIODecoder {
                 timeout: Instant::now() + interval,
                 interval,
                 last_transport: None,
             },
-            encoder: TaggedSansIOEncoder,
+            encoder: TaggedSyncIOEncoder,
         }
     }
 }
 
-impl InboundHandler for TaggedSansIODecoder {
+impl InboundHandler for TaggedSyncIODecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
@@ -64,7 +64,7 @@ impl InboundHandler for TaggedSansIODecoder {
 
     fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
         if self.last_transport.is_some() && self.timeout <= now {
-            println!("TaggedSansIOHandler timeout at: {:?}", self.timeout);
+            println!("TaggedSyncIOHandler timeout at: {:?}", self.timeout);
             self.timeout = now + self.interval;
             if let Some(transport) = &self.last_transport {
                 ctx.fire_write(TaggedString {
@@ -85,7 +85,7 @@ impl InboundHandler for TaggedSansIODecoder {
     }
 }
 
-impl OutboundHandler for TaggedSansIOEncoder {
+impl OutboundHandler for TaggedSyncIOEncoder {
     type Win = TaggedString;
     type Wout = Self::Win;
 
@@ -94,14 +94,14 @@ impl OutboundHandler for TaggedSansIOEncoder {
     }
 }
 
-impl Handler for TaggedSansIOHandler {
+impl Handler for TaggedSyncIOHandler {
     type Rin = TaggedString;
     type Rout = Self::Rin;
     type Win = TaggedString;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "TaggedSansIOHandler"
+        "TaggedSyncIOHandler"
     }
 
     fn split(
@@ -115,10 +115,10 @@ impl Handler for TaggedSansIOHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "SansIO UDP Server")]
+#[command(name = "SyncIO UDP Server")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of sans-io udp server", long_about = None)]
+#[command(about = "An example of sync-io udp server", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -165,12 +165,12 @@ async fn main() -> anyhow::Result<()> {
                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
             ));
             let string_codec_handler = TaggedStringCodec::new();
-            let sans_io_handler = TaggedSansIOHandler::new(Duration::from_secs(5));
+            let sync_io_handler = TaggedSyncIOHandler::new(Duration::from_secs(5));
 
             pipeline.add_back(async_transport_handler).await;
             pipeline.add_back(line_based_frame_decoder_handler).await;
             pipeline.add_back(string_codec_handler).await;
-            pipeline.add_back(sans_io_handler).await;
+            pipeline.add_back(sync_io_handler).await;
             pipeline.finalize().await;
 
             Arc::new(pipeline)

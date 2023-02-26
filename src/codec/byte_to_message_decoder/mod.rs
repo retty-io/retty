@@ -1,6 +1,6 @@
 //! Handlers for converting byte to message
 
-#[cfg(not(feature = "sans-io"))]
+#[cfg(not(feature = "sync-io"))]
 use async_trait::async_trait;
 use bytes::BytesMut;
 
@@ -45,7 +45,7 @@ impl ByteToMessageCodec {
     }
 }
 
-#[cfg(not(feature = "sans-io"))]
+#[cfg(not(feature = "sync-io"))]
 #[async_trait]
 impl InboundHandler for ByteToMessageDecoder {
     type Rin = BytesMut;
@@ -78,7 +78,7 @@ impl InboundHandler for ByteToMessageDecoder {
     }
 }
 
-#[cfg(not(feature = "sans-io"))]
+#[cfg(not(feature = "sync-io"))]
 #[async_trait]
 impl OutboundHandler for ByteToMessageEncoder {
     type Win = BytesMut;
@@ -89,7 +89,7 @@ impl OutboundHandler for ByteToMessageEncoder {
     }
 }
 
-#[cfg(feature = "sans-io")]
+#[cfg(feature = "sync-io")]
 impl InboundHandler for ByteToMessageDecoder {
     type Rin = BytesMut;
     type Rout = Self::Rin;
@@ -121,7 +121,7 @@ impl InboundHandler for ByteToMessageDecoder {
     }
 }
 
-#[cfg(feature = "sans-io")]
+#[cfg(feature = "sync-io")]
 impl OutboundHandler for ByteToMessageEncoder {
     type Win = BytesMut;
     type Wout = Self::Win;
