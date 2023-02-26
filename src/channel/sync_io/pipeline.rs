@@ -6,7 +6,6 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::sync::broadcast::Receiver;
 
 use crate::channel::sync_io::{
     handler::Handler,
@@ -312,23 +311,25 @@ pub enum Event<R, W> {
     WriteException(Box<dyn Error + Send + Sync>),
     /// Close Event
     Close,
-    /// Transmit Event
-    Transmit(R),
 }
 
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 /// over how an event is handled and how the Handlers in a pipeline interact with each other.
 pub struct Pipeline<R, W> {
-    receiver: Mutex<Receiver<R>>,
     events: Mutex<VecDeque<Event<R, W>>>,
     internal: Mutex<PipelineInternal<R, W>>,
 }
 
-impl<R: Clone + Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Default for Pipeline<R, W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     /// Creates a new Pipeline
-    pub fn new(receiver: Receiver<R>) -> Self {
+    pub fn new() -> Self {
         Self {
-            receiver: Mutex::new(receiver),
             events: Mutex::new(VecDeque::new()),
             internal: Mutex::new(PipelineInternal::new()),
         }
@@ -466,16 +467,8 @@ impl<R: Clone + Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> 
 
     /// Polls an event.
     pub fn poll_event(&self) -> Option<Event<R, W>> {
-        {
-            let mut receiver = self.receiver.lock().unwrap();
-            if let Ok(transmit) = receiver.try_recv() {
-                return Some(Event::Transmit(transmit));
-            }
-        }
-        {
-            let mut events = self.events.lock().unwrap();
-            events.pop_front()
-        }
+        let mut events = self.events.lock().unwrap();
+        events.pop_front()
     }
 
     /// Handles a timeout event.
@@ -510,9 +503,6 @@ impl<R: Clone + Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> 
             Event::Close => {
                 let internal = self.internal.lock().unwrap();
                 internal.close();
-            }
-            Event::Transmit(_transmit) => {
-                // ignored since it is handled already in bootstrap
             }
         }
     }

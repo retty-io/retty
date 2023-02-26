@@ -41,7 +41,7 @@ pub type PipelineFactoryFn<R, W> = Box<
 >;
 
 #[cfg(feature = "sync-io")]
-use tokio::sync::broadcast::Sender;
+use std::sync::mpsc::Sender;
 /// Creates a new [Pipeline]
 #[cfg(feature = "sync-io")]
 pub type PipelineFactoryFn<R, W> = Box<dyn Fn(Sender<R>) -> Arc<Pipeline<R, W>>>;
