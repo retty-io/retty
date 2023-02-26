@@ -1,10 +1,11 @@
 use clap::Parser;
-use std::io::stdin;
-use std::io::Write;
-use std::net::SocketAddr;
-use std::str::FromStr;
-use std::sync::Arc;
-use tokio::sync::broadcast::Sender;
+use std::{
+    io::{stdin, Write},
+    net::SocketAddr,
+    str::FromStr,
+    sync::mpsc::Sender,
+    time::Instant,
+};
 
 use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
@@ -14,7 +15,6 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::runtime::default_runtime;
 use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +34,7 @@ impl TaggedSyncIOHandler {
         }
     }
 }
+
 impl InboundHandler for TaggedSyncIODecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
@@ -119,35 +120,30 @@ async fn main() -> anyhow::Result<()> {
     let transport = TransportContext {
         local_addr: SocketAddr::from_str("0.0.0.0:0")?,
         peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
+        ecn: None,
     };
 
-    let mut bootstrap = BootstrapUdpClient::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapUdpClient::new();
     bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
-        Box::pin(async move {
-            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-            let async_transport_handler = AsyncTransport::new(writer);
-            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-            ));
-            let string_codec_handler = TaggedStringCodec::new();
-            let sync_io_handler = TaggedSyncIOHandler::new();
+        let async_transport_handler = AsyncTransport::new(writer);
+        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+            LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+        ));
+        let string_codec_handler = TaggedStringCodec::new();
+        let sync_io_handler = TaggedSyncIOHandler::new();
 
-            pipeline.add_back(async_transport_handler).await;
-            pipeline.add_back(line_based_frame_decoder_handler).await;
-            pipeline.add_back(string_codec_handler).await;
-            pipeline.add_back(sync_io_handler).await;
-            pipeline.finalize().await;
-
-            Arc::new(pipeline)
-        })
+        pipeline.add_back(async_transport_handler);
+        pipeline.add_back(line_based_frame_decoder_handler);
+        pipeline.add_back(string_codec_handler);
+        pipeline.add_back(sync_io_handler);
+        pipeline.finalize()
     }));
 
-    bootstrap.bind(transport.local_addr).await?;
+    bootstrap.bind(transport.local_addr)?;
 
-    let pipeline = bootstrap
-        .connect(transport.peer_addr.as_ref().unwrap())
-        .await?;
+    let pipeline = bootstrap.connect(transport.peer_addr.as_ref().unwrap())?;
 
     println!("Enter bye to stop");
     let mut buffer = String::new();
@@ -155,14 +151,13 @@ async fn main() -> anyhow::Result<()> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline
-                    .write(TaggedString {
-                        transport,
-                        message: format!("{}\r\n", line),
-                    })
-                    .await;
+                pipeline.write(TaggedString {
+                    now: Instant::now(),
+                    transport,
+                    message: format!("{}\r\n", line),
+                });
                 if line == "bye" {
-                    pipeline.close().await;
+                    pipeline.close();
                     break;
                 }
             }
@@ -170,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
         buffer.clear();
     }
 
-    bootstrap.stop().await;
+    bootstrap.stop();
 
     Ok(())
 }

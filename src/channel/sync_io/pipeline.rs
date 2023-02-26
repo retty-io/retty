@@ -26,8 +26,7 @@ struct PipelineInternal<R, W> {
     phantom: PhantomData<(R, W)>,
 }
 
-// Since PipelineInternal is already protected by asynchronous runtime::sync::Mutex in
-// Pipeline(internal: runtime::sync::Mutex<PipelineInternal<R, W>>),
+// Since PipelineInternal is already protected by Mutex in Pipeline(internal: Mutex<PipelineInternal<R, W>>),
 // it is safe to use Rc<RefCell<<>> internally. So, here use unsafe to mark PipelineInternal as Send
 unsafe impl<R, W> Send for PipelineInternal<R, W> {}
 

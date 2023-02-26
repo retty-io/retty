@@ -1,9 +1,5 @@
 use clap::Parser;
-use std::io::Write;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::broadcast::Sender;
+use std::{io::Write, str::FromStr, sync::mpsc::Sender, time::Instant};
 
 use retty::bootstrap::BootstrapUdpServer;
 use retty::channel::{
@@ -13,16 +9,11 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::runtime::default_runtime;
-use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
+use retty::transport::{AsyncTransport, TaggedBytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedSyncIODecoder {
-    interval: Duration,
-    timeout: Instant,
-    last_transport: Option<TransportContext>,
-}
+struct TaggedSyncIODecoder;
 struct TaggedSyncIOEncoder;
 struct TaggedSyncIOHandler {
     decoder: TaggedSyncIODecoder,
@@ -30,13 +21,9 @@ struct TaggedSyncIOHandler {
 }
 
 impl TaggedSyncIOHandler {
-    fn new(interval: Duration) -> Self {
+    fn new() -> Self {
         TaggedSyncIOHandler {
-            decoder: TaggedSyncIODecoder {
-                timeout: Instant::now() + interval,
-                interval,
-                last_transport: None,
-            },
+            decoder: TaggedSyncIODecoder,
             encoder: TaggedSyncIOEncoder,
         }
     }
@@ -51,37 +38,13 @@ impl InboundHandler for TaggedSyncIODecoder {
             "handling {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
-        if msg.message == "bye" {
-            self.last_transport.take();
-        } else {
-            self.last_transport = Some(msg.transport);
+        if msg.message != "bye" {
             ctx.fire_write(TaggedString {
+                now: Instant::now(),
                 transport: msg.transport,
                 message: format!("{}\r\n", msg.message),
             });
         }
-    }
-
-    fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if self.last_transport.is_some() && self.timeout <= now {
-            println!("TaggedSyncIOHandler timeout at: {:?}", self.timeout);
-            self.timeout = now + self.interval;
-            if let Some(transport) = &self.last_transport {
-                ctx.fire_write(TaggedString {
-                    transport: *transport,
-                    message: format!("Keep-alive message: next one at {:?}\r\n", self.timeout),
-                });
-            }
-        }
-
-        //last handler, no need to fire_read_timeout
-    }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
-        if self.last_transport.is_some() && self.timeout < *eto {
-            *eto = self.timeout;
-        }
-
-        //last handler, no need to fire_poll_timeout
     }
 }
 
@@ -155,34 +118,30 @@ async fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapUdpServer::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapUdpServer::new();
     bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
-        Box::pin(async move {
-            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-            let async_transport_handler = AsyncTransport::new(writer);
-            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-            ));
-            let string_codec_handler = TaggedStringCodec::new();
-            let sync_io_handler = TaggedSyncIOHandler::new(Duration::from_secs(5));
+        let async_transport_handler = AsyncTransport::new(writer);
+        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+            LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+        ));
+        let string_codec_handler = TaggedStringCodec::new();
+        let sync_io_handler = TaggedSyncIOHandler::new();
 
-            pipeline.add_back(async_transport_handler).await;
-            pipeline.add_back(line_based_frame_decoder_handler).await;
-            pipeline.add_back(string_codec_handler).await;
-            pipeline.add_back(sync_io_handler).await;
-            pipeline.finalize().await;
-
-            Arc::new(pipeline)
-        })
+        pipeline.add_back(async_transport_handler);
+        pipeline.add_back(line_based_frame_decoder_handler);
+        pipeline.add_back(string_codec_handler);
+        pipeline.add_back(sync_io_handler);
+        pipeline.finalize()
     }));
 
-    bootstrap.bind(format!("{}:{}", host, port)).await?;
+    bootstrap.bind(format!("{}:{}", host, port))?;
 
     println!("Press ctrl-c to stop");
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
-            bootstrap.stop().await;
+            bootstrap.stop();
         }
     };
 
