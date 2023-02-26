@@ -1,10 +1,12 @@
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::error::Error;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use tokio::sync::broadcast::Receiver;
 
 use crate::channel::sync_io::{
     handler::Handler,
@@ -296,22 +298,38 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     }
 }
 
+/// Pipeline Events
+pub enum Event<R, W> {
+    /// Read Event
+    Read(R),
+    /// ReadException Event
+    ReadException(Box<dyn Error + Send + Sync>),
+    /// ReadEof Event
+    ReadEof,
+    /// Write Event
+    Write(W),
+    /// WriteException Event
+    WriteException(Box<dyn Error + Send + Sync>),
+    /// Close Event
+    Close,
+    /// Transmit Event
+    Transmit(R),
+}
+
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 /// over how an event is handled and how the Handlers in a pipeline interact with each other.
 pub struct Pipeline<R, W> {
+    receiver: Mutex<Receiver<R>>,
+    events: Mutex<VecDeque<Event<R, W>>>,
     internal: Mutex<PipelineInternal<R, W>>,
 }
 
-impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Default for Pipeline<R, W> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
+impl<R: Clone + Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     /// Creates a new Pipeline
-    pub fn new() -> Self {
+    pub fn new(receiver: Receiver<R>) -> Self {
         Self {
+            receiver: Mutex::new(receiver),
+            events: Mutex::new(VecDeque::new()),
             internal: Mutex::new(PipelineInternal::new()),
         }
     }
@@ -406,26 +424,38 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
 
     /// Reads a message.
     pub fn read(&self, msg: R) {
-        let internal = self.internal.lock().unwrap();
-        internal.read(msg);
+        let mut events = self.events.lock().unwrap();
+        events.push_back(Event::Read(msg));
     }
 
     /// Reads an Error exception in one of its inbound operations.
     pub fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let internal = self.internal.lock().unwrap();
-        internal.read_exception(err);
+        let mut events = self.events.lock().unwrap();
+        events.push_back(Event::ReadException(err));
     }
 
     /// Reads an EOF event.
     pub fn read_eof(&self) {
-        let internal = self.internal.lock().unwrap();
-        internal.read_eof();
+        let mut events = self.events.lock().unwrap();
+        events.push_back(Event::ReadEof);
     }
 
-    /// Reads a timeout event.
-    pub fn read_timeout(&self, now: Instant) {
-        let internal = self.internal.lock().unwrap();
-        internal.read_timeout(now);
+    /// Writes a message.
+    pub fn write(&self, msg: W) {
+        let mut events = self.events.lock().unwrap();
+        events.push_back(Event::Write(msg));
+    }
+
+    /// Writes an Error exception from one of its outbound operations.
+    pub fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
+        let mut events = self.events.lock().unwrap();
+        events.push_back(Event::WriteException(err));
+    }
+
+    /// Writes a close event.
+    pub fn close(&self) {
+        let mut events = self.events.lock().unwrap();
+        events.push_back(Event::Close);
     }
 
     /// Polls earliest timeout (eto) in its inbound operations.
@@ -434,21 +464,56 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.poll_timeout(eto);
     }
 
-    /// Writes a message.
-    pub fn write(&self, msg: W) {
-        let internal = self.internal.lock().unwrap();
-        internal.write(msg);
+    /// Polls an event.
+    pub fn poll_event(&self) -> Option<Event<R, W>> {
+        {
+            let mut receiver = self.receiver.lock().unwrap();
+            if let Ok(transmit) = receiver.try_recv() {
+                return Some(Event::Transmit(transmit));
+            }
+        }
+        {
+            let mut events = self.events.lock().unwrap();
+            events.pop_front()
+        }
     }
 
-    /// Writes an Error exception from one of its outbound operations.
-    pub fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
+    /// Handles a timeout event.
+    pub fn handle_timeout(&self, now: Instant) {
         let internal = self.internal.lock().unwrap();
-        internal.write_exception(err);
+        internal.read_timeout(now);
     }
 
-    /// Writes a close event.
-    pub fn close(&self) {
-        let internal = self.internal.lock().unwrap();
-        internal.close();
+    /// Handles an event.
+    pub fn handle_event(&self, evt: Event<R, W>) {
+        match evt {
+            Event::Read(msg) => {
+                let internal = self.internal.lock().unwrap();
+                internal.read(msg);
+            }
+            Event::ReadException(err) => {
+                let internal = self.internal.lock().unwrap();
+                internal.read_exception(err);
+            }
+            Event::ReadEof => {
+                let internal = self.internal.lock().unwrap();
+                internal.read_eof();
+            }
+            Event::Write(msg) => {
+                let internal = self.internal.lock().unwrap();
+                internal.write(msg);
+            }
+            Event::WriteException(err) => {
+                let internal = self.internal.lock().unwrap();
+                internal.write_exception(err);
+            }
+            Event::Close => {
+                let internal = self.internal.lock().unwrap();
+                internal.close();
+            }
+            Event::Transmit(_transmit) => {
+                // ignored since it is handled already in bootstrap
+            }
+        }
     }
 }

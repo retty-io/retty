@@ -3,9 +3,9 @@ use std::{
     io::{stdin, Write},
     net::SocketAddr,
     str::FromStr,
-    sync::mpsc::Sender,
     time::Instant,
 };
+use tokio::sync::broadcast::Sender;
 
 use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
@@ -125,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut bootstrap = BootstrapUdpClient::new();
     bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
-        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new(writer.subscribe());
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(

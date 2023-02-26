@@ -15,5 +15,6 @@ pub(crate) mod sync_io;
 pub use sync_io::{
     handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler},
     handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
+    pipeline::Event,
     pipeline::Pipeline,
 };

@@ -1,5 +1,6 @@
 use clap::Parser;
-use std::{io::Write, str::FromStr, sync::mpsc::Sender, time::Instant};
+use std::{io::Write, str::FromStr, time::Instant};
+use tokio::sync::broadcast::Sender;
 
 use retty::bootstrap::BootstrapUdpServer;
 use retty::channel::{
@@ -120,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut bootstrap = BootstrapUdpServer::new();
     bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
-        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new(writer.subscribe());
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(

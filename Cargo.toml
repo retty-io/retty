@@ -15,7 +15,7 @@ categories = [ "network-programming", "asynchronous" ]
 default = ["runtime-tokio"]
 runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util", "tokio/time", "async-transport/runtime-tokio"]
 runtime-async-std = ["async-io", "async-std", "futures-lite", "async-transport/runtime-async-std"]
-sync-io = []
+sync-io = ["tokio/sync"]
 
 [dependencies]
 bytes = "1.4.0"

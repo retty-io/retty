@@ -3,24 +3,22 @@ use log::{trace, warn};
 use std::{
     io::{Error, ErrorKind},
     net::{ToSocketAddrs, UdpSocket},
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
+use tokio::sync::broadcast::channel;
 
 use crate::bootstrap::{PipelineFactoryFn, MIN_DURATION};
-use crate::channel::Pipeline;
+use crate::channel::{Event, Pipeline};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
 pub struct BootstrapUdpClient<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     socket: Option<Arc<UdpSocket>>,
-    close_tx: Arc<Mutex<Option<Sender<()>>>>,
-    done_rx: Arc<Mutex<Option<Receiver<()>>>>,
+    close_tx: Arc<Mutex<Option<std::sync::mpsc::Sender<()>>>>,
+    done_rx: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
 }
 
 impl<W: Send + Sync + 'static> Default for BootstrapUdpClient<W> {
@@ -67,50 +65,54 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
-        let (sender, receiver) = channel();
+        let (sender, receiver) = channel(8);
         let pipeline_wr = (pipeline_factory_fn)(sender);
 
         let local_addr = socket_rd.local_addr()?;
         let pipeline = Arc::clone(&pipeline_wr);
 
-        let (close_tx, close_rx) = channel();
+        let (close_tx, close_rx) = std::sync::mpsc::channel();
         {
             let mut tx = self.close_tx.lock().unwrap();
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
         {
             let mut rx = self.done_rx.lock().unwrap();
             *rx = Some(done_rx);
         }
 
         thread::spawn(move || {
+            let _receiver = receiver;
+
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active();
-            loop {
-                if close_rx.try_recv().is_ok() {
-                    trace!("pipeline socket exit loop");
-                    let _ = done_tx.send(());
-                    break;
-                }
-
-                if let Ok(transmit) = receiver.try_recv() {
-                    if let Some(peer_addr) = transmit.transport.peer_addr {
-                        match socket_wr.send_to(&transmit.message, peer_addr) {
-                            Ok(n) => {
-                                trace!("socket write {} bytes", n);
+            while close_rx.try_recv().is_err() {
+                if let Some(evt) = pipeline.poll_event() {
+                    match evt {
+                        Event::Transmit(transmit) => {
+                            if let Some(peer_addr) = transmit.transport.peer_addr {
+                                match socket_wr.send_to(&transmit.message, peer_addr) {
+                                    Ok(n) => {
+                                        trace!("socket write {} bytes", n);
+                                        continue;
+                                    }
+                                    Err(err) => {
+                                        warn!("socket write error {}", err);
+                                        break;
+                                    }
+                                }
+                            } else {
+                                trace!("socket write error due to none peer_addr");
                                 continue;
                             }
-                            Err(err) => {
-                                warn!("socket write error {}", err);
-                                break;
-                            }
                         }
-                    } else {
-                        trace!("socket write error due to none peer_addr");
-                        continue;
+                        _ => {
+                            pipeline.handle_event(evt);
+                            continue;
+                        }
                     }
                 }
 
@@ -123,7 +125,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                     .unwrap_or(Duration::from_secs(0));
 
                 if timeout.is_zero() {
-                    pipeline.read_timeout(Instant::now());
+                    pipeline.handle_timeout(Instant::now());
                     continue;
                 }
 
@@ -149,7 +151,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                     Err(err) => match err.kind() {
                         // Expected error for set_read_timeout(). One for windows, one for the rest.
                         ErrorKind::WouldBlock | ErrorKind::TimedOut => {
-                            pipeline.read_timeout(Instant::now());
+                            pipeline.handle_timeout(Instant::now());
                             continue;
                         }
                         _ => {
@@ -160,6 +162,9 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                 }
             }
             pipeline.transport_inactive();
+
+            trace!("pipeline socket exit loop");
+            let _ = done_tx.send(());
 
             Ok::<(), Error>(())
         });

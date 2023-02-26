@@ -1,7 +1,7 @@
 use log::{trace, warn};
 use std::io::ErrorKind;
 use std::marker::PhantomData;
-use std::sync::mpsc::Sender;
+use tokio::sync::broadcast::Sender;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 
