@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
     net::ToSocketAddrs,
@@ -89,7 +89,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnServer<W> {
 
             pipeline.transport_active().await;
             loop {
-                let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION);
+                let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto).await;
 
                 let timer = if let Some(duration) = eto.checked_duration_since(Instant::now()) {

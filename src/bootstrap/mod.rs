@@ -46,5 +46,5 @@ use std::sync::mpsc::Sender;
 #[cfg(feature = "sync-io")]
 pub type PipelineFactoryFn<R, W> = Box<dyn Fn(Sender<R>) -> Arc<Pipeline<R, W>>>;
 
-const MAX_DURATION: u64 = 86400; // 1 day
-const MIN_DURATION: u64 = 1; // 1 second
+const MAX_DURATION_IN_SECS: u64 = 86400; // 1 day
+const MIN_DURATION_IN_MILLIS: u64 = 100;

@@ -11,7 +11,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::bootstrap::{PipelineFactoryFn, MIN_DURATION};
+use crate::bootstrap::{PipelineFactoryFn, MIN_DURATION_IN_MILLIS};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
@@ -97,8 +97,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
                     continue;
                 }
 
-                // Default timeout in case no activity in order to gracefully shutdown
-                let mut eto = Instant::now() + Duration::from_secs(MIN_DURATION);
+                // Default timeout in case no activity in order to gracefully shutdown and transmit/events handling
+                let mut eto = Instant::now() + Duration::from_millis(MIN_DURATION_IN_MILLIS);
                 pipeline.poll_timeout(&mut eto);
 
                 let timeout = eto
