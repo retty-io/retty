@@ -6,18 +6,18 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
 
-#[cfg(not(feature = "sync-io"))]
+#[cfg(not(feature = "metal-io"))]
 pub(crate) mod async_io;
-#[cfg(not(feature = "sync-io"))]
+#[cfg(not(feature = "metal-io"))]
 pub use self::async_io::{
     async_transport_tcp::AsyncTransportTcp, async_transport_udp::AsyncTransportUdp,
     async_transport_udp_ecn::AsyncTransportUdpEcn, AsyncTransportRead, AsyncTransportWrite,
 };
 
-#[cfg(feature = "sync-io")]
-pub(crate) mod sync_io;
-#[cfg(feature = "sync-io")]
-pub use sync_io::AsyncTransport;
+#[cfg(feature = "metal-io")]
+pub(crate) mod metal_io;
+#[cfg(feature = "metal-io")]
+pub use metal_io::AsyncTransport;
 
 /// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

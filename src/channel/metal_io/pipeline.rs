@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::channel::sync_io::{
+use crate::channel::metal_io::{
     handler::Handler,
     handler_internal::{
         InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,

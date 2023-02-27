@@ -2,7 +2,7 @@
 
 mod tagged;
 
-#[cfg(not(feature = "sync-io"))]
+#[cfg(not(feature = "metal-io"))]
 use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 
@@ -36,7 +36,7 @@ impl StringCodec {
     }
 }
 
-#[cfg(not(feature = "sync-io"))]
+#[cfg(not(feature = "metal-io"))]
 #[async_trait]
 impl InboundHandler for StringDecoder {
     type Rin = BytesMut;
@@ -52,7 +52,7 @@ impl InboundHandler for StringDecoder {
     }
 }
 
-#[cfg(not(feature = "sync-io"))]
+#[cfg(not(feature = "metal-io"))]
 #[async_trait]
 impl OutboundHandler for StringEncoder {
     type Win = String;
@@ -65,7 +65,7 @@ impl OutboundHandler for StringEncoder {
     }
 }
 
-#[cfg(feature = "sync-io")]
+#[cfg(feature = "metal-io")]
 impl InboundHandler for StringDecoder {
     type Rin = BytesMut;
     type Rout = String;
@@ -80,7 +80,7 @@ impl InboundHandler for StringDecoder {
     }
 }
 
-#[cfg(feature = "sync-io")]
+#[cfg(feature = "metal-io")]
 impl OutboundHandler for StringEncoder {
     type Win = String;
     type Wout = BytesMut;

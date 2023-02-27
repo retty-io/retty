@@ -1,13 +1,13 @@
 use clap::Parser;
 use mio_extras::channel::Sender;
-use std::net::SocketAddr;
 use std::{
-    io::Write,
+    io::{stdin, Write},
+    net::SocketAddr,
     str::FromStr,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-use retty::bootstrap::BootstrapUdpServer;
+use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -19,11 +19,7 @@ use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedSyncIODecoder {
-    interval: Duration,
-    timeout: Instant,
-    last_transport: Option<TransportContext>,
-}
+struct TaggedSyncIODecoder;
 struct TaggedSyncIOEncoder;
 struct TaggedSyncIOHandler {
     decoder: TaggedSyncIODecoder,
@@ -31,13 +27,9 @@ struct TaggedSyncIOHandler {
 }
 
 impl TaggedSyncIOHandler {
-    fn new(interval: Duration) -> Self {
+    fn new() -> Self {
         TaggedSyncIOHandler {
-            decoder: TaggedSyncIODecoder {
-                timeout: Instant::now() + interval,
-                interval,
-                last_transport: None,
-            },
+            decoder: TaggedSyncIODecoder,
             encoder: TaggedSyncIOEncoder,
         }
     }
@@ -47,48 +39,11 @@ impl InboundHandler for TaggedSyncIODecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
-            "handling {} from {:?}",
+            "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
-        if msg.message == "bye" {
-            self.last_transport.take();
-        } else {
-            self.last_transport = Some(msg.transport);
-            ctx.fire_write(TaggedString {
-                now: Instant::now(),
-                transport: msg.transport,
-                message: format!("{}\r\n", msg.message),
-            });
-        }
-    }
-
-    fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if self.last_transport.is_some() && self.timeout <= now {
-            println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
-            self.interval += Duration::from_secs(1);
-            self.timeout = now + self.interval;
-            if let Some(transport) = &self.last_transport {
-                ctx.fire_write(TaggedString {
-                    now: Instant::now(),
-                    transport: *transport,
-                    message: format!(
-                        "Keep-alive message: next one for interval {:?}\r\n",
-                        self.interval
-                    ),
-                });
-            }
-        }
-
-        //last handler, no need to fire_read_timeout
-    }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
-        if self.last_transport.is_some() && self.timeout < *eto {
-            *eto = self.timeout;
-        }
-
-        //last handler, no need to fire_poll_timeout
     }
 }
 
@@ -122,10 +77,10 @@ impl Handler for TaggedSyncIOHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "SyncIO UDP Server")]
+#[command(name = "MIO UDP Client")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of sync-io udp server", long_about = None)]
+#[command(about = "An example of mio udp client", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -160,9 +115,15 @@ async fn main() -> anyhow::Result<()> {
             .init();
     }
 
-    println!("listening {}:{}...", host, port);
+    println!("Connecting {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapUdpServer::new();
+    let transport = TransportContext {
+        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
+        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
+        ecn: None,
+    };
+
+    let mut bootstrap = BootstrapUdpClient::new();
     bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
         let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
@@ -171,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
         let string_codec_handler = TaggedStringCodec::new();
-        let sync_io_handler = TaggedSyncIOHandler::new(Duration::from_secs(10));
+        let sync_io_handler = TaggedSyncIOHandler::new();
 
         pipeline.add_back(async_transport_handler);
         pipeline.add_back(line_based_frame_decoder_handler);
@@ -180,14 +141,31 @@ async fn main() -> anyhow::Result<()> {
         pipeline.finalize()
     }));
 
-    bootstrap.bind(&SocketAddr::from_str(&format!("{}:{}", host, port))?)?;
+    bootstrap.bind(&transport.local_addr)?;
 
-    println!("Press ctrl-c to stop");
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            bootstrap.stop();
-        }
-    };
+    let pipeline = bootstrap.connect(*transport.peer_addr.as_ref().unwrap())?;
+
+    println!("Enter bye to stop");
+    let mut buffer = String::new();
+    while stdin().read_line(&mut buffer).is_ok() {
+        match buffer.trim_end() {
+            "" => break,
+            line => {
+                pipeline.write(TaggedString {
+                    now: Instant::now(),
+                    transport,
+                    message: format!("{}\r\n", line),
+                });
+                if line == "bye" {
+                    pipeline.close();
+                    break;
+                }
+            }
+        };
+        buffer.clear();
+    }
+
+    bootstrap.stop();
 
     Ok(())
 }

@@ -316,5 +316,5 @@ pub mod channel;
 pub mod codec;
 pub mod transport;
 
-#[cfg(not(feature = "sync-io"))]
+#[cfg(not(feature = "metal-io"))]
 pub mod runtime;

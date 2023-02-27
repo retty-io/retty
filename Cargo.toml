@@ -15,7 +15,7 @@ categories = [ "network-programming", "asynchronous" ]
 default = ["runtime-tokio"]
 runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util", "tokio/time", "tokio/macros", "async-transport/runtime-tokio", "waitgroup", "async-trait"]
 runtime-async-std = ["async-io", "async-std", "futures-lite", "tokio/macros", "async-transport/runtime-async-std", "waitgroup", "async-trait"]
-sync-io = ["mio", "mio-extras"]
+metal-io = ["mio", "mio-extras"]
 
 [dependencies]
 bytes = "1.4.0"
@@ -63,14 +63,14 @@ name = "chat_tcp_server"
 path = "examples/chat/chat_tcp_server.rs"
 
 [[example]]
-name = "sync_io_udp_server"
-path = "examples/sync-io/sync_io_udp_server.rs"
-required-features = ["sync-io"]
+name = "mio_udp_server"
+path = "examples/mio/mio_udp_server.rs"
+required-features = ["metal-io"]
 
 [[example]]
-name = "sync_io_udp_client"
-path = "examples/sync-io/sync_io_udp_client.rs"
-required-features = ["sync-io"]
+name = "mio_udp_client"
+path = "examples/mio/mio_udp_client.rs"
+required-features = ["metal-io"]
 
 [[example]]
 name = "chat_udp_ecn_client"
