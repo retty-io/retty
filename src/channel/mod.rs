@@ -15,6 +15,5 @@ pub(crate) mod metal_io;
 pub use metal_io::{
     handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler},
     handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
-    pipeline::OutboundEvent,
-    pipeline::Pipeline,
+    pipeline::{InboundPipeline, OutboundEvent, OutboundPipeline, Pipeline},
 };

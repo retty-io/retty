@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
-use crate::channel::Pipeline;
+use crate::channel::{InboundPipeline, OutboundPipeline};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
@@ -63,7 +63,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
     pub fn connect<A: ToSocketAddrs>(
         &mut self,
         addr: A,
-    ) -> Result<Arc<Pipeline<TaggedBytesMut, W>>, Error> {
+    ) -> Result<Arc<dyn OutboundPipeline<W>>, Error> {
         let socket = Arc::clone(self.socket.as_ref().unwrap());
         super::each_addr(addr, |addr| socket.connect(*addr))?;
 
@@ -71,10 +71,10 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
 
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
         let (sender, receiver) = channel();
-        let pipeline_wr = (pipeline_factory_fn)(sender);
+        let pipeline = (pipeline_factory_fn)(sender);
 
         let local_addr = socket_rd.local_addr()?;
-        let pipeline = Arc::clone(&pipeline_wr);
+        let pipeline_wr = Arc::clone(&pipeline);
 
         let (close_tx, close_rx) = channel();
         {

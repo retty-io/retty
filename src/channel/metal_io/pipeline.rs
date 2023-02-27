@@ -299,6 +299,36 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     }
 }
 
+/// InboundPipeline
+pub trait InboundPipeline<R> {
+    /// Transport is active now, which means it is connected.
+    fn transport_active(&self);
+
+    /// Transport is inactive now, which means it is disconnected.
+    fn transport_inactive(&self);
+
+    /// Reads a message.
+    fn read(&self, msg: R);
+
+    /// Reads an Error exception in one of its inbound operations.
+    fn read_exception(&self, err: Box<dyn Error + Send + Sync>);
+
+    /// Reads an EOF event.
+    fn read_eof(&self);
+}
+
+/// OutboundPipeline
+pub trait OutboundPipeline<W> {
+    /// Writes a message.
+    fn write(&self, msg: W);
+
+    /// Writes an Error exception from one of its outbound operations.
+    fn write_exception(&self, err: Box<dyn Error + Send + Sync>);
+
+    /// Writes a close event.
+    fn close(&self);
+}
+
 /// Outbound Events
 pub enum OutboundEvent<W> {
     /// Write Event
@@ -412,63 +442,6 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         pipeline.update()
     }
 
-    /// Transport is active now, which means it is connected.
-    pub fn transport_active(&self) {
-        let internal = self.internal.lock().unwrap();
-        internal.transport_active();
-    }
-
-    /// Transport is inactive now, which means it is disconnected.
-    pub fn transport_inactive(&self) {
-        let internal = self.internal.lock().unwrap();
-        internal.transport_inactive();
-    }
-
-    /// Reads a message.
-    pub fn read(&self, msg: R) {
-        let internal = self.internal.lock().unwrap();
-        internal.read(msg);
-    }
-
-    /// Reads an Error exception in one of its inbound operations.
-    pub fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let internal = self.internal.lock().unwrap();
-        internal.read_exception(err);
-    }
-
-    /// Reads an EOF event.
-    pub fn read_eof(&self) {
-        let internal = self.internal.lock().unwrap();
-        internal.read_eof();
-    }
-
-    /// Writes a message.
-    pub fn write(&self, msg: W) {
-        {
-            let mut events = self.events.lock().unwrap();
-            events.push_back(OutboundEvent::Write(msg));
-        }
-        let _ = self.set_readiness.set_readiness(Ready::readable());
-    }
-
-    /// Writes an Error exception from one of its outbound operations.
-    pub fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        {
-            let mut events = self.events.lock().unwrap();
-            events.push_back(OutboundEvent::WriteException(err));
-        }
-        let _ = self.set_readiness.set_readiness(Ready::readable());
-    }
-
-    /// Writes a close event.
-    pub fn close(&self) {
-        {
-            let mut events = self.events.lock().unwrap();
-            events.push_back(OutboundEvent::Close);
-        }
-        let _ = self.set_readiness.set_readiness(Ready::readable());
-    }
-
     /// Polls earliest timeout (eto) in its inbound operations.
     pub fn poll_timeout(&self, eto: &mut Instant) {
         let internal = self.internal.lock().unwrap();
@@ -503,6 +476,67 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
                 internal.close();
             }
         }
+    }
+}
+
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> InboundPipeline<R> for Pipeline<R, W> {
+    /// Transport is active now, which means it is connected.
+    fn transport_active(&self) {
+        let internal = self.internal.lock().unwrap();
+        internal.transport_active();
+    }
+
+    /// Transport is inactive now, which means it is disconnected.
+    fn transport_inactive(&self) {
+        let internal = self.internal.lock().unwrap();
+        internal.transport_inactive();
+    }
+
+    /// Reads a message.
+    fn read(&self, msg: R) {
+        let internal = self.internal.lock().unwrap();
+        internal.read(msg);
+    }
+
+    /// Reads an Error exception in one of its inbound operations.
+    fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
+        let internal = self.internal.lock().unwrap();
+        internal.read_exception(err);
+    }
+
+    /// Reads an EOF event.
+    fn read_eof(&self) {
+        let internal = self.internal.lock().unwrap();
+        internal.read_eof();
+    }
+}
+
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> OutboundPipeline<W> for Pipeline<R, W> {
+    /// Writes a message.
+    fn write(&self, msg: W) {
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push_back(OutboundEvent::Write(msg));
+        }
+        let _ = self.set_readiness.set_readiness(Ready::readable());
+    }
+
+    /// Writes an Error exception from one of its outbound operations.
+    fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push_back(OutboundEvent::WriteException(err));
+        }
+        let _ = self.set_readiness.set_readiness(Ready::readable());
+    }
+
+    /// Writes a close event.
+    fn close(&self) {
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push_back(OutboundEvent::Close);
+        }
+        let _ = self.set_readiness.set_readiness(Ready::readable());
     }
 }
 
