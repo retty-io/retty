@@ -117,17 +117,15 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
             'outer: loop {
                 let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto);
-
                 let delay_from_now = eto
                     .checked_duration_since(Instant::now())
                     .unwrap_or(Duration::from_secs(0));
-
                 if delay_from_now.is_zero() {
                     pipeline.handle_timeout(Instant::now());
                     continue;
+                } else {
+                    timer.set_timeout(delay_from_now, ());
                 }
-
-                let _timeout = timer.set_timeout(delay_from_now, ());
 
                 poll.poll(&mut events, None)?;
                 for event in events.iter() {
