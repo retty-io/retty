@@ -8,7 +8,7 @@ use mio_extras::{
 };
 use std::{
     io::Error,
-    net::SocketAddr,
+    net::ToSocketAddrs,
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -50,8 +50,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
     }
 
     /// Binds local address and port
-    pub fn bind(&mut self, addr: SocketAddr) -> Result<(), Error> {
-        let socket = Arc::new(UdpSocket::bind(&addr)?);
+    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+        let socket = Arc::new(super::each_addr(addr, UdpSocket::bind)?);
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);

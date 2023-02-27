@@ -143,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
 
     bootstrap.bind(transport.local_addr)?;
 
-    let pipeline = bootstrap.connect(*transport.peer_addr.as_ref().unwrap())?;
+    let pipeline = bootstrap.connect(transport.peer_addr.as_ref().unwrap())?;
 
     println!("Enter bye to stop");
     let mut buffer = String::new();

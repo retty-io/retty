@@ -1,6 +1,5 @@
 use clap::Parser;
 use mio_extras::channel::Sender;
-use std::net::SocketAddr;
 use std::{
     io::Write,
     str::FromStr,
@@ -180,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
         pipeline.finalize()
     }));
 
-    bootstrap.bind(SocketAddr::from_str(&format!("{}:{}", host, port))?)?;
+    bootstrap.bind(format!("{}:{}", host, port))?;
 
     println!("Press ctrl-c to stop");
     tokio::select! {
