@@ -102,9 +102,9 @@ pub trait InboundHandler: Send + Sync {
         ctx.fire_read_eof().await;
     }
 
-    /// Reads a timeout event.
-    async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        ctx.fire_read_timeout(now).await;
+    /// Handles a timeout event.
+    async fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        ctx.fire_handle_timeout(now).await;
     }
     /// Polls earliest timeout (eto) in its inbound operations.
     async fn poll_timeout(
@@ -184,9 +184,9 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundHandlerInte
         }
     }
 
-    async fn read_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant) {
+    async fn handle_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant) {
         if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
-            self.read_timeout(ctx, now).await;
+            self.handle_timeout(ctx, now).await;
         } else {
             panic!(
                 "ctx can't downcast_ref::<InboundContext<Rin, Rout>> in {} handler",
@@ -372,18 +372,18 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContext<Rin
         }
     }
 
-    /// Reads a timeout event.
-    pub async fn fire_read_timeout(&self, now: Instant) {
+    /// Handles a timeout event.
+    pub async fn fire_handle_timeout(&self, now: Instant) {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
             let (mut next_handler, next_context) =
                 (next_in_handler.lock().await, next_in_context.lock().await);
             next_handler
-                .read_timeout_internal(&*next_context, now)
+                .handle_timeout_internal(&*next_context, now)
                 .await;
         } else {
-            warn!("read reached end of pipeline");
+            warn!("handle_timeout reached end of pipeline");
         }
     }
 
@@ -426,8 +426,8 @@ impl<Rin: Send + Sync + 'static, Rout: Send + Sync + 'static> InboundContextInte
     async fn fire_read_eof_internal(&self) {
         self.fire_read_eof().await;
     }
-    async fn fire_read_timeout_internal(&self, now: Instant) {
-        self.fire_read_timeout(now).await;
+    async fn fire_handle_timeout_internal(&self, now: Instant) {
+        self.fire_handle_timeout(now).await;
     }
     async fn fire_poll_timeout_internal(&self, eto: &mut Instant) {
         self.fire_poll_timeout(eto).await;

@@ -13,7 +13,7 @@ pub trait InboundHandlerInternal {
     fn read_exception_internal(&mut self, ctx: &dyn InboundContextInternal, err: Box<dyn Error>);
     fn read_eof_internal(&mut self, ctx: &dyn InboundContextInternal);
 
-    fn read_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant);
+    fn handle_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant);
     fn poll_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, eto: &mut Instant);
 }
 
@@ -24,7 +24,7 @@ pub trait InboundContextInternal {
     fn fire_read_internal(&self, msg: Box<dyn Any>);
     fn fire_read_exception_internal(&self, err: Box<dyn Error>);
     fn fire_read_eof_internal(&self);
-    fn fire_read_timeout_internal(&self, now: Instant);
+    fn fire_handle_timeout_internal(&self, now: Instant);
     fn fire_poll_timeout_internal(&self, eto: &mut Instant);
 
     fn name(&self) -> &str;

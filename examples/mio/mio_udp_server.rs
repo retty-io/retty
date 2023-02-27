@@ -63,7 +63,7 @@ impl InboundHandler for TaggedSyncIODecoder {
         }
     }
 
-    fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+    fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
         if self.last_transport.is_some() && self.timeout <= now {
             println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
             self.interval += Duration::from_secs(1);
@@ -80,7 +80,7 @@ impl InboundHandler for TaggedSyncIODecoder {
             }
         }
 
-        //last handler, no need to fire_read_timeout
+        //last handler, no need to fire_handle_timeout
     }
     fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
         if self.last_transport.is_some() && self.timeout < *eto {

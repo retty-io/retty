@@ -96,9 +96,9 @@ pub trait InboundHandler {
         ctx.fire_read_eof();
     }
 
-    /// Reads a timeout event.
-    fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        ctx.fire_read_timeout(now);
+    /// Handles a timeout event.
+    fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        ctx.fire_handle_timeout(now);
     }
     /// Polls earliest timeout (eto) in its inbound operations.
     fn poll_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
@@ -165,9 +165,9 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
         }
     }
 
-    fn read_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant) {
+    fn handle_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant) {
         if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
-            self.read_timeout(ctx, now);
+            self.handle_timeout(ctx, now);
         } else {
             panic!(
                 "ctx can't downcast_ref::<InboundContext<Rin, Rout>> in {} handler",
@@ -337,16 +337,16 @@ impl<Rin: 'static, Rout: 'static> InboundContext<Rin, Rout> {
         }
     }
 
-    /// Reads a timeout event.
-    pub fn fire_read_timeout(&self, now: Instant) {
+    /// Handles a timeout event.
+    pub fn fire_handle_timeout(&self, now: Instant) {
         if let (Some(next_in_handler), Some(next_in_context)) =
             (&self.next_in_handler, &self.next_in_context)
         {
             let (mut next_handler, next_context) =
                 (next_in_handler.borrow_mut(), next_in_context.borrow());
-            next_handler.read_timeout_internal(&*next_context, now);
+            next_handler.handle_timeout_internal(&*next_context, now);
         } else {
-            warn!("read reached end of pipeline");
+            warn!("handle_timeout reached end of pipeline");
         }
     }
 
@@ -384,8 +384,8 @@ impl<Rin: 'static, Rout: 'static> InboundContextInternal for InboundContext<Rin,
     fn fire_read_eof_internal(&self) {
         self.fire_read_eof();
     }
-    fn fire_read_timeout_internal(&self, now: Instant) {
-        self.fire_read_timeout(now);
+    fn fire_handle_timeout_internal(&self, now: Instant) {
+        self.fire_handle_timeout(now);
     }
     fn fire_poll_timeout_internal(&self, eto: &mut Instant) {
         self.fire_poll_timeout(eto);

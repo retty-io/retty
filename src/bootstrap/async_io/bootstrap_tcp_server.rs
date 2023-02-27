@@ -153,7 +153,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
                     break;
                 }
                 _ = timer.as_mut() => {
-                    pipeline.read_timeout(Instant::now()).await;
+                    pipeline.handle_timeout(Instant::now()).await;
                 }
                 res = socket_rd.read(&mut buf) => {
                     match res {

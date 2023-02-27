@@ -258,12 +258,12 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
         handler.read_eof_internal(&*context);
     }
 
-    fn read_timeout(&self, now: Instant) {
+    fn handle_timeout(&self, now: Instant) {
         let (mut handler, context) = (
             self.inbound_handlers.first().unwrap().borrow_mut(),
             self.inbound_contexts.first().unwrap().borrow(),
         );
-        handler.read_timeout_internal(&*context, now);
+        handler.handle_timeout_internal(&*context, now);
     }
 
     fn poll_timeout(&self, eto: &mut Instant) {
@@ -315,6 +315,12 @@ pub trait InboundPipeline<R> {
 
     /// Reads an EOF event.
     fn read_eof(&self);
+
+    /// Handles a timeout event.
+    fn handle_timeout(&self, now: Instant);
+
+    /// Polls an event.
+    fn poll_timeout(&self, eto: &mut Instant);
 }
 
 /// OutboundPipeline
@@ -442,18 +448,6 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         pipeline.update()
     }
 
-    /// Polls earliest timeout (eto) in its inbound operations.
-    pub fn poll_timeout(&self, eto: &mut Instant) {
-        let internal = self.internal.lock().unwrap();
-        internal.poll_timeout(eto);
-    }
-
-    /// Handles a timeout event.
-    pub fn handle_timeout(&self, now: Instant) {
-        let internal = self.internal.lock().unwrap();
-        internal.read_timeout(now);
-    }
-
     /// Polls an event.
     pub fn poll_event(&self) -> Option<OutboundEvent<W>> {
         let mut events = self.events.lock().unwrap();
@@ -508,6 +502,18 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> InboundPipeline<R> for 
     fn read_eof(&self) {
         let internal = self.internal.lock().unwrap();
         internal.read_eof();
+    }
+
+    /// Handles a timeout event.
+    fn handle_timeout(&self, now: Instant) {
+        let internal = self.internal.lock().unwrap();
+        internal.handle_timeout(now);
+    }
+
+    /// Polls earliest timeout (eto) in its inbound operations.
+    fn poll_timeout(&self, eto: &mut Instant) {
+        let internal = self.internal.lock().unwrap();
+        internal.poll_timeout(eto);
     }
 }
 

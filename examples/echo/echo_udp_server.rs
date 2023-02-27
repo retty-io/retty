@@ -64,7 +64,7 @@ impl InboundHandler for TaggedEchoDecoder {
         }
     }
 
-    async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+    async fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
         if self.last_transport.is_some() && self.timeout <= now {
             println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
             self.timeout = now + self.interval;
@@ -78,7 +78,7 @@ impl InboundHandler for TaggedEchoDecoder {
             }
         }
 
-        //last handler, no need to fire_read_timeout
+        //last handler, no need to fire_handle_timeout
     }
     async fn poll_timeout(
         &mut self,

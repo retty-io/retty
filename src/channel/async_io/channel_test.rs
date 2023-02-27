@@ -26,7 +26,7 @@ pub(crate) struct Stats {
     pub(crate) read: Option<Arc<AtomicUsize>>,
     pub(crate) read_exception: Option<Arc<AtomicUsize>>,
     pub(crate) read_eof: Option<Arc<AtomicUsize>>,
-    pub(crate) read_timeout: Option<Arc<AtomicUsize>>,
+    pub(crate) handle_timeout: Option<Arc<AtomicUsize>>,
     pub(crate) poll_timeout: Option<Arc<AtomicUsize>>,
     pub(crate) write: Option<Arc<AtomicUsize>>,
     pub(crate) write_exception: Option<Arc<AtomicUsize>>,
@@ -109,11 +109,11 @@ impl<Rin: Default + Send + Sync + 'static, Rout: Default + Send + Sync + 'static
         ctx.fire_read_eof().await;
     }
 
-    async fn read_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if let Some(read_timeout) = &self.stats.read_timeout {
-            read_timeout.fetch_add(1, Ordering::SeqCst);
+    async fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        if let Some(handle_timeout) = &self.stats.handle_timeout {
+            handle_timeout.fetch_add(1, Ordering::SeqCst);
         }
-        ctx.fire_read_timeout(now).await;
+        ctx.fire_handle_timeout(now).await;
     }
     async fn poll_timeout(
         &mut self,
@@ -243,7 +243,7 @@ async fn pipeline_test_fire_actions() -> Result<()> {
         read: Some(Arc::new(AtomicUsize::new(0))),
         read_exception: Some(Arc::new(AtomicUsize::new(0))),
         read_eof: Some(Arc::new(AtomicUsize::new(0))),
-        read_timeout: Some(Arc::new(AtomicUsize::new(0))),
+        handle_timeout: Some(Arc::new(AtomicUsize::new(0))),
         poll_timeout: Some(Arc::new(AtomicUsize::new(0))),
         write: Some(Arc::new(AtomicUsize::new(0))),
         write_exception: Some(Arc::new(AtomicUsize::new(0))),
@@ -285,10 +285,14 @@ async fn pipeline_test_fire_actions() -> Result<()> {
     pipeline.read_eof().await;
     assert_eq!(2, stats.read_eof.as_ref().unwrap().load(Ordering::SeqCst));
 
-    pipeline.read_timeout(Instant::now()).await;
+    pipeline.handle_timeout(Instant::now()).await;
     assert_eq!(
         2,
-        stats.read_timeout.as_ref().unwrap().load(Ordering::SeqCst)
+        stats
+            .handle_timeout
+            .as_ref()
+            .unwrap()
+            .load(Ordering::SeqCst)
     );
 
     pipeline.poll_timeout(&mut Instant::now()).await;
