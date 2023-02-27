@@ -53,8 +53,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
     }
 
     /// Binds local address and port
-    pub fn bind(&mut self, addr: &SocketAddr) -> Result<(), Error> {
-        let socket = UdpSocket::bind(addr)?;
+    pub fn bind(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        let socket = UdpSocket::bind(&addr)?;
         self.socket = Some(Arc::new(socket));
         Ok(())
     }

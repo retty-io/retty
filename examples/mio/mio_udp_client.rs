@@ -141,7 +141,7 @@ async fn main() -> anyhow::Result<()> {
         pipeline.finalize()
     }));
 
-    bootstrap.bind(&transport.local_addr)?;
+    bootstrap.bind(transport.local_addr)?;
 
     let pipeline = bootstrap.connect(*transport.peer_addr.as_ref().unwrap())?;
 

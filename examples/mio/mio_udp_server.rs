@@ -180,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
         pipeline.finalize()
     }));
 
-    bootstrap.bind(&SocketAddr::from_str(&format!("{}:{}", host, port))?)?;
+    bootstrap.bind(SocketAddr::from_str(&format!("{}:{}", host, port))?)?;
 
     println!("Press ctrl-c to stop");
     tokio::select! {

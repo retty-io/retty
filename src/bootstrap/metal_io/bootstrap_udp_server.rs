@@ -50,8 +50,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
     }
 
     /// Binds local address and port
-    pub fn bind(&mut self, addr: &SocketAddr) -> Result<(), Error> {
-        let socket = Arc::new(UdpSocket::bind(addr)?);
+    pub fn bind(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        let socket = Arc::new(UdpSocket::bind(&addr)?);
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
