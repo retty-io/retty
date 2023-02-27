@@ -448,14 +448,14 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         pipeline.update()
     }
 
-    /// Polls an event.
-    pub fn poll_event(&self) -> Option<OutboundEvent<W>> {
+    /// Polls an outbound event.
+    pub fn poll_outbound_event(&self) -> Option<OutboundEvent<W>> {
         let mut events = self.events.lock().unwrap();
         events.pop_front()
     }
 
-    /// Handles an event.
-    pub fn handle_event(&self, evt: OutboundEvent<W>) {
+    /// Handles an outbound event.
+    pub fn handle_outbound_event(&self, evt: OutboundEvent<W>) {
         match evt {
             OutboundEvent::Write(msg) => {
                 let internal = self.internal.lock().unwrap();

@@ -195,8 +195,8 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                             pipeline.handle_timeout(Instant::now());
                         }
                         OUTBOUND_EVENT_TOKEN => {
-                            if let Some(evt) = pipeline.poll_event() {
-                                pipeline.handle_event(evt);
+                            if let Some(evt) = pipeline.poll_outbound_event() {
+                                pipeline.handle_outbound_event(evt);
                             }
                         }
                         _ => unreachable!(),
