@@ -297,14 +297,8 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     }
 }
 
-/// Pipeline Events
-pub enum Event<R, W> {
-    /// Read Event
-    Read(R),
-    /// ReadException Event
-    ReadException(Box<dyn Error + Send + Sync>),
-    /// ReadEof Event
-    ReadEof,
+/// Outbound Events
+pub enum OutboundEvent<W> {
     /// Write Event
     Write(W),
     /// WriteException Event
@@ -316,7 +310,7 @@ pub enum Event<R, W> {
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control
 /// over how an event is handled and how the Handlers in a pipeline interact with each other.
 pub struct Pipeline<R, W> {
-    events: Mutex<VecDeque<Event<R, W>>>,
+    events: Mutex<VecDeque<OutboundEvent<W>>>,
     internal: Mutex<PipelineInternal<R, W>>,
 }
 
@@ -425,38 +419,38 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
 
     /// Reads a message.
     pub fn read(&self, msg: R) {
-        let mut events = self.events.lock().unwrap();
-        events.push_back(Event::Read(msg));
+        let internal = self.internal.lock().unwrap();
+        internal.read(msg);
     }
 
     /// Reads an Error exception in one of its inbound operations.
     pub fn read_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let mut events = self.events.lock().unwrap();
-        events.push_back(Event::ReadException(err));
+        let internal = self.internal.lock().unwrap();
+        internal.read_exception(err);
     }
 
     /// Reads an EOF event.
     pub fn read_eof(&self) {
-        let mut events = self.events.lock().unwrap();
-        events.push_back(Event::ReadEof);
+        let internal = self.internal.lock().unwrap();
+        internal.read_eof();
     }
 
     /// Writes a message.
     pub fn write(&self, msg: W) {
         let mut events = self.events.lock().unwrap();
-        events.push_back(Event::Write(msg));
+        events.push_back(OutboundEvent::Write(msg));
     }
 
     /// Writes an Error exception from one of its outbound operations.
     pub fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
         let mut events = self.events.lock().unwrap();
-        events.push_back(Event::WriteException(err));
+        events.push_back(OutboundEvent::WriteException(err));
     }
 
     /// Writes a close event.
     pub fn close(&self) {
         let mut events = self.events.lock().unwrap();
-        events.push_back(Event::Close);
+        events.push_back(OutboundEvent::Close);
     }
 
     /// Polls earliest timeout (eto) in its inbound operations.
@@ -465,42 +459,30 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
         internal.poll_timeout(eto);
     }
 
-    /// Polls an event.
-    pub fn poll_event(&self) -> Option<Event<R, W>> {
-        let mut events = self.events.lock().unwrap();
-        events.pop_front()
-    }
-
     /// Handles a timeout event.
     pub fn handle_timeout(&self, now: Instant) {
         let internal = self.internal.lock().unwrap();
         internal.read_timeout(now);
     }
 
+    /// Polls an event.
+    pub fn poll_event(&self) -> Option<OutboundEvent<W>> {
+        let mut events = self.events.lock().unwrap();
+        events.pop_front()
+    }
+
     /// Handles an event.
-    pub fn handle_event(&self, evt: Event<R, W>) {
+    pub fn handle_event(&self, evt: OutboundEvent<W>) {
         match evt {
-            Event::Read(msg) => {
-                let internal = self.internal.lock().unwrap();
-                internal.read(msg);
-            }
-            Event::ReadException(err) => {
-                let internal = self.internal.lock().unwrap();
-                internal.read_exception(err);
-            }
-            Event::ReadEof => {
-                let internal = self.internal.lock().unwrap();
-                internal.read_eof();
-            }
-            Event::Write(msg) => {
+            OutboundEvent::Write(msg) => {
                 let internal = self.internal.lock().unwrap();
                 internal.write(msg);
             }
-            Event::WriteException(err) => {
+            OutboundEvent::WriteException(err) => {
                 let internal = self.internal.lock().unwrap();
                 internal.write_exception(err);
             }
-            Event::Close => {
+            OutboundEvent::Close => {
                 let internal = self.internal.lock().unwrap();
                 internal.close();
             }

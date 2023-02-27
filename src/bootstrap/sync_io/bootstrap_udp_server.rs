@@ -1,17 +1,20 @@
 use bytes::BytesMut;
 use log::{trace, warn};
+use mio::net::UdpSocket;
+use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio_extras::{
+    channel::{channel, Receiver, Sender},
+    timer::Builder,
+};
 use std::{
-    io::{Error, ErrorKind},
-    net::{ToSocketAddrs, UdpSocket},
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex,
-    },
+    io::Error,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 
-use crate::bootstrap::{PipelineFactoryFn, MIN_DURATION_IN_MILLIS};
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
@@ -47,7 +50,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
     }
 
     /// Binds local address and port
-    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+    pub fn bind(&mut self, addr: &SocketAddr) -> Result<(), Error> {
         let socket = Arc::new(UdpSocket::bind(addr)?);
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
@@ -70,76 +73,113 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
         }
 
         thread::spawn(move || {
+            const SOCKET_WT_TOKEN: Token = Token(0);
+            const SOCKET_RD_TOKEN: Token = Token(1);
+            const CLOSE_RX_TOKEN: Token = Token(2);
+            const TIMEOUT_TOKEN: Token = Token(3);
+            const OUTBOUND_EVENT_TOKEN: Token = Token(4);
+
+            let mut timer = Builder::default().build::<()>();
+
+            let poll = Poll::new()?;
+
+            poll.register(
+                &receiver,
+                SOCKET_WT_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+            poll.register(
+                &socket_rd,
+                SOCKET_RD_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+            poll.register(
+                &close_rx,
+                CLOSE_RX_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+            poll.register(&timer, TIMEOUT_TOKEN, Ready::readable(), PollOpt::edge())?;
+
+            let mut events = Events::with_capacity(128);
+
             let mut buf = vec![0u8; 8196];
 
             pipeline.transport_active();
-            while close_rx.try_recv().is_err() {
-                if let Ok(transmit) = receiver.try_recv() {
-                    if let Some(peer_addr) = transmit.transport.peer_addr {
-                        match socket_wr.send_to(&transmit.message, peer_addr) {
-                            Ok(n) => {
-                                trace!("socket write {} bytes", n);
-                                continue;
-                            }
-                            Err(err) => {
-                                warn!("socket write error {}", err);
-                                break;
-                            }
-                        }
-                    } else {
-                        trace!("socket write error due to none peer_addr");
-                        continue;
-                    }
-                }
-
-                if let Some(evt) = pipeline.poll_event() {
-                    pipeline.handle_event(evt);
-                    continue;
-                }
-
-                // Default timeout in case no activity in order to gracefully shutdown and transmit/events handling
-                let mut eto = Instant::now() + Duration::from_millis(MIN_DURATION_IN_MILLIS);
+            'outer: loop {
+                let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto);
 
-                let timeout = eto
+                let delay_from_now = eto
                     .checked_duration_since(Instant::now())
                     .unwrap_or(Duration::from_secs(0));
 
-                if timeout.is_zero() {
+                if delay_from_now.is_zero() {
                     pipeline.handle_timeout(Instant::now());
                     continue;
                 }
 
-                socket_rd.set_read_timeout(Some(timeout))?;
-                match socket_rd.recv_from(&mut buf) {
-                    Ok((n, peer_addr)) => {
-                        if n == 0 {
-                            pipeline.read_eof();
-                            break;
-                        }
+                let _timeout = timer.set_timeout(delay_from_now, ());
 
-                        trace!("socket read {} bytes", n);
-                        pipeline.read(TaggedBytesMut {
-                            now: Instant::now(),
-                            transport: TransportContext {
-                                local_addr,
-                                peer_addr: Some(peer_addr),
-                                ecn: None,
-                            },
-                            message: BytesMut::from(&buf[..n]),
-                        });
-                    }
-                    Err(err) => match err.kind() {
-                        // Expected error for set_read_timeout(). One for windows, one for the rest.
-                        ErrorKind::WouldBlock | ErrorKind::TimedOut => {
+                poll.poll(&mut events, None)?;
+                for event in events.iter() {
+                    match event.token() {
+                        SOCKET_WT_TOKEN => {
+                            if let Ok(transmit) = receiver.try_recv() {
+                                if let Some(peer_addr) = transmit.transport.peer_addr {
+                                    match socket_wr.send_to(&transmit.message, &peer_addr) {
+                                        Ok(n) => {
+                                            trace!("socket write {} bytes", n);
+                                        }
+                                        Err(err) => {
+                                            warn!("socket write error {}", err);
+                                            break 'outer;
+                                        }
+                                    }
+                                } else {
+                                    trace!("socket write error due to none peer_addr");
+                                }
+                            }
+                        }
+                        SOCKET_RD_TOKEN => match socket_rd.recv_from(&mut buf) {
+                            Ok((n, peer_addr)) => {
+                                if n == 0 {
+                                    pipeline.read_eof();
+                                    break 'outer;
+                                }
+
+                                trace!("socket read {} bytes", n);
+                                pipeline.read(TaggedBytesMut {
+                                    now: Instant::now(),
+                                    transport: TransportContext {
+                                        local_addr,
+                                        peer_addr: Some(peer_addr),
+                                        ecn: None,
+                                    },
+                                    message: BytesMut::from(&buf[..n]),
+                                });
+                            }
+                            Err(err) => {
+                                warn!("socket read error {}", err);
+                                break 'outer;
+                            }
+                        },
+                        CLOSE_RX_TOKEN => {
+                            let _ = close_rx.try_recv();
+                            break 'outer;
+                        }
+                        TIMEOUT_TOKEN => {
                             pipeline.handle_timeout(Instant::now());
-                            continue;
                         }
-                        _ => {
-                            warn!("socket read error {}", err);
-                            break;
+                        OUTBOUND_EVENT_TOKEN => {
+                            if let Some(evt) = pipeline.poll_event() {
+                                pipeline.handle_event(evt);
+                            }
                         }
-                    },
+                        _ => unreachable!(),
+                    }
                 }
             }
             pipeline.transport_inactive();
@@ -164,7 +204,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
         {
             let mut done_rx = self.done_rx.lock().unwrap();
             if let Some(done_rx) = done_rx.take() {
-                let _ = done_rx.recv();
+                let _ = done_rx.try_recv(); //TODO: Loop until recv?
             }
         }
     }

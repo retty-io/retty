@@ -1,5 +1,7 @@
 use clap::Parser;
-use std::{io::Write, str::FromStr, sync::mpsc::Sender, time::Instant};
+use mio_extras::channel::Sender;
+use std::net::SocketAddr;
+use std::{io::Write, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapUdpServer;
 use retty::channel::{
@@ -136,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
         pipeline.finalize()
     }));
 
-    bootstrap.bind(format!("{}:{}", host, port))?;
+    bootstrap.bind(&SocketAddr::from_str(&format!("{}:{}", host, port))?)?;
 
     println!("Press ctrl-c to stop");
     tokio::select! {
