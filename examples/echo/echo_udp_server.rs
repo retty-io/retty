@@ -175,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
                 let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = TaggedEchoHandler::new(Duration::from_secs(5));
+                let echo_handler = TaggedEchoHandler::new(Duration::from_secs(10));
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;

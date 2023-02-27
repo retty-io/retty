@@ -102,6 +102,12 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
                 PollOpt::edge(),
             )?;
             poll.register(&timer, TIMEOUT_TOKEN, Ready::readable(), PollOpt::edge())?;
+            poll.register(
+                &pipeline,
+                OUTBOUND_EVENT_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
 
             let mut events = Events::with_capacity(128);
 

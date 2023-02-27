@@ -1,3 +1,5 @@
+use mio::event::Evented;
+use mio::{Poll, PollOpt, Ready, Registration, SetReadiness, Token};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
@@ -312,6 +314,8 @@ pub enum OutboundEvent<W> {
 pub struct Pipeline<R, W> {
     events: Mutex<VecDeque<OutboundEvent<W>>>,
     internal: Mutex<PipelineInternal<R, W>>,
+    registration: Registration,
+    set_readiness: SetReadiness,
 }
 
 impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Default for Pipeline<R, W> {
@@ -323,9 +327,12 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Default for Pipeline<R,
 impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
     /// Creates a new Pipeline
     pub fn new() -> Self {
+        let (registration, set_readiness) = Registration::new2();
         Self {
             events: Mutex::new(VecDeque::new()),
             internal: Mutex::new(PipelineInternal::new()),
+            registration,
+            set_readiness,
         }
     }
 
@@ -437,20 +444,29 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
 
     /// Writes a message.
     pub fn write(&self, msg: W) {
-        let mut events = self.events.lock().unwrap();
-        events.push_back(OutboundEvent::Write(msg));
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push_back(OutboundEvent::Write(msg));
+        }
+        let _ = self.set_readiness.set_readiness(Ready::readable());
     }
 
     /// Writes an Error exception from one of its outbound operations.
     pub fn write_exception(&self, err: Box<dyn Error + Send + Sync>) {
-        let mut events = self.events.lock().unwrap();
-        events.push_back(OutboundEvent::WriteException(err));
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push_back(OutboundEvent::WriteException(err));
+        }
+        let _ = self.set_readiness.set_readiness(Ready::readable());
     }
 
     /// Writes a close event.
     pub fn close(&self) {
-        let mut events = self.events.lock().unwrap();
-        events.push_back(OutboundEvent::Close);
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push_back(OutboundEvent::Close);
+        }
+        let _ = self.set_readiness.set_readiness(Ready::readable());
     }
 
     /// Polls earliest timeout (eto) in its inbound operations.
@@ -487,5 +503,31 @@ impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Pipeline<R, W> {
                 internal.close();
             }
         }
+    }
+}
+
+impl<R: Send + Sync + 'static, W: Send + Sync + 'static> Evented for Pipeline<R, W> {
+    fn register(
+        &self,
+        poll: &Poll,
+        token: Token,
+        interest: Ready,
+        opts: PollOpt,
+    ) -> std::io::Result<()> {
+        self.registration.register(poll, token, interest, opts)
+    }
+
+    fn reregister(
+        &self,
+        poll: &Poll,
+        token: Token,
+        interest: Ready,
+        opts: PollOpt,
+    ) -> std::io::Result<()> {
+        self.registration.reregister(poll, token, interest, opts)
+    }
+
+    fn deregister(&self, poll: &Poll) -> std::io::Result<()> {
+        poll.deregister(&self.registration)
     }
 }
