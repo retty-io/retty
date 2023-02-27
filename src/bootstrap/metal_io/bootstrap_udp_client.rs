@@ -139,9 +139,10 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                 if delay_from_now.is_zero() {
                     pipeline.handle_timeout(Instant::now());
                     continue;
-                } else {
-                    timer.set_timeout(delay_from_now, ());
                 }
+
+                let timeout = timer.set_timeout(delay_from_now, ());
+                let _timeout = super::TimeoutGuard::new(&mut timer, timeout);
 
                 poll.poll(&mut events, None)?;
                 for event in events.iter() {

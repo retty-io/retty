@@ -1,3 +1,4 @@
+use mio_extras::timer::{Timeout, Timer};
 use std::{
     io,
     net::{SocketAddr, ToSocketAddrs},
@@ -31,4 +32,21 @@ where
             "could not resolve to any addresses",
         )
     }))
+}
+
+struct TimeoutGuard<'a, T> {
+    timer: &'a mut Timer<T>,
+    timeout: Timeout,
+}
+
+impl<'a, T> TimeoutGuard<'a, T> {
+    fn new(timer: &'a mut Timer<T>, timeout: Timeout) -> Self {
+        Self { timer, timeout }
+    }
+}
+
+impl<'a, T> Drop for TimeoutGuard<'a, T> {
+    fn drop(&mut self) {
+        let _ = self.timer.cancel_timeout(&self.timeout);
+    }
 }
