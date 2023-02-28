@@ -4,12 +4,12 @@ use std::{
     net::{SocketAddr, ToSocketAddrs},
 };
 
-//pub(crate) mod bootstrap_tcp_client;
-//pub(crate) mod bootstrap_tcp_server;
-pub(crate) mod bootstrap_udp_client;
-pub(crate) mod bootstrap_udp_server;
-//pub(crate) mod bootstrap_udp_ecn_client;
-//pub(crate) mod bootstrap_udp_ecn_server;
+//pub(crate) mod bootstrap_client_tcp;
+//pub(crate) mod bootstrap_server_tcp;
+pub(crate) mod bootstrap_client_udp;
+pub(crate) mod bootstrap_server_udp;
+//pub(crate) mod bootstrap_client_udp_ecn;
+//pub(crate) mod bootstrap_server_udp_ecn;
 
 fn each_addr<A: ToSocketAddrs, F, T>(addr: A, mut f: F) -> io::Result<T>
 where

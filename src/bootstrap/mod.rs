@@ -23,10 +23,10 @@ pub use self::async_io::{
 pub(crate) mod metal_io;
 #[cfg(feature = "metal-io")]
 pub use metal_io::{
-    bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
+    bootstrap_client_udp::BootstrapClientUdp, bootstrap_server_udp::BootstrapServerUdp,
 };
 
-/*bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
+/*bootstrap_client_tcp::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
 bootstrap_udp_ecn_client::BootstrapUdpEcnClient,
 bootstrap_udp_ecn_server::BootstrapUdpEcnServer*/
 

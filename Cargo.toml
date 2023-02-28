@@ -39,52 +39,52 @@ clap = { version = "4.1.4", features = ["derive"] }
 anyhow = "1.0.69"
 
 [[example]]
-name = "echo_tcp_server"
-path = "examples/echo/echo_tcp_server.rs"
+name = "aio_echo_tcp_server"
+path = "examples/async_io/echo/echo_tcp_server.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "echo_tcp_client"
-path = "examples/echo/echo_tcp_client.rs"
+name = "aio_echo_tcp_client"
+path = "examples/async_io/echo/echo_tcp_client.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "echo_udp_server"
-path = "examples/echo/echo_udp_server.rs"
+name = "aio_echo_udp_server"
+path = "examples/async_io/echo/echo_udp_server.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "echo_udp_client"
-path = "examples/echo/echo_udp_client.rs"
+name = "aio_echo_udp_client"
+path = "examples/async_io/echo/echo_udp_client.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "chat_tcp_client"
-path = "examples/chat/chat_tcp_client.rs"
+name = "aio_chat_tcp_client"
+path = "examples/async_io/chat/chat_tcp_client.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "chat_tcp_server"
-path = "examples/chat/chat_tcp_server.rs"
+name = "aio_chat_tcp_server"
+path = "examples/async_io/chat/chat_tcp_server.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "chat_udp_ecn_client"
-path = "examples/chat/chat_udp_ecn_client.rs"
+name = "aio_chat_udp_ecn_client"
+path = "examples/async_io/chat/chat_udp_ecn_client.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "chat_udp_ecn_server"
-path = "examples/chat/chat_udp_ecn_server.rs"
+name = "aio_chat_udp_ecn_server"
+path = "examples/async_io/chat/chat_udp_ecn_server.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "mio_udp_server"
-path = "examples/mio/mio_udp_server.rs"
+name = "mio_echo_server_udp"
+path = "examples/metal_io/echo/echo_server_udp.rs"
 required-features = ["metal-io"]
 
 [[example]]
-name = "mio_udp_client"
-path = "examples/mio/mio_udp_client.rs"
+name = "mio_echo_client_udp"
+path = "examples/metal_io/echo/echo_client_udp.rs"
 required-features = ["metal-io"]
 

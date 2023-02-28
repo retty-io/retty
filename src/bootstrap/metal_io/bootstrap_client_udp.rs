@@ -15,33 +15,35 @@ use std::{
 };
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
-use crate::channel::InboundPipeline;
+use crate::channel::{InboundPipeline, OutboundPipeline};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
-/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
-pub struct BootstrapUdpServer<W> {
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
+pub struct BootstrapClientUdp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
+    socket: Option<Arc<UdpSocket>>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> Default for BootstrapUdpServer<W> {
+impl<W: Send + Sync + 'static> Default for BootstrapClientUdp<W> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
-    /// Creates a new BootstrapUdpServer
+impl<W: Send + Sync + 'static> BootstrapClientUdp<W> {
+    /// Creates a new BootstrapClientUdp
     pub fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
+            socket: None,
             close_tx: Arc::new(Mutex::new(None)),
             done_rx: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapUdpServer::bind].
+    /// Creates pipeline instances from when calling [BootstrapClientUdp::connect].
     pub fn pipeline(
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
@@ -53,6 +55,18 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
     /// Binds local address and port
     pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
         let socket = Arc::new(super::each_addr(addr, UdpSocket::bind)?);
+        self.socket = Some(socket);
+        Ok(())
+    }
+
+    /// Connects to the remote peer
+    pub fn connect<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+    ) -> Result<Arc<dyn OutboundPipeline<W>>, Error> {
+        let socket = Arc::clone(self.socket.as_ref().unwrap());
+        super::each_addr(addr, |addr| socket.connect(*addr))?;
+
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
@@ -60,6 +74,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
         let pipeline = (pipeline_factory_fn)(sender);
 
         let local_addr = socket_rd.local_addr()?;
+        let pipeline_wr = Arc::clone(&pipeline);
 
         let (close_tx, close_rx) = channel();
         {
@@ -196,10 +211,10 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
             Ok::<(), Error>(())
         });
 
-        Ok(())
+        Ok(pipeline_wr)
     }
 
-    /// Gracefully stop the server
+    /// Gracefully stop the client
     pub fn stop(&self) {
         {
             let mut close_tx = self.close_tx.lock().unwrap();
