@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
-use retty::bootstrap::BootstrapUdpEcnServer;
+use retty::bootstrap::BootstrapServerUdpEcn;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -156,10 +156,10 @@ impl Handler for ChatHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Chat UDP Server with ECN")]
+#[command(name = "Chat Server UDP with ECN")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of chat udp server with ECN", long_about = None)]
+#[command(about = "An example of chat server udp with ECN", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -202,7 +202,7 @@ async fn main() -> anyhow::Result<()> {
     // client connection.
     let state = Arc::new(Mutex::new(Shared::new()));
 
-    let mut bootstrap = BootstrapUdpEcnServer::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapServerUdpEcn::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             let state = state.clone();

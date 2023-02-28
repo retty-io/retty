@@ -1,77 +1,81 @@
 use async_trait::async_trait;
-use bytes::BytesMut;
 use clap::Parser;
-use std::error::Error;
-use std::io::stdin;
 use std::io::Write;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use retty::bootstrap::BootstrapTcpClient;
+use retty::bootstrap::BootstrapServerUdp;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
 use retty::codec::{
-    byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
-    string_codec::StringCodec,
+    byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
+    string_codec::{TaggedString, TaggedStringCodec},
 };
 use retty::runtime::default_runtime;
-use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
+use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct EchoDecoder {
+struct TaggedEchoDecoder {
     interval: Duration,
     timeout: Instant,
+    last_transport: Option<TransportContext>,
 }
-struct EchoEncoder;
-struct EchoHandler {
-    decoder: EchoDecoder,
-    encoder: EchoEncoder,
+struct TaggedEchoEncoder;
+struct TaggedEchoHandler {
+    decoder: TaggedEchoDecoder,
+    encoder: TaggedEchoEncoder,
 }
 
-impl EchoHandler {
+impl TaggedEchoHandler {
     fn new(interval: Duration) -> Self {
-        EchoHandler {
-            decoder: EchoDecoder {
+        TaggedEchoHandler {
+            decoder: TaggedEchoDecoder {
                 timeout: Instant::now() + interval,
                 interval,
+                last_transport: None,
             },
-            encoder: EchoEncoder,
+            encoder: TaggedEchoEncoder,
         }
     }
 }
 
 #[async_trait]
-impl InboundHandler for EchoDecoder {
-    type Rin = String;
+impl InboundHandler for TaggedEchoDecoder {
+    type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("received back: {}", msg);
-    }
-    async fn read_exception(
-        &mut self,
-        ctx: &InboundContext<Self::Rin, Self::Rout>,
-        err: Box<dyn Error + Send + Sync>,
-    ) {
-        println!("received exception: {}", err);
-        ctx.fire_close().await;
-    }
-    async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
-        println!("EOF received :(");
-        ctx.fire_close().await;
+    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+        println!(
+            "handling {} from {:?}",
+            msg.message, msg.transport.peer_addr
+        );
+        if msg.message == "bye" {
+            self.last_transport.take();
+        } else {
+            self.last_transport = Some(msg.transport);
+            ctx.fire_write(TaggedString {
+                now: Instant::now(),
+                transport: msg.transport,
+                message: format!("{}\r\n", msg.message),
+            })
+            .await;
+        }
     }
 
     async fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if now >= self.timeout {
-            println!("EchoHandler timeout at: {:?}", self.timeout);
+        if self.last_transport.is_some() && self.timeout <= now {
+            println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
             self.timeout = now + self.interval;
-            ctx.fire_write(format!(
-                "Keep-alive message: next one at {:?}\r\n",
-                self.timeout
-            ))
-            .await;
+            if let Some(transport) = &self.last_transport {
+                ctx.fire_write(TaggedString {
+                    now: Instant::now(),
+                    transport: *transport,
+                    message: format!("Keep-alive message: next one at {:?}\r\n", self.timeout),
+                })
+                .await;
+            }
         }
 
         //last handler, no need to fire_handle_timeout
@@ -81,8 +85,8 @@ impl InboundHandler for EchoDecoder {
         _ctx: &InboundContext<Self::Rin, Self::Rout>,
         eto: &mut Instant,
     ) {
-        if self.timeout < *eto {
-            *eto = self.timeout
+        if self.last_transport.is_some() && self.timeout < *eto {
+            *eto = self.timeout;
         }
 
         //last handler, no need to fire_poll_timeout
@@ -90,8 +94,8 @@ impl InboundHandler for EchoDecoder {
 }
 
 #[async_trait]
-impl OutboundHandler for EchoEncoder {
-    type Win = String;
+impl OutboundHandler for TaggedEchoEncoder {
+    type Win = TaggedString;
     type Wout = Self::Win;
 
     async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
@@ -99,14 +103,14 @@ impl OutboundHandler for EchoEncoder {
     }
 }
 
-impl Handler for EchoHandler {
-    type Rin = String;
+impl Handler for TaggedEchoHandler {
+    type Rin = TaggedString;
     type Rout = Self::Rin;
-    type Win = String;
+    type Win = TaggedString;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "EchoHandler"
+        "TaggedEchoHandler"
     }
 
     fn split(
@@ -120,10 +124,10 @@ impl Handler for EchoHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Echo TCP Client")]
+#[command(name = "Echo Server UDP")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of echo tcp client", long_about = None)]
+#[command(about = "An example of echo server udp", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -158,20 +162,20 @@ async fn main() -> anyhow::Result<()> {
             .init();
     }
 
-    println!("Connecting {}:{}...", host, port);
+    println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapTcpClient::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapServerUdp::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
-                let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                let async_transport_handler = AsyncTransportTcp::new(sock);
-                let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+                let async_transport_handler = AsyncTransportUdp::new(sock);
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
-                let string_codec_handler = StringCodec::new();
-                let echo_handler = EchoHandler::new(Duration::from_secs(5));
+                let string_codec_handler = TaggedStringCodec::new();
+                let echo_handler = TaggedEchoHandler::new(Duration::from_secs(10));
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;
@@ -182,25 +186,14 @@ async fn main() -> anyhow::Result<()> {
         },
     ));
 
-    let pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
+    bootstrap.bind(format!("{}:{}", host, port)).await?;
 
-    println!("Enter bye to stop");
-    let mut buffer = String::new();
-    while stdin().read_line(&mut buffer).is_ok() {
-        match buffer.trim_end() {
-            "" => break,
-            line => {
-                if line == "bye" {
-                    pipeline.close().await;
-                    break;
-                }
-                pipeline.write(format!("{}\r\n", line)).await;
-            }
-        };
-        buffer.clear();
-    }
-
-    bootstrap.stop().await;
+    println!("Press ctrl-c to stop");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            bootstrap.stop().await;
+        }
+    };
 
     Ok(())
 }

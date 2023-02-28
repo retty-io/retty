@@ -1,5 +1,5 @@
 use crate::bootstrap::{
-    BootstrapClientUdp, BootstrapServerUdp, BootstrapTcpClient, BootstrapTcpServer,
+    BootstrapClientTcp, BootstrapClientUdp, BootstrapServerTcp, BootstrapServerUdp,
 };
 use crate::channel::Pipeline;
 use crate::codec::string_codec::{StringCodec, TaggedString, TaggedStringCodec};
@@ -11,8 +11,8 @@ use bytes::BytesMut;
 #[tokio::test]
 async fn bootstrap_basic() -> Result<()> {
     let rt = default_runtime().unwrap();
-    let _tcp_server = BootstrapTcpServer::<String>::new(rt.clone());
-    let _tcp_client = BootstrapTcpClient::<String>::new(rt.clone());
+    let _tcp_server = BootstrapServerTcp::<String>::new(rt.clone());
+    let _tcp_client = BootstrapClientTcp::<String>::new(rt.clone());
     let _udp_server = BootstrapServerUdp::<TaggedString>::new(rt.clone());
     let _udp_client = BootstrapClientUdp::<TaggedString>::new(rt.clone());
 
@@ -21,7 +21,7 @@ async fn bootstrap_basic() -> Result<()> {
 
 #[tokio::test]
 async fn bootstrap_tcp_server_with_pipeline() -> Result<()> {
-    let mut bootstrap = BootstrapTcpServer::<String>::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapServerTcp::<String>::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |_sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
@@ -59,7 +59,7 @@ async fn bootstrap_udp_server_with_pipeline() -> Result<()> {
 
 #[tokio::test]
 async fn bootstrap_tcp_client_with_pipeline() -> Result<()> {
-    let mut bootstrap = BootstrapTcpClient::<String>::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapClientTcp::<String>::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |_sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {

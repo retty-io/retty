@@ -39,43 +39,43 @@ clap = { version = "4.1.4", features = ["derive"] }
 anyhow = "1.0.69"
 
 [[example]]
-name = "aio_echo_tcp_server"
-path = "examples/async_io/echo/echo_tcp_server.rs"
+name = "aio_echo_server_tcp"
+path = "examples/async_io/echo/echo_server_tcp.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_echo_tcp_client"
-path = "examples/async_io/echo/echo_tcp_client.rs"
+name = "aio_echo_client_tcp"
+path = "examples/async_io/echo/echo_client_tcp.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_echo_udp_server"
-path = "examples/async_io/echo/echo_udp_server.rs"
+name = "aio_echo_server_udp"
+path = "examples/async_io/echo/echo_server_udp.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_echo_udp_client"
-path = "examples/async_io/echo/echo_udp_client.rs"
+name = "aio_echo_client_udp"
+path = "examples/async_io/echo/echo_client_udp.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_chat_tcp_client"
-path = "examples/async_io/chat/chat_tcp_client.rs"
+name = "aio_chat_client_tcp"
+path = "examples/async_io/chat/chat_client_tcp.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_chat_tcp_server"
-path = "examples/async_io/chat/chat_tcp_server.rs"
+name = "aio_chat_server_tcp"
+path = "examples/async_io/chat/chat_server_tcp.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_chat_udp_ecn_client"
-path = "examples/async_io/chat/chat_udp_ecn_client.rs"
+name = "aio_chat_client_udp_ecn"
+path = "examples/async_io/chat/chat_client_udp_ecn.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]
-name = "aio_chat_udp_ecn_server"
-path = "examples/async_io/chat/chat_udp_ecn_server.rs"
+name = "aio_chat_server_udp_ecn"
+path = "examples/async_io/chat/chat_server_udp_ecn.rs"
 required-features = ["runtime-tokio"]
 
 [[example]]

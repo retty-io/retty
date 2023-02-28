@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
 
-use retty::bootstrap::BootstrapUdpEcnClient;
+use retty::bootstrap::BootstrapClientUdpEcn;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -82,10 +82,10 @@ impl Handler for ChatHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Chat UDP Client with ECN")]
+#[command(name = "Chat Client UDP with ECN")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of chat upd client with ECN", long_about = None)]
+#[command(about = "An example of chat client udp with ECN", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -128,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         ecn: None,
     };
 
-    let mut bootstrap = BootstrapUdpEcnClient::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapClientUdpEcn::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {

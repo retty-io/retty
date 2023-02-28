@@ -90,7 +90,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
                                     if let Some(t) = &*tx {
                                         t.subscribe()
                                     } else {
-                                        warn!("BootstrapTcpServer is closed");
+                                        warn!("BootstrapServerTcp is closed");
                                         break
                                     }
                                 };

@@ -1,10 +1,13 @@
 use async_trait::async_trait;
 use bytes::BytesMut;
 use clap::Parser;
+use std::collections::HashMap;
 use std::io::Write;
+use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 
-use retty::bootstrap::BootstrapTcpServer;
+use retty::bootstrap::BootstrapServerTcp;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -12,43 +15,87 @@ use retty::codec::{
     byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
     string_codec::StringCodec,
 };
-use retty::runtime::default_runtime;
+use retty::runtime::{default_runtime, sync::Mutex};
 use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct EchoDecoder;
-struct EchoEncoder;
-struct EchoHandler {
-    decoder: EchoDecoder,
-    encoder: EchoEncoder,
+struct Shared {
+    peers: HashMap<SocketAddr, Arc<Pipeline<BytesMut, String>>>,
 }
 
-impl EchoHandler {
+impl Shared {
+    /// Create a new, empty, instance of `Shared`.
     fn new() -> Self {
-        EchoHandler {
-            decoder: EchoDecoder,
-            encoder: EchoEncoder,
+        Shared {
+            peers: HashMap::new(),
+        }
+    }
+
+    fn join(&mut self, peer: SocketAddr, pipeline: Arc<Pipeline<BytesMut, String>>) {
+        println!("{} joined", peer);
+        self.peers.insert(peer, pipeline);
+    }
+
+    fn leave(&mut self, peer: &SocketAddr) {
+        println!("{} left", peer);
+        self.peers.remove(peer);
+    }
+
+    /// Send message to every peer, except for the sender.
+    async fn broadcast(&mut self, sender: SocketAddr, message: String) {
+        print!("broadcast message: {}", message);
+        for (peer, pipeline) in self.peers.iter() {
+            if *peer != sender {
+                let _ = pipeline.write(message.clone()).await;
+            }
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+struct ChatDecoder {
+    peer: SocketAddr,
+    state: Arc<Mutex<Shared>>,
+}
+struct ChatEncoder;
+struct ChatHandler {
+    decoder: ChatDecoder,
+    encoder: ChatEncoder,
+}
+
+impl ChatHandler {
+    fn new(peer: SocketAddr, state: Arc<Mutex<Shared>>) -> Self {
+        ChatHandler {
+            decoder: ChatDecoder { peer, state },
+            encoder: ChatEncoder,
         }
     }
 }
 
 #[async_trait]
-impl InboundHandler for EchoDecoder {
+impl InboundHandler for ChatDecoder {
     type Rin = String;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("handling {}", msg);
-        ctx.fire_write(format!("{}\r\n", msg)).await;
+    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+        println!("received: {}", msg);
+
+        let mut s = self.state.lock().await;
+        s.broadcast(self.peer, format!("{}\r\n", msg)).await;
     }
     async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
+        // first leave itself from state, otherwise, it may still receive message from broadcast,
+        // which may cause data racing.
+        {
+            let mut s = self.state.lock().await;
+            s.leave(&self.peer);
+        }
         ctx.fire_close().await;
     }
 }
 
 #[async_trait]
-impl OutboundHandler for EchoEncoder {
+impl OutboundHandler for ChatEncoder {
     type Win = String;
     type Wout = Self::Win;
 
@@ -57,14 +104,14 @@ impl OutboundHandler for EchoEncoder {
     }
 }
 
-impl Handler for EchoHandler {
+impl Handler for ChatHandler {
     type Rin = String;
     type Rout = Self::Rin;
     type Win = String;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "EchoHandler"
+        "ChatHandler"
     }
 
     fn split(
@@ -78,10 +125,10 @@ impl Handler for EchoHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Echo TCP Server")]
+#[command(name = "Chat Server TCP")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of echo tcp server", long_about = None)]
+#[command(about = "An example of chat server tcp", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -118,24 +165,37 @@ async fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapTcpServer::new(default_runtime().unwrap());
+    // Create the shared state. This is how all the peers communicate.
+    // The server task will hold a handle to this. For every new client, the
+    // `state` handle is cloned and passed into the handler that processes the
+    // client connection.
+    let state = Arc::new(Mutex::new(Shared::new()));
+
+    let mut bootstrap = BootstrapServerTcp::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
+            let state = state.clone();
             Box::pin(async move {
                 let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
+                let peer = sock.peer_addr().unwrap();
+                let chat_handler = ChatHandler::new(peer, state.clone());
                 let async_transport_handler = AsyncTransportTcp::new(sock);
                 let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
                 let string_codec_handler = StringCodec::new();
-                let echo_handler = EchoHandler::new();
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
-                pipeline.add_back(echo_handler).await;
-                pipeline.finalize().await
+                pipeline.add_back(chat_handler).await;
+                let pipeline = pipeline.finalize().await;
+                {
+                    let mut s = state.lock().await;
+                    s.join(peer, pipeline.clone());
+                }
+                pipeline
             })
         },
     ));

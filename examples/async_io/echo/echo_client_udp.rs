@@ -1,10 +1,12 @@
 use async_trait::async_trait;
 use clap::Parser;
+use std::io::stdin;
 use std::io::Write;
+use std::net::SocketAddr;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use retty::bootstrap::BootstrapServerUdp;
+use retty::bootstrap::BootstrapClientUdp;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -17,11 +19,7 @@ use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TaggedBytesMut, T
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedEchoDecoder {
-    interval: Duration,
-    timeout: Instant,
-    last_transport: Option<TransportContext>,
-}
+struct TaggedEchoDecoder;
 struct TaggedEchoEncoder;
 struct TaggedEchoHandler {
     decoder: TaggedEchoDecoder,
@@ -29,13 +27,9 @@ struct TaggedEchoHandler {
 }
 
 impl TaggedEchoHandler {
-    fn new(interval: Duration) -> Self {
+    fn new() -> Self {
         TaggedEchoHandler {
-            decoder: TaggedEchoDecoder {
-                timeout: Instant::now() + interval,
-                interval,
-                last_transport: None,
-            },
+            decoder: TaggedEchoDecoder,
             encoder: TaggedEchoEncoder,
         }
     }
@@ -46,50 +40,11 @@ impl InboundHandler for TaggedEchoDecoder {
     type Rin = TaggedString;
     type Rout = Self::Rin;
 
-    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
-            "handling {} from {:?}",
+            "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
-        if msg.message == "bye" {
-            self.last_transport.take();
-        } else {
-            self.last_transport = Some(msg.transport);
-            ctx.fire_write(TaggedString {
-                now: Instant::now(),
-                transport: msg.transport,
-                message: format!("{}\r\n", msg.message),
-            })
-            .await;
-        }
-    }
-
-    async fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if self.last_transport.is_some() && self.timeout <= now {
-            println!("TaggedEchoHandler timeout at: {:?}", self.timeout);
-            self.timeout = now + self.interval;
-            if let Some(transport) = &self.last_transport {
-                ctx.fire_write(TaggedString {
-                    now: Instant::now(),
-                    transport: *transport,
-                    message: format!("Keep-alive message: next one at {:?}\r\n", self.timeout),
-                })
-                .await;
-            }
-        }
-
-        //last handler, no need to fire_handle_timeout
-    }
-    async fn poll_timeout(
-        &mut self,
-        _ctx: &InboundContext<Self::Rin, Self::Rout>,
-        eto: &mut Instant,
-    ) {
-        if self.last_transport.is_some() && self.timeout < *eto {
-            *eto = self.timeout;
-        }
-
-        //last handler, no need to fire_poll_timeout
     }
 }
 
@@ -124,10 +79,10 @@ impl Handler for TaggedEchoHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Echo UDP Server")]
+#[command(name = "Echo Client UDP")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of echo udp server", long_about = None)]
+#[command(about = "An example of echo client udp", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -162,9 +117,15 @@ async fn main() -> anyhow::Result<()> {
             .init();
     }
 
-    println!("listening {}:{}...", host, port);
+    println!("Connecting {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapServerUdp::new(default_runtime().unwrap());
+    let transport = TransportContext {
+        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
+        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
+        ecn: None,
+    };
+
+    let mut bootstrap = BootstrapClientUdp::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
@@ -175,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
                 let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = TaggedEchoHandler::new(Duration::from_secs(10));
+                let echo_handler = TaggedEchoHandler::new();
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;
@@ -186,14 +147,35 @@ async fn main() -> anyhow::Result<()> {
         },
     ));
 
-    bootstrap.bind(format!("{}:{}", host, port)).await?;
+    bootstrap.bind(transport.local_addr).await?;
 
-    println!("Press ctrl-c to stop");
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            bootstrap.stop().await;
-        }
-    };
+    let pipeline = bootstrap
+        .connect(transport.peer_addr.as_ref().unwrap())
+        .await?;
+
+    println!("Enter bye to stop");
+    let mut buffer = String::new();
+    while stdin().read_line(&mut buffer).is_ok() {
+        match buffer.trim_end() {
+            "" => break,
+            line => {
+                pipeline
+                    .write(TaggedString {
+                        now: Instant::now(),
+                        transport,
+                        message: format!("{}\r\n", line),
+                    })
+                    .await;
+                if line == "bye" {
+                    pipeline.close().await;
+                    break;
+                }
+            }
+        };
+        buffer.clear();
+    }
+
+    bootstrap.stop().await;
 
     Ok(())
 }

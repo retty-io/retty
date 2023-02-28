@@ -1,56 +1,65 @@
 use async_trait::async_trait;
+use bytes::BytesMut;
 use clap::Parser;
+use std::error::Error;
 use std::io::stdin;
 use std::io::Write;
-use std::net::SocketAddr;
 use std::str::FromStr;
-use std::time::Instant;
 
-use retty::bootstrap::BootstrapClientUdp;
+use retty::bootstrap::BootstrapClientTcp;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
 use retty::codec::{
-    byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
-    string_codec::{TaggedString, TaggedStringCodec},
+    byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
+    string_codec::StringCodec,
 };
 use retty::runtime::default_runtime;
-use retty::transport::{AsyncTransportUdp, AsyncTransportWrite, TaggedBytesMut, TransportContext};
+use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct TaggedEchoDecoder;
-struct TaggedEchoEncoder;
-struct TaggedEchoHandler {
-    decoder: TaggedEchoDecoder,
-    encoder: TaggedEchoEncoder,
+struct ChatDecoder;
+struct ChatEncoder;
+struct ChatHandler {
+    decoder: ChatDecoder,
+    encoder: ChatEncoder,
 }
 
-impl TaggedEchoHandler {
+impl ChatHandler {
     fn new() -> Self {
-        TaggedEchoHandler {
-            decoder: TaggedEchoDecoder,
-            encoder: TaggedEchoEncoder,
+        ChatHandler {
+            decoder: ChatDecoder,
+            encoder: ChatEncoder,
         }
     }
 }
 
 #[async_trait]
-impl InboundHandler for TaggedEchoDecoder {
-    type Rin = TaggedString;
+impl InboundHandler for ChatDecoder {
+    type Rin = String;
     type Rout = Self::Rin;
 
     async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!(
-            "received back: {} from {:?}",
-            msg.message, msg.transport.peer_addr
-        );
+        println!("received: {}", msg);
+    }
+    async fn read_exception(
+        &mut self,
+        ctx: &InboundContext<Self::Rin, Self::Rout>,
+        err: Box<dyn Error + Send + Sync>,
+    ) {
+        println!("received exception: {}", err);
+        ctx.fire_close().await;
+    }
+    async fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
+        println!("EOF received :(");
+        ctx.fire_close().await;
     }
 }
 
 #[async_trait]
-impl OutboundHandler for TaggedEchoEncoder {
-    type Win = TaggedString;
+impl OutboundHandler for ChatEncoder {
+    type Win = String;
     type Wout = Self::Win;
 
     async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
@@ -58,14 +67,14 @@ impl OutboundHandler for TaggedEchoEncoder {
     }
 }
 
-impl Handler for TaggedEchoHandler {
-    type Rin = TaggedString;
+impl Handler for ChatHandler {
+    type Rin = String;
     type Rout = Self::Rin;
-    type Win = TaggedString;
+    type Win = String;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "TaggedEchoHandler"
+        "ChatHandler"
     }
 
     fn split(
@@ -79,10 +88,10 @@ impl Handler for TaggedEchoHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Echo UDP Client")]
+#[command(name = "Chat Client TCP")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of echo udp client", long_about = None)]
+#[command(about = "An example of chat client tcp", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -119,39 +128,29 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Connecting {}:{}...", host, port);
 
-    let transport = TransportContext {
-        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
-        ecn: None,
-    };
-
-    let mut bootstrap = BootstrapClientUdp::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapClientTcp::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
-                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
-                let async_transport_handler = AsyncTransportUdp::new(sock);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                let async_transport_handler = AsyncTransportTcp::new(sock);
+                let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = TaggedEchoHandler::new();
+                let string_codec_handler = StringCodec::new();
+                let chat_handler = ChatHandler::new();
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
-                pipeline.add_back(echo_handler).await;
+                pipeline.add_back(chat_handler).await;
                 pipeline.finalize().await
             })
         },
     ));
 
-    bootstrap.bind(transport.local_addr).await?;
-
-    let pipeline = bootstrap
-        .connect(transport.peer_addr.as_ref().unwrap())
-        .await?;
+    let pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
 
     println!("Enter bye to stop");
     let mut buffer = String::new();
@@ -159,17 +158,11 @@ async fn main() -> anyhow::Result<()> {
         match buffer.trim_end() {
             "" => break,
             line => {
-                pipeline
-                    .write(TaggedString {
-                        now: Instant::now(),
-                        transport,
-                        message: format!("{}\r\n", line),
-                    })
-                    .await;
                 if line == "bye" {
                     pipeline.close().await;
                     break;
                 }
+                pipeline.write(format!("{}\r\n", line)).await;
             }
         };
         buffer.clear();

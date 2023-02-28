@@ -5,8 +5,9 @@ use std::error::Error;
 use std::io::stdin;
 use std::io::Write;
 use std::str::FromStr;
+use std::time::{Duration, Instant};
 
-use retty::bootstrap::BootstrapTcpClient;
+use retty::bootstrap::BootstrapClientTcp;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -19,29 +20,35 @@ use retty::transport::{AsyncTransportTcp, AsyncTransportWrite};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct ChatDecoder;
-struct ChatEncoder;
-struct ChatHandler {
-    decoder: ChatDecoder,
-    encoder: ChatEncoder,
+struct EchoDecoder {
+    interval: Duration,
+    timeout: Instant,
+}
+struct EchoEncoder;
+struct EchoHandler {
+    decoder: EchoDecoder,
+    encoder: EchoEncoder,
 }
 
-impl ChatHandler {
-    fn new() -> Self {
-        ChatHandler {
-            decoder: ChatDecoder,
-            encoder: ChatEncoder,
+impl EchoHandler {
+    fn new(interval: Duration) -> Self {
+        EchoHandler {
+            decoder: EchoDecoder {
+                timeout: Instant::now() + interval,
+                interval,
+            },
+            encoder: EchoEncoder,
         }
     }
 }
 
 #[async_trait]
-impl InboundHandler for ChatDecoder {
+impl InboundHandler for EchoDecoder {
     type Rin = String;
     type Rout = Self::Rin;
 
     async fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("received: {}", msg);
+        println!("received back: {}", msg);
     }
     async fn read_exception(
         &mut self,
@@ -55,10 +62,35 @@ impl InboundHandler for ChatDecoder {
         println!("EOF received :(");
         ctx.fire_close().await;
     }
+
+    async fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        if now >= self.timeout {
+            println!("EchoHandler timeout at: {:?}", self.timeout);
+            self.timeout = now + self.interval;
+            ctx.fire_write(format!(
+                "Keep-alive message: next one at {:?}\r\n",
+                self.timeout
+            ))
+            .await;
+        }
+
+        //last handler, no need to fire_handle_timeout
+    }
+    async fn poll_timeout(
+        &mut self,
+        _ctx: &InboundContext<Self::Rin, Self::Rout>,
+        eto: &mut Instant,
+    ) {
+        if self.timeout < *eto {
+            *eto = self.timeout
+        }
+
+        //last handler, no need to fire_poll_timeout
+    }
 }
 
 #[async_trait]
-impl OutboundHandler for ChatEncoder {
+impl OutboundHandler for EchoEncoder {
     type Win = String;
     type Wout = Self::Win;
 
@@ -67,14 +99,14 @@ impl OutboundHandler for ChatEncoder {
     }
 }
 
-impl Handler for ChatHandler {
+impl Handler for EchoHandler {
     type Rin = String;
     type Rout = Self::Rin;
     type Win = String;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "ChatHandler"
+        "EchoHandler"
     }
 
     fn split(
@@ -88,10 +120,10 @@ impl Handler for ChatHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Chat TCP Client")]
+#[command(name = "Echo Client TCP")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of chat tcp client", long_about = None)]
+#[command(about = "An example of echo client tcp", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
@@ -128,7 +160,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Connecting {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapTcpClient::new(default_runtime().unwrap());
+    let mut bootstrap = BootstrapClientTcp::new(default_runtime().unwrap());
     bootstrap.pipeline(Box::new(
         move |sock: Box<dyn AsyncTransportWrite + Send + Sync>| {
             Box::pin(async move {
@@ -139,12 +171,12 @@ async fn main() -> anyhow::Result<()> {
                     LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
                 ));
                 let string_codec_handler = StringCodec::new();
-                let chat_handler = ChatHandler::new();
+                let echo_handler = EchoHandler::new(Duration::from_secs(5));
 
                 pipeline.add_back(async_transport_handler).await;
                 pipeline.add_back(line_based_frame_decoder_handler).await;
                 pipeline.add_back(string_codec_handler).await;
-                pipeline.add_back(chat_handler).await;
+                pipeline.add_back(echo_handler).await;
                 pipeline.finalize().await
             })
         },
