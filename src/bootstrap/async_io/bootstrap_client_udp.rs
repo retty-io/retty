@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
+use crate::channel::Pipeline;
 use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
     net::{ToSocketAddrs, UdpSocket},
@@ -13,26 +14,28 @@ use crate::runtime::{
 };
 use crate::transport::{AsyncTransportRead, TaggedBytesMut, TransportContext};
 
-/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
-pub struct BootstrapUdpServer<W> {
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
+pub struct BootstrapClientUdp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
+    socket: Option<Arc<UdpSocket>>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
-    /// Creates a new BootstrapUdpServer
+impl<W: Send + Sync + 'static> BootstrapClientUdp<W> {
+    /// Creates a new BootstrapClientUdp
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
             runtime,
+            socket: None,
             close_tx: Arc::new(Mutex::new(None)),
             done_rx: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapUdpServer::bind].
+    /// Creates pipeline instances from when calling [BootstrapClientUdp::connect].
     pub fn pipeline(
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
@@ -43,14 +46,21 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
 
     /// Binds local address and port
     pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), std::io::Error> {
-        let socket = Arc::new(UdpSocket::bind(addr).await?);
-        let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+        let socket = UdpSocket::bind(addr).await?;
+        self.socket = Some(Arc::new(socket));
+        Ok(())
+    }
 
+    /// Connects to the remote peer
+    pub async fn connect<A: ToSocketAddrs>(
+        &mut self,
+        addr: A,
+    ) -> Result<Arc<Pipeline<TaggedBytesMut, W>>, std::io::Error> {
+        let socket = Arc::clone(self.socket.as_ref().unwrap());
+        socket.connect(addr).await?;
         let (mut socket_rd, socket_wr) = (Arc::clone(&socket), socket);
-        let async_writer = Box::new(socket_wr);
-        let pipeline = (pipeline_factory_fn)(async_writer).await;
 
-        let local_addr = socket_rd.local_addr()?;
+        let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         #[allow(unused_mut)]
         let (close_tx, mut close_rx) = bounded(1);
@@ -66,6 +76,11 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
             *rx = Some(done_rx);
         }
 
+        let async_writer = Box::new(socket_wr);
+        let pipeline_wr = (pipeline_factory_fn)(async_writer).await;
+
+        let local_addr = socket_rd.local_addr()?;
+        let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];
 
@@ -122,10 +137,10 @@ impl<W: Send + Sync + 'static> BootstrapUdpServer<W> {
             pipeline.transport_inactive().await;
         }));
 
-        Ok(())
+        Ok(pipeline_wr)
     }
 
-    /// Gracefully stop the server
+    /// Gracefully stop the client
     pub async fn stop(&self) {
         {
             let mut tx = self.close_tx.lock().await;

@@ -4,26 +4,25 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
-use crate::channel::Pipeline;
 use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
-    net::{TcpStream, ToSocketAddrs},
+    net::{ToSocketAddrs, UdpSocket},
     sleep,
     sync::Mutex,
     Runtime,
 };
-use crate::transport::AsyncTransportRead;
+use crate::transport::{AsyncTransportRead, TaggedBytesMut, TransportContext};
 
-/// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
-pub struct BootstrapTcpClient<W> {
-    pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
+pub struct BootstrapServerUdp<W> {
+    pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
-    /// Creates a new BootstrapTcpClient
+impl<W: Send + Sync + 'static> BootstrapServerUdp<W> {
+    /// Creates a new BootstrapServerUdp
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -33,25 +32,25 @@ impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
-    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
+    /// Creates pipeline instances from when calling [BootstrapServerUdp::bind].
+    pub fn pipeline(
+        &mut self,
+        pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
+    ) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
-    /// Connects to the remote peer
-    pub async fn connect<A: ToSocketAddrs>(
-        &mut self,
-        addr: A,
-    ) -> Result<Arc<Pipeline<BytesMut, W>>, std::io::Error> {
-        let socket = TcpStream::connect(addr).await?;
-
-        #[cfg(feature = "runtime-tokio")]
-        let (mut socket_rd, socket_wr) = socket.into_split();
-        #[cfg(feature = "runtime-async-std")]
-        let (mut socket_rd, socket_wr) = (socket.clone(), socket);
-
+    /// Binds local address and port
+    pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), std::io::Error> {
+        let socket = Arc::new(UdpSocket::bind(addr).await?);
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+
+        let (mut socket_rd, socket_wr) = (Arc::clone(&socket), socket);
+        let async_writer = Box::new(socket_wr);
+        let pipeline = (pipeline_factory_fn)(async_writer).await;
+
+        let local_addr = socket_rd.local_addr()?;
 
         #[allow(unused_mut)]
         let (close_tx, mut close_rx) = bounded(1);
@@ -67,10 +66,6 @@ impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
             *rx = Some(done_rx);
         }
 
-        let async_writer = Box::new(socket_wr);
-        let pipeline_wr = (pipeline_factory_fn)(async_writer).await;
-
-        let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {
             let mut buf = vec![0u8; 8196];
 
@@ -97,14 +92,24 @@ impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
                     }
                     res = socket_rd.read(&mut buf) => {
                         match res {
-                            Ok((n,_)) => {
+                            Ok((n, peer_addr)) => {
                                 if n == 0 {
                                     pipeline.read_eof().await;
                                     break;
                                 }
 
                                 trace!("socket read {} bytes", n);
-                                pipeline.read(BytesMut::from(&buf[..n])).await;
+                                pipeline
+                                    .read(TaggedBytesMut {
+                                        now: Instant::now(),
+                                        transport: TransportContext {
+                                            local_addr,
+                                            peer_addr,
+                                            ecn: None,
+                                        },
+                                        message: BytesMut::from(&buf[..n]),
+                                    })
+                                    .await;
                             }
                             Err(err) => {
                                 warn!("socket read error {}", err);
@@ -117,11 +122,11 @@ impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
             pipeline.transport_inactive().await;
         }));
 
-        Ok(pipeline_wr)
+        Ok(())
     }
 
-    /// Gracefully stop the client
-    pub async fn stop(&mut self) {
+    /// Gracefully stop the server
+    pub async fn stop(&self) {
         {
             let mut tx = self.close_tx.lock().await;
             tx.take();

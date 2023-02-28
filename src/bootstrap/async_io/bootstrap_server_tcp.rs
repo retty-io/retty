@@ -15,15 +15,15 @@ use crate::runtime::{
 use crate::transport::AsyncTransportRead;
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
-pub struct BootstrapTcpServer<W> {
+pub struct BootstrapServerTcp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     wg: Arc<Mutex<Option<WaitGroup>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
-    /// Creates a new BootstrapTcpServer
+impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
+    /// Creates a new BootstrapServerTcp
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -33,7 +33,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapTcpServer::bind].
+    /// Creates pipeline instances from when calling [BootstrapServerTcp::bind].
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
@@ -100,7 +100,7 @@ impl<W: Send + Sync + 'static> BootstrapTcpServer<W> {
 
                                 let child_worker = child_wg.worker();
                                 runtime.spawn(Box::pin(async move {
-                                    BootstrapTcpServer::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx, child_worker)
+                                    BootstrapServerTcp::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx, child_worker)
                                         .await;
                                 }));
                             }

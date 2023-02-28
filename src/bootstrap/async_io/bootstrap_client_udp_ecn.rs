@@ -1,30 +1,34 @@
+use async_transport::{RecvMeta, BATCH_SIZE};
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    mem::MaybeUninit,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::Pipeline;
 use crate::runtime::{
     mpsc::{bounded, Receiver, Sender},
-    net::{ToSocketAddrs, UdpSocket},
+    net::ToSocketAddrs,
     sleep,
     sync::Mutex,
     Runtime,
 };
-use crate::transport::{AsyncTransportRead, TaggedBytesMut, TransportContext};
+use crate::transport::{AsyncTransportRead, TaggedBytesMut, TransportAddress, TransportContext};
 
-/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
-pub struct BootstrapUdpClient<W> {
+/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients with ECN information.
+pub struct BootstrapClientUdpEcn<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
-    socket: Option<Arc<UdpSocket>>,
+    socket: Option<Arc<async_transport::UdpSocket>>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
-    /// Creates a new BootstrapUdpClient
+impl<W: Send + Sync + 'static> BootstrapClientUdpEcn<W> {
+    /// Creates a new BootstrapClientUdpEcn
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -35,7 +39,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapUdpClient::connect].
+    /// Creates pipeline instances from when calling [BootstrapClientUdpEcn::connect].
     pub fn pipeline(
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
@@ -46,7 +50,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
 
     /// Binds local address and port
     pub async fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), std::io::Error> {
-        let socket = UdpSocket::bind(addr).await?;
+        let socket = async_transport::UdpSocket::bind(addr).await?;
         self.socket = Some(Arc::new(socket));
         Ok(())
     }
@@ -82,7 +86,21 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
         let local_addr = socket_rd.local_addr()?;
         let pipeline = Arc::clone(&pipeline_wr);
         self.runtime.spawn(Box::pin(async move {
-            let mut buf = vec![0u8; 8196];
+            let buf = vec![0u8; 8196];
+            let buf_len = buf.len();
+            let mut recv_buf: Box<[u8]> = buf.into();
+            let mut metas = [RecvMeta::default(); BATCH_SIZE];
+            let mut iovs = MaybeUninit::<[std::io::IoSliceMut<'_>; BATCH_SIZE]>::uninit();
+            recv_buf
+                .chunks_mut(buf_len / BATCH_SIZE)
+                .enumerate()
+                .for_each(|(i, buf)| unsafe {
+                    iovs.as_mut_ptr()
+                        .cast::<std::io::IoSliceMut<'_>>()
+                        .add(i)
+                        .write(std::io::IoSliceMut::<'_>::new(buf));
+                });
+            let mut iovs = unsafe { iovs.assume_init() };
 
             pipeline.transport_active().await;
             loop {
@@ -105,26 +123,31 @@ impl<W: Send + Sync + 'static> BootstrapUdpClient<W> {
                     _ = timer.as_mut() => {
                         pipeline.handle_timeout(Instant::now()).await;
                     }
-                    res = socket_rd.read(&mut buf) => {
+                    res = socket_rd.recv(&mut iovs, &mut metas) => {
                         match res {
-                            Ok((n, peer_addr)) => {
-                                if n == 0 {
+                            Ok(msgs) => {
+                                if msgs == 0 {
                                     pipeline.read_eof().await;
                                     break;
                                 }
 
-                                trace!("socket read {} bytes", n);
-                                pipeline
-                                    .read(TaggedBytesMut {
-                                        now: Instant::now(),
-                                        transport: TransportContext {
-                                            local_addr,
-                                            peer_addr,
-                                            ecn: None,
-                                        },
-                                        message: BytesMut::from(&buf[..n]),
-                                    })
-                                    .await;
+                                for (meta, buf) in metas.iter().zip(iovs.iter()).take(msgs) {
+                                    let message: BytesMut = buf[0..meta.len].into();
+                                    if !message.is_empty() {
+                                        trace!("socket read {} bytes", message.len());
+                                        pipeline
+                                            .read(TaggedBytesMut {
+                                                now: Instant::now(),
+                                                transport: TransportContext {
+                                                    local_addr,
+                                                    peer_addr: Some(meta.addr),
+                                                    ecn: meta.ecn,
+                                                },
+                                                message,
+                                            })
+                                            .await;
+                                    }
+                                }
                             }
                             Err(err) => {
                                 warn!("socket read error {}", err);

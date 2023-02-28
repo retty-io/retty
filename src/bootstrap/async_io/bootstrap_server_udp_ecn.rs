@@ -18,15 +18,15 @@ use crate::runtime::{
 use crate::transport::{AsyncTransportRead, TaggedBytesMut, TransportAddress, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers with ECN information.
-pub struct BootstrapUdpEcnServer<W> {
+pub struct BootstrapServerUdpEcn<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapUdpEcnServer<W> {
-    /// Creates a new BootstrapUdpEcnServer
+impl<W: Send + Sync + 'static> BootstrapServerUdpEcn<W> {
+    /// Creates a new BootstrapServerUdpEcn
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -36,7 +36,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnServer<W> {
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapUdpEcnServer::bind].
+    /// Creates pipeline instances from when calling [BootstrapServerUdpEcn::bind].
     pub fn pipeline(
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
