@@ -23,12 +23,15 @@ pub use self::async_io::{
 pub(crate) mod metal_io;
 #[cfg(feature = "metal-io")]
 pub use metal_io::{
-    bootstrap_client_udp::BootstrapClientUdp, bootstrap_server_udp::BootstrapServerUdp,
+    bootstrap_client_tcp::BootstrapClientTcp, bootstrap_client_udp::BootstrapClientUdp,
+    bootstrap_server_udp::BootstrapServerUdp,
 };
 
-/*bootstrap_client_tcp::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
-bootstrap_udp_ecn_client::BootstrapUdpEcnClient,
-bootstrap_udp_ecn_server::BootstrapUdpEcnServer*/
+/*
+bootstrap_server_tcp::BootstrapServerTcp,
+bootstrap_client_udp_ecn::BootstrapClientUdpEcn,
+bootstrap_server_udp_ecn::BootstrapServerUdpEcn,
+*/
 
 /// Creates a new [Pipeline]
 #[cfg(not(feature = "metal-io"))]

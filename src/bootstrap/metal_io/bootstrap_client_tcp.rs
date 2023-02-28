@@ -1,170 +1,204 @@
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::broadcast::channel;
-
-use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
-use crate::channel::Pipeline;
-use crate::runtime::{
-    mpsc::{bounded, Receiver, Sender},
-    net::{TcpStream, ToSocketAddrs},
-    sleep,
-    sync::Mutex,
-    Runtime,
+use mio::net::TcpStream;
+use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio_extras::{
+    channel::{channel, Receiver, Sender},
+    timer::Builder,
 };
-use crate::transport::{AsyncTransportRead, AsyncTransportWrite};
+use std::{
+    io::{Error, Read, Write},
+    net::ToSocketAddrs,
+    sync::{Arc, Mutex},
+    thread,
+    time::{Duration, Instant},
+};
+
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
+use crate::channel::{InboundPipeline, OutboundPipeline};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
-pub struct BootstrapTcpClient<W> {
+pub struct BootstrapClientTcp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
-    runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapTcpClient<W> {
-    /// Creates a new BootstrapTcpClient
-    pub fn new(runtime: Arc<dyn Runtime>) -> Self {
+impl<W: Send + Sync + 'static> Default for BootstrapClientTcp<W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<W: Send + Sync + 'static> BootstrapClientTcp<W> {
+    /// Creates a new BootstrapClientTcp
+    pub fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
-            runtime,
             close_tx: Arc::new(Mutex::new(None)),
             done_rx: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
+    /// Creates pipeline instances from when calling [BootstrapClientTcp::connect].
     pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
         self.pipeline_factory_fn = Some(Arc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
     /// Connects to the remote peer
-    pub async fn connect<A: ToSocketAddrs>(
+    pub fn connect<A: ToSocketAddrs>(
         &mut self,
         addr: A,
-    ) -> Result<Arc<Pipeline<BytesMut, W>>, std::io::Error> {
-        let socket = TcpStream::connect(addr).await?;
-
-        #[cfg(feature = "runtime-tokio")]
-        let (mut socket_rd, mut socket_wr) = socket.into_split();
-        #[cfg(feature = "runtime-async-std")]
-        let (mut socket_rd, mut socket_wr) = (socket.clone(), socket);
+    ) -> Result<Arc<dyn OutboundPipeline<W>>, Error> {
+        let socket = super::each_addr(addr, TcpStream::connect)?;
 
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        #[allow(unused_mut)]
-        let (close_tx, mut close_rx) = bounded(1);
+        let (mut socket_rd, mut socket_wr) = (socket.try_clone()?, socket);
+        let (sender, receiver) = channel();
+        let pipeline = (pipeline_factory_fn)(sender);
+
+        let pipeline_wr = Arc::clone(&pipeline);
+
+        let (close_tx, close_rx) = channel();
         {
-            let mut tx = self.close_tx.lock().await;
+            let mut tx = self.close_tx.lock().unwrap();
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = bounded(1);
-        let mut done_tx = Some(done_tx);
+        let (done_tx, done_rx) = channel();
         {
-            let mut rx = self.done_rx.lock().await;
+            let mut rx = self.done_rx.lock().unwrap();
             *rx = Some(done_rx);
         }
 
-        let (sender, mut receiver) = channel(8); //TODO: make it configurable?
-        let pipeline_wr = (pipeline_factory_fn)(sender).await;
+        thread::spawn(move || {
+            const SOCKET_WT_TOKEN: Token = Token(0);
+            const SOCKET_RD_TOKEN: Token = Token(1);
+            const CLOSE_RX_TOKEN: Token = Token(2);
+            const TIMEOUT_TOKEN: Token = Token(3);
+            const OUTBOUND_EVENT_TOKEN: Token = Token(4);
 
-        let pipeline = Arc::clone(&pipeline_wr);
-        self.runtime.spawn(Box::pin(async move {
+            let mut timer = Builder::default().build::<()>();
+
+            let poll = Poll::new()?;
+
+            poll.register(
+                &receiver,
+                SOCKET_WT_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+            poll.register(
+                &socket_rd,
+                SOCKET_RD_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+            poll.register(
+                &close_rx,
+                CLOSE_RX_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+            poll.register(&timer, TIMEOUT_TOKEN, Ready::readable(), PollOpt::edge())?;
+            poll.register(
+                &pipeline,
+                OUTBOUND_EVENT_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
+
+            let mut events = Events::with_capacity(128);
+
             let mut buf = vec![0u8; 8196];
 
-            pipeline.transport_active().await;
-            loop {
-                if let Ok(transmit) = receiver.try_recv() {
-                    match socket_wr.write(&transmit, None).await {
-                        Ok(n) => {
-                            trace!("socket write {} bytes", n);
-                            continue;
-                        }
-                        Err(err) => {
-                            warn!("socket write error {}", err);
-                            break;
-                        }
-                    }
+            pipeline.transport_active();
+            'outer: loop {
+                let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
+                pipeline.poll_timeout(&mut eto);
+                let delay_from_now = eto
+                    .checked_duration_since(Instant::now())
+                    .unwrap_or(Duration::from_secs(0));
+                if delay_from_now.is_zero() {
+                    pipeline.handle_timeout(Instant::now());
+                    continue;
                 }
 
-                let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION);
-                pipeline.poll_timeout(&mut eto).await;
+                let timeout = timer.set_timeout(delay_from_now, ());
+                let _timeout = super::TimeoutGuard::new(&mut timer, timeout);
 
-                let timer = if let Some(duration) = eto.checked_duration_since(Instant::now()) {
-                    sleep(duration)
-                } else {
-                    sleep(Duration::from_secs(0))
-                };
-                tokio::pin!(timer);
-
-                tokio::select! {
-                    _ = close_rx.recv() => {
-                        trace!("pipeline socket exit loop");
-                        done_tx.take();
-                        break;
-                    }
-                    _ = timer.as_mut() => {
-                        pipeline.handle_timeout(Instant::now()).await;
-                    }
-                    res = receiver.recv() => {
-                        match res {
-                            Ok(transmit) => {
-                                match socket_wr.write(&transmit, None).await {
+                poll.poll(&mut events, None)?;
+                for event in events.iter() {
+                    match event.token() {
+                        SOCKET_WT_TOKEN => {
+                            if let Ok(transmit) = receiver.try_recv() {
+                                match socket_wr.write(&transmit) {
                                     Ok(n) => {
                                         trace!("socket write {} bytes", n);
-                                        continue;
                                     }
                                     Err(err) => {
                                         warn!("socket write error {}", err);
-                                        break;
+                                        break 'outer;
                                     }
                                 }
                             }
-                            Err(err) => {
-                                warn!("pipeline recv error {}", err);
-                                break;
-                            }
                         }
-                    }
-                    res = socket_rd.read(&mut buf) => {
-                        match res {
-                            Ok((n,_)) => {
+                        SOCKET_RD_TOKEN => match socket_rd.read(&mut buf) {
+                            Ok(n) => {
                                 if n == 0 {
-                                    pipeline.read_eof().await;
-                                    break;
+                                    pipeline.read_eof();
+                                    break 'outer;
                                 }
 
                                 trace!("socket read {} bytes", n);
-                                pipeline.read(BytesMut::from(&buf[..n])).await;
+                                pipeline.read(BytesMut::from(&buf[..n]));
                             }
                             Err(err) => {
                                 warn!("socket read error {}", err);
-                                break;
+                                break 'outer;
                             }
-                        };
+                        },
+                        CLOSE_RX_TOKEN => {
+                            let _ = close_rx.try_recv();
+                            break 'outer;
+                        }
+                        TIMEOUT_TOKEN => {
+                            pipeline.handle_timeout(Instant::now());
+                        }
+                        OUTBOUND_EVENT_TOKEN => {
+                            if let Some(evt) = pipeline.poll_outbound_event() {
+                                pipeline.handle_outbound_event(evt);
+                            }
+                        }
+                        _ => unreachable!(),
                     }
                 }
             }
-            pipeline.transport_inactive().await;
-        }));
+            pipeline.transport_inactive();
+
+            trace!("pipeline socket exit loop");
+            let _ = done_tx.send(());
+
+            Ok::<(), Error>(())
+        });
 
         Ok(pipeline_wr)
     }
 
     /// Gracefully stop the client
-    pub async fn stop(&mut self) {
+    pub fn stop(&self) {
         {
-            let mut tx = self.close_tx.lock().await;
-            tx.take();
+            let mut close_tx = self.close_tx.lock().unwrap();
+            if let Some(close_tx) = close_tx.take() {
+                let _ = close_tx.send(());
+            }
         }
         {
-            let mut rx = self.done_rx.lock().await;
-            #[allow(unused_mut)]
-            if let Some(mut done_rx) = rx.take() {
-                let _ = done_rx.recv().await;
+            let mut done_rx = self.done_rx.lock().unwrap();
+            if let Some(done_rx) = done_rx.take() {
+                let _ = done_rx.try_recv(); //TODO: Loop until recv?
             }
         }
     }

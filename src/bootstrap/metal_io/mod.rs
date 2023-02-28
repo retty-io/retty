@@ -4,7 +4,7 @@ use std::{
     net::{SocketAddr, ToSocketAddrs},
 };
 
-//pub(crate) mod bootstrap_client_tcp;
+pub(crate) mod bootstrap_client_tcp;
 //pub(crate) mod bootstrap_server_tcp;
 pub(crate) mod bootstrap_client_udp;
 pub(crate) mod bootstrap_server_udp;

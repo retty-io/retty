@@ -22,7 +22,7 @@ use crate::transport::{
 };
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients with ECN information.
-pub struct BootstrapUdpEcnClient<W> {
+pub struct BootstrapClientUdpEcn<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     runtime: Arc<dyn Runtime>,
     socket: Option<Arc<async_transport::UdpSocket>>,
@@ -30,8 +30,8 @@ pub struct BootstrapUdpEcnClient<W> {
     done_rx: Arc<Mutex<Option<Receiver<()>>>>,
 }
 
-impl<W: Send + Sync + 'static> BootstrapUdpEcnClient<W> {
-    /// Creates a new BootstrapUdpEcnClient
+impl<W: Send + Sync + 'static> BootstrapClientUdpEcn<W> {
+    /// Creates a new BootstrapClientUdpEcn
     pub fn new(runtime: Arc<dyn Runtime>) -> Self {
         Self {
             pipeline_factory_fn: None,
@@ -42,7 +42,7 @@ impl<W: Send + Sync + 'static> BootstrapUdpEcnClient<W> {
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapUdpEcnClient::connect].
+    /// Creates pipeline instances from when calling [BootstrapClientUdpEcn::connect].
     pub fn pipeline(
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
