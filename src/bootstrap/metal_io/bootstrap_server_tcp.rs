@@ -4,7 +4,7 @@ use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{
     channel::{channel, Receiver, Sender},
-    timer::Builder,
+    timer::{Builder, Timer},
 };
 use std::collections::HashMap;
 use std::{
@@ -16,7 +16,33 @@ use std::{
 };
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
-use crate::channel::{InboundPipeline, OutboundPipeline};
+use crate::channel::{InboundPipeline, Pipeline};
+
+enum ConnectionToken {
+    SocketWt,
+    SocketRd,
+    Timeout,
+    OutboundEvent,
+    Num,
+}
+
+impl From<usize> for ConnectionToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => Self::SocketWt,
+            1 => Self::SocketRd,
+            2 => Self::Timeout,
+            3 => Self::OutboundEvent,
+            _ => Self::Num,
+        }
+    }
+}
+
+struct Connection<W> {
+    receiver: Receiver<BytesMut>,
+    socket: TcpStream,
+    pipeline: Arc<Pipeline<BytesMut, W>>,
+}
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapServerTcp<W> {
@@ -50,7 +76,6 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
     /// Binds local address and port
     pub fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), Error> {
         let listener = super::each_addr(addr, TcpListener::bind)?;
-
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, close_rx) = channel();
@@ -66,8 +91,10 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
         }
 
         thread::spawn(move || {
-            const LISTENER_TOKEN: Token = Token(0);
+            const LISTENER_TOKEN: Token = Token(usize::MAX);
+            const CLOSE_RX_TOKEN: Token = Token(usize::MAX - 1);
 
+            let mut timer = Builder::default().build::<()>();
             let poll = Poll::new()?;
             poll.register(
                 &listener,
@@ -75,13 +102,19 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                 Ready::readable(),
                 PollOpt::edge(),
             )?;
+            poll.register(
+                &close_rx,
+                CLOSE_RX_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
 
             let mut events = Events::with_capacity(128);
 
-            // Map of `Token` -> `TcpStream`.
-            let mut connections = HashMap::new();
+            // Map of `usize` -> `Connection`.
+            let mut connections: HashMap<usize, Connection<W>> = HashMap::new();
             // Unique token for each incoming connection.
-            let mut unique_token = Token(LISTENER_TOKEN.0 + 1);
+            let mut unique_token = Token(0);
 
             'outer: loop {
                 poll.poll(&mut events, None)?;
@@ -102,68 +135,38 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                                 Err(e) => {
                                     // If it was any other kind of error, something went
                                     // wrong and we terminate with an error.
-                                    return Err(e);
+                                    warn!("listener accept error {}", e);
+                                    break 'outer;
                                 }
                             };
 
                             trace!("Accepted connection from: {}", peer);
-
-                            let token = Self::next(&mut unique_token);
-                            /*poll.registry().register(
-                                &mut connection,
-                                token,
-                                Interest::READABLE.add(Interest::WRITABLE),
-                            )?;*/
-
-                            connections.insert(token, socket);
+                            Self::register_connection(
+                                &pipeline_factory_fn,
+                                &mut connections,
+                                &mut unique_token,
+                                &poll,
+                                &timer,
+                                socket,
+                            )?;
                         },
-                        _token => {}
+                        CLOSE_RX_TOKEN => {
+                            let _ = close_rx.try_recv();
+                            //TODO: clean up connections?
+                            break 'outer;
+                        }
+                        token => {
+                            let key = token.0 % 4;
+                            if let Some(connection) = connections.get_mut(&key) {
+                                Self::process_connection(connection, token, &mut timer);
+                            }
+                        }
                     }
                 }
-
-                /*
-                tokio::select! {
-                    _ = close_rx.recv() => {
-                        trace!("listener exit loop");
-                        break;
-                    }
-
-                    res = listener.accept() => {
-                        match res {
-                            Ok((socket, _remote_addr)) => {
-                                // A new task is spawned for each inbound socket. The socket is
-                                // moved to the new task and processed there.
-                                let child_pipeline_factory_fn = Arc::clone(&pipeline_factory_fn);
-
-                                #[cfg(feature = "runtime-tokio")]
-                                let child_close_rx = {
-                                    let tx = close_tx.lock().await;
-                                    if let Some(t) = &*tx {
-                                        t.subscribe()
-                                    } else {
-                                        warn!("BootstrapServerTcp is closed");
-                                        break
-                                    }
-                                };
-                                #[cfg(feature = "runtime-async-std")]
-                                let child_close_rx = {
-                                    close_rx.clone()
-                                };
-
-                                let child_worker = child_wg.worker();
-                                runtime.spawn(Box::pin(async move {
-                                    BootstrapTcpServer::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx, child_worker)
-                                        .await;
-                                }));
-                            }
-                            Err(err) => {
-                                warn!("listener accept error {}", err);
-                                break;
-                            }
-                        };
-                    }
-                }*/
             }
+
+            trace!("listener exit loop");
+            let _ = done_tx.send(());
 
             Ok::<(), Error>(())
         });
@@ -171,100 +174,114 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
         Ok(())
     }
 
-    fn register_pipeline() {}
-
-    /*
-    fn process_pipeline(
+    fn register_connection(
+        pipeline_factory_fn: &Arc<PipelineFactoryFn<BytesMut, W>>,
+        connections: &mut HashMap<usize, Connection<W>>,
+        token: &mut Token,
+        poll: &Poll,
+        timer: &Timer<()>,
         socket: TcpStream,
-        pipeline_factory_fn: Arc<PipelineFactoryFn<BytesMut, W>>,
-        #[allow(unused_mut)] mut close_rx: Receiver<()>,
-        worker: Worker,
-    ) {
-        let _w = worker;
+    ) -> Result<(), Error> {
+        let (sender, receiver) = channel();
+        let pipeline = (pipeline_factory_fn)(sender);
+
+        #[allow(non_snake_case)]
+        let SOCKET_WT_TOKEN: Token = Token(token.0 + ConnectionToken::SocketWt as usize);
+        #[allow(non_snake_case)]
+        let SOCKET_RD_TOKEN: Token = Token(token.0 + ConnectionToken::SocketRd as usize);
+        #[allow(non_snake_case)]
+        let TIMEOUT_TOKEN: Token = Token(token.0 + ConnectionToken::Timeout as usize);
+        #[allow(non_snake_case)]
+        let OUTBOUND_EVENT_TOKEN: Token = Token(token.0 + ConnectionToken::OutboundEvent as usize);
+
+        poll.register(
+            &receiver,
+            SOCKET_WT_TOKEN,
+            Ready::readable(),
+            PollOpt::edge(),
+        )?;
+        poll.register(&socket, SOCKET_RD_TOKEN, Ready::readable(), PollOpt::edge())?;
+        poll.register(timer, TIMEOUT_TOKEN, Ready::readable(), PollOpt::edge())?;
+        poll.register(
+            &pipeline,
+            OUTBOUND_EVENT_TOKEN,
+            Ready::readable(),
+            PollOpt::edge(),
+        )?;
+
+        connections.insert(
+            token.0,
+            Connection {
+                receiver,
+                socket,
+                pipeline,
+            },
+        );
+        token.0 += ConnectionToken::Num as usize;
+
+        Ok(())
+    }
+
+    fn process_connection(connection: &mut Connection<W>, token: Token, timer: &mut Timer<()>) {
         let mut buf = vec![0u8; 8196];
 
-        #[cfg(feature = "runtime-tokio")]
-        let (mut socket_rd, mut socket_wr) = socket.into_split();
-        #[cfg(feature = "runtime-async-std")]
-        let (mut socket_rd, mut socket_wr) = (socket.clone(), socket);
+        connection.pipeline.transport_active();
+        'outer: loop {
+            let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
+            connection.pipeline.poll_timeout(&mut eto);
+            let delay_from_now = eto
+                .checked_duration_since(Instant::now())
+                .unwrap_or(Duration::from_secs(0));
+            if delay_from_now.is_zero() {
+                connection.pipeline.handle_timeout(Instant::now());
+                continue;
+            }
 
-        let (sender, mut receiver) = channel(8); //TODO: make it configurable?
-        let pipeline = (pipeline_factory_fn)(sender).await;
+            let timeout = timer.set_timeout(delay_from_now, ());
+            let _timeout = super::TimeoutGuard::new(timer, timeout);
 
-        pipeline.transport_active().await;
-        loop {
-            if let Ok(transmit) = receiver.try_recv() {
-                match socket_wr.write(&transmit, None).await {
+            match ConnectionToken::from(token.0 % ConnectionToken::Num as usize) {
+                ConnectionToken::SocketWt => {
+                    if let Ok(transmit) = connection.receiver.try_recv() {
+                        match connection.socket.write(&transmit) {
+                            Ok(n) => {
+                                trace!("socket write {} bytes", n);
+                            }
+                            Err(err) => {
+                                warn!("socket write error {}", err);
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+                ConnectionToken::SocketRd => match connection.socket.read(&mut buf) {
                     Ok(n) => {
-                        trace!("socket write {} bytes", n);
-                        continue;
+                        if n == 0 {
+                            connection.pipeline.read_eof();
+                            break 'outer;
+                        }
+
+                        trace!("socket read {} bytes", n);
+                        connection.pipeline.read(BytesMut::from(&buf[..n]));
                     }
                     Err(err) => {
-                        warn!("socket write error {}", err);
-                        break;
+                        warn!("socket read error {}", err);
+                        break 'outer;
+                    }
+                },
+                ConnectionToken::Timeout => {
+                    connection.pipeline.handle_timeout(Instant::now());
+                }
+                ConnectionToken::OutboundEvent => {
+                    if let Some(evt) = connection.pipeline.poll_outbound_event() {
+                        connection.pipeline.handle_outbound_event(evt);
                     }
                 }
-            }
-
-            let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION);
-            pipeline.poll_timeout(&mut eto).await;
-
-            let timer = if let Some(duration) = eto.checked_duration_since(Instant::now()) {
-                sleep(duration)
-            } else {
-                sleep(Duration::from_secs(0))
-            };
-            tokio::pin!(timer);
-
-            tokio::select! {
-                _ = close_rx.recv() => {
-                    trace!("pipeline socket exit loop");
-                    break;
-                }
-                _ = timer.as_mut() => {
-                    pipeline.handle_timeout(Instant::now()).await;
-                }
-                res = receiver.recv() => {
-                    match res {
-                        Ok(transmit) => {
-                            match socket_wr.write(&transmit, None).await {
-                                Ok(n) => {
-                                    trace!("socket write {} bytes", n);
-                                    continue;
-                                }
-                                Err(err) => {
-                                    warn!("socket write error {}", err);
-                                    break;
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            warn!("pipeline recv error {}", err);
-                            break;
-                        }
-                    }
-                }
-                res = socket_rd.read(&mut buf) => {
-                    match res {
-                        Ok((n,_)) => {
-                            if n == 0 {
-                                pipeline.read_eof().await;
-                                break;
-                            }
-
-                            trace!("socket read {} bytes", n);
-                            pipeline.read(BytesMut::from(&buf[..n])).await;
-                        }
-                        Err(err) => {
-                            warn!("socket read error {}", err);
-                            break;
-                        }
-                    };
-                }
+                _ => unreachable!(),
             }
         }
-        pipeline.transport_inactive();
-    }*/
+        connection.pipeline.transport_inactive();
+    }
 
     /// Gracefully stop the server
     pub fn stop(&self) {
@@ -280,18 +297,5 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                 let _ = done_rx.try_recv(); //TODO: Loop until recv?
             }
         }
-    }
-
-    fn next(current: &mut Token) -> Token {
-        let next = current.0;
-        current.0 += 5;
-        /*
-           const SOCKET_WT_TOKEN: Token = Token(0);
-           const SOCKET_RD_TOKEN: Token = Token(1);
-           const CLOSE_RX_TOKEN: Token = Token(2);
-           const TIMEOUT_TOKEN: Token = Token(3);
-           const OUTBOUND_EVENT_TOKEN: Token = Token(4);
-        */
-        Token(next)
     }
 }

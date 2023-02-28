@@ -51,9 +51,7 @@ impl<W: Send + Sync + 'static> BootstrapClientTcp<W> {
         &mut self,
         addr: A,
     ) -> Result<Arc<dyn OutboundPipeline<W>>, Error> {
-        let socket = super::each_addr(addr, TcpStream::connect)?;
-        let (mut socket_rd, mut socket_wr) = (socket.try_clone()?, socket);
-
+        let mut socket = super::each_addr(addr, TcpStream::connect)?;
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
         let (sender, receiver) = channel();
         let pipeline = (pipeline_factory_fn)(sender);
@@ -79,21 +77,14 @@ impl<W: Send + Sync + 'static> BootstrapClientTcp<W> {
             const OUTBOUND_EVENT_TOKEN: Token = Token(4);
 
             let mut timer = Builder::default().build::<()>();
-
             let poll = Poll::new()?;
-
             poll.register(
                 &receiver,
                 SOCKET_WT_TOKEN,
                 Ready::readable(),
                 PollOpt::edge(),
             )?;
-            poll.register(
-                &socket_rd,
-                SOCKET_RD_TOKEN,
-                Ready::readable(),
-                PollOpt::edge(),
-            )?;
+            poll.register(&socket, SOCKET_RD_TOKEN, Ready::readable(), PollOpt::edge())?;
             poll.register(
                 &close_rx,
                 CLOSE_RX_TOKEN,
@@ -132,7 +123,7 @@ impl<W: Send + Sync + 'static> BootstrapClientTcp<W> {
                     match event.token() {
                         SOCKET_WT_TOKEN => {
                             if let Ok(transmit) = receiver.try_recv() {
-                                match socket_wr.write(&transmit) {
+                                match socket.write(&transmit) {
                                     Ok(n) => {
                                         trace!("socket write {} bytes", n);
                                     }
@@ -143,7 +134,7 @@ impl<W: Send + Sync + 'static> BootstrapClientTcp<W> {
                                 }
                             }
                         }
-                        SOCKET_RD_TOKEN => match socket_rd.read(&mut buf) {
+                        SOCKET_RD_TOKEN => match socket.read(&mut buf) {
                             Ok(n) => {
                                 if n == 0 {
                                     pipeline.read_eof();

@@ -23,14 +23,13 @@ pub use self::async_io::{
 pub(crate) mod metal_io;
 #[cfg(feature = "metal-io")]
 pub use metal_io::{
-    bootstrap_client_tcp::BootstrapClientTcp, bootstrap_client_udp::BootstrapClientUdp,
-    /*bootstrap_server_tcp::BootstrapServerTcp,*/ bootstrap_server_udp::BootstrapServerUdp,
+    bootstrap_client_tcp::BootstrapClientTcp,
+    bootstrap_client_udp::BootstrapClientUdp,
+    bootstrap_server_tcp::BootstrapServerTcp,
+    bootstrap_server_udp::BootstrapServerUdp,
+    //bootstrap_client_udp_ecn::BootstrapClientUdpEcn,
+    //bootstrap_server_udp_ecn::BootstrapServerUdpEcn,
 };
-
-/*
-bootstrap_client_udp_ecn::BootstrapClientUdpEcn,
-bootstrap_server_udp_ecn::BootstrapServerUdpEcn,
-*/
 
 /// Creates a new [Pipeline]
 #[cfg(not(feature = "metal-io"))]
@@ -46,6 +45,6 @@ pub type PipelineFactoryFn<R, W> = Box<
 use mio_extras::channel::Sender;
 /// Creates a new [Pipeline]
 #[cfg(feature = "metal-io")]
-pub type PipelineFactoryFn<R, W> = Box<dyn Fn(Sender<R>) -> Arc<Pipeline<R, W>>>;
+pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(Sender<R>) -> Arc<Pipeline<R, W>>) + Send + Sync>;
 
 const MAX_DURATION_IN_SECS: u64 = 86400; // 1 day
