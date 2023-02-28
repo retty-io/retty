@@ -12,10 +12,10 @@ keywords = ["networking", "protocols"]
 categories = [ "network-programming", "asynchronous" ]
 
 [features]
-default = ["runtime-tokio"]
+default = ["metal-io"]
+metal-io = ["mio", "mio-extras", "async-transport/metal-io"]
 runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util", "tokio/time", "tokio/macros", "async-transport/runtime-tokio", "waitgroup", "async-trait"]
 runtime-async-std = ["async-io", "async-std", "futures-lite", "tokio/macros", "async-transport/runtime-async-std", "waitgroup", "async-trait"]
-metal-io = ["mio", "mio-extras", "async-transport/metal-io"]
 
 [dependencies]
 bytes = "1.4.0"
