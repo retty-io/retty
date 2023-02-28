@@ -1,36 +1,43 @@
 use bytes::BytesMut;
 use log::{trace, warn};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::broadcast::channel;
-use waitgroup::{WaitGroup, Worker};
-
-use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION};
-use crate::runtime::{
-    mpsc::{bounded, Receiver, Sender},
-    net::{TcpListener, TcpStream, ToSocketAddrs},
-    sleep,
-    sync::Mutex,
-    Runtime,
+use mio::net::{TcpListener, TcpStream};
+use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio_extras::{
+    channel::{channel, Receiver, Sender},
+    timer::Builder,
 };
-use crate::transport::{AsyncTransportRead, AsyncTransportWrite};
+use std::collections::HashMap;
+use std::{
+    io::{Error, ErrorKind, Read, Write},
+    net::ToSocketAddrs,
+    sync::{Arc, Mutex},
+    thread,
+    time::{Duration, Instant},
+};
+
+use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
+use crate::channel::{InboundPipeline, OutboundPipeline};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapServerTcp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
-    runtime: Arc<dyn Runtime>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
-    wg: Arc<Mutex<Option<WaitGroup>>>,
+    done_rx: Arc<Mutex<Option<Receiver<()>>>>,
+}
+
+impl<W: Send + Sync + 'static> Default for BootstrapServerTcp<W> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
     /// Creates a new BootstrapServerTcp
-    pub fn new(runtime: Arc<dyn Runtime>) -> Self {
+    pub fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
-            runtime,
             close_tx: Arc::new(Mutex::new(None)),
-            wg: Arc::new(Mutex::new(None)),
+            done_rx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -41,36 +48,80 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
     }
 
     /// Binds local address and port
-    pub async fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), std::io::Error> {
-        let listener = TcpListener::bind(addr).await?;
+    pub fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<(), Error> {
+        let listener = super::each_addr(addr, TcpListener::bind)?;
+
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        #[allow(unused_mut)]
-        let (close_tx, mut close_rx) = bounded(1);
+        let (close_tx, close_rx) = channel();
         {
-            let mut tx = self.close_tx.lock().await;
+            let mut tx = self.close_tx.lock().unwrap();
             *tx = Some(close_tx);
         }
 
-        #[cfg(feature = "runtime-tokio")]
-        let close_tx = Arc::clone(&self.close_tx);
+        let (done_tx, done_rx) = channel();
+        {
+            let mut rx = self.done_rx.lock().unwrap();
+            *rx = Some(done_rx);
+        }
 
-        let worker = {
-            let workgroup = WaitGroup::new();
-            let worker = workgroup.worker();
-            {
-                let mut wg = self.wg.lock().await;
-                *wg = Some(workgroup);
-            }
-            worker
-        };
+        thread::spawn(move || {
+            const LISTENER_TOKEN: Token = Token(0);
 
-        let runtime = Arc::clone(&self.runtime);
-        self.runtime.spawn(Box::pin(async move {
-            let _w = worker;
-            let child_wg = WaitGroup::new();
+            let poll = Poll::new()?;
+            poll.register(
+                &listener,
+                LISTENER_TOKEN,
+                Ready::readable(),
+                PollOpt::edge(),
+            )?;
 
-            loop {
+            let mut events = Events::with_capacity(128);
+
+            // Map of `Token` -> `TcpStream`.
+            let mut connections = HashMap::new();
+            // Unique token for each incoming connection.
+            let mut unique_token = Token(LISTENER_TOKEN.0 + 1);
+
+            'outer: loop {
+                poll.poll(&mut events, None)?;
+                for event in events.iter() {
+                    match event.token() {
+                        LISTENER_TOKEN => loop {
+                            // Received an event for the TCP server socket, which
+                            // indicates we can accept an connection.
+                            let (socket, peer) = match listener.accept() {
+                                Ok((socket, peer)) => (socket, peer),
+                                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                                    // If we get a `WouldBlock` error we know our
+                                    // listener has no more incoming connections queued,
+                                    // so we can return to polling and wait for some
+                                    // more.
+                                    break;
+                                }
+                                Err(e) => {
+                                    // If it was any other kind of error, something went
+                                    // wrong and we terminate with an error.
+                                    return Err(e);
+                                }
+                            };
+
+                            trace!("Accepted connection from: {}", peer);
+
+                            let token = Self::next(&mut unique_token);
+                            /*poll.registry().register(
+                                &mut connection,
+                                token,
+                                Interest::READABLE.add(Interest::WRITABLE),
+                            )?;*/
+
+                            connections.insert(token, socket);
+                        },
+                        _token => {}
+                    }
+                }
+
+                /*
                 tokio::select! {
                     _ = close_rx.recv() => {
                         trace!("listener exit loop");
@@ -111,15 +162,19 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                             }
                         };
                     }
-                }
+                }*/
             }
-            child_wg.wait().await;
-        }));
+
+            Ok::<(), Error>(())
+        });
 
         Ok(())
     }
 
-    async fn process_pipeline(
+    fn register_pipeline() {}
+
+    /*
+    fn process_pipeline(
         socket: TcpStream,
         pipeline_factory_fn: Arc<PipelineFactoryFn<BytesMut, W>>,
         #[allow(unused_mut)] mut close_rx: Receiver<()>,
@@ -208,20 +263,35 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                 }
             }
         }
-        pipeline.transport_inactive().await;
-    }
+        pipeline.transport_inactive();
+    }*/
 
     /// Gracefully stop the server
-    pub async fn stop(&mut self) {
+    pub fn stop(&self) {
         {
-            let mut tx = self.close_tx.lock().await;
-            tx.take();
-        }
-        {
-            let mut wg = self.wg.lock().await;
-            if let Some(wg) = wg.take() {
-                wg.wait().await;
+            let mut close_tx = self.close_tx.lock().unwrap();
+            if let Some(close_tx) = close_tx.take() {
+                let _ = close_tx.send(());
             }
         }
+        {
+            let mut done_rx = self.done_rx.lock().unwrap();
+            if let Some(done_rx) = done_rx.take() {
+                let _ = done_rx.try_recv(); //TODO: Loop until recv?
+            }
+        }
+    }
+
+    fn next(current: &mut Token) -> Token {
+        let next = current.0;
+        current.0 += 5;
+        /*
+           const SOCKET_WT_TOKEN: Token = Token(0);
+           const SOCKET_RD_TOKEN: Token = Token(1);
+           const CLOSE_RX_TOKEN: Token = Token(2);
+           const TIMEOUT_TOKEN: Token = Token(3);
+           const OUTBOUND_EVENT_TOKEN: Token = Token(4);
+        */
+        Token(next)
     }
 }

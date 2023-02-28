@@ -66,14 +66,12 @@ impl<W: Send + Sync + 'static> BootstrapClientUdp<W> {
     ) -> Result<Arc<dyn OutboundPipeline<W>>, Error> {
         let socket = Arc::clone(self.socket.as_ref().unwrap());
         super::each_addr(addr, |addr| socket.connect(*addr))?;
+        let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
+        let local_addr = socket_rd.local_addr()?;
 
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
-
-        let (socket_rd, socket_wr) = (Arc::clone(&socket), socket);
         let (sender, receiver) = channel();
         let pipeline = (pipeline_factory_fn)(sender);
-
-        let local_addr = socket_rd.local_addr()?;
         let pipeline_wr = Arc::clone(&pipeline);
 
         let (close_tx, close_rx) = channel();

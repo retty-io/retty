@@ -89,7 +89,7 @@
 //!         msg: Self::Rin,
 //!     ) {
 //!         println!("handling {}", msg);
-//!         ctx.fire_write(format!("{}\r\n", msg)).await;
+//!         ctx.fire_write(format!("{}\r\n", msg));
 //!     }
 //! }
 //!
@@ -102,7 +102,7 @@
 //!         ctx: &OutboundContext<Self::Win, Self::Wout>,
 //!         msg: Self::Win,
 //!     ) {
-//!         ctx.fire_write(msg).await;
+//!         ctx.fire_write(msg);
 //!     }
 //! }
 //!
@@ -144,7 +144,7 @@
 //!     pipeline.add_back(line_based_frame_decoder_handler);
 //!     pipeline.add_back(string_codec_handler);
 //!     pipeline.add_back(echo_handler);
-//!     pipeline.finalize().await
+//!     pipeline.finalize()
 //! }));
 //! ```
 //!
@@ -246,11 +246,11 @@
 //! Now onto the client’s pipeline factory. It is identical the server’s pipeline factory, which
 //! handles writing data.
 //! ```ignore
-//! let mut bootstrap = BootstrapTcpClient::new();
+//! let mut bootstrap = BootstrapClientTcp::new();
 //! bootstrap.pipeline(Box::new( move |writer: Sender<BytesMut>| {
 //!             let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 //!
-//!             let async_transport_handler = AsyncTransportTcp::new(writer);
+//!             let async_transport_handler = AsyncTransport::new(writer);
 //!             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
 //!                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
 //!             ));

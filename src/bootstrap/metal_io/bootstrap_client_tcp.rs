@@ -52,13 +52,11 @@ impl<W: Send + Sync + 'static> BootstrapClientTcp<W> {
         addr: A,
     ) -> Result<Arc<dyn OutboundPipeline<W>>, Error> {
         let socket = super::each_addr(addr, TcpStream::connect)?;
+        let (mut socket_rd, mut socket_wr) = (socket.try_clone()?, socket);
 
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
-
-        let (mut socket_rd, mut socket_wr) = (socket.try_clone()?, socket);
         let (sender, receiver) = channel();
         let pipeline = (pipeline_factory_fn)(sender);
-
         let pipeline_wr = Arc::clone(&pipeline);
 
         let (close_tx, close_rx) = channel();
