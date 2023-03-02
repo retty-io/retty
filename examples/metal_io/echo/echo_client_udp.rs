@@ -92,8 +92,7 @@ struct Cli {
     log_level: String,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
@@ -132,12 +131,12 @@ async fn main() -> anyhow::Result<()> {
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
         let string_codec_handler = TaggedStringCodec::new();
-        let sync_io_handler = EchoHandler::new();
+        let echo_handler = EchoHandler::new();
 
         pipeline.add_back(async_transport_handler);
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
-        pipeline.add_back(sync_io_handler);
+        pipeline.add_back(echo_handler);
         pipeline.finalize()
     }));
 

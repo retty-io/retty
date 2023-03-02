@@ -13,7 +13,7 @@ categories = [ "network-programming", "asynchronous" ]
 
 [features]
 default = ["metal-io"]
-metal-io = ["mio", "mio-extras", "async-transport/metal-io"]
+metal-io = ["mio", "mio-extras", "async-transport/metal-io", "crossbeam"]
 runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util", "tokio/time", "tokio/macros", "async-transport/runtime-tokio", "waitgroup", "async-trait"]
 runtime-async-std = ["async-io", "async-std", "futures-lite", "tokio/macros", "async-transport/runtime-async-std", "waitgroup", "async-trait"]
 
@@ -29,6 +29,7 @@ tokio = { version = "1.25.0", optional = true }
 async-transport = { version = "0.3.3", default-features = false, optional = true }
 mio = { version = "0.6.23", optional = true }
 mio-extras = { version = "2.0.6", optional = true }
+crossbeam = { version = "0.8.2", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.25.0", features = ["full"] }
@@ -88,3 +89,12 @@ name = "mio_echo_client_udp"
 path = "examples/metal_io/echo/echo_client_udp.rs"
 required-features = ["metal-io"]
 
+[[example]]
+name = "mio_echo_server_tcp"
+path = "examples/metal_io/echo/echo_server_tcp.rs"
+required-features = ["metal-io"]
+
+[[example]]
+name = "mio_echo_client_tcp"
+path = "examples/metal_io/echo/echo_client_tcp.rs"
+required-features = ["metal-io"]
