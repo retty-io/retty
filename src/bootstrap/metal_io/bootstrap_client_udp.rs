@@ -3,7 +3,7 @@ use log::{trace, warn};
 use mio::net::UdpSocket;
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use mio_extras::{
-    channel::{channel, Receiver, Sender},
+    channel::{channel, Sender},
     timer::Builder,
 };
 use std::{
@@ -23,7 +23,7 @@ pub struct BootstrapClientUdp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     socket: Option<Arc<UdpSocket>>,
     close_tx: Arc<Mutex<Option<Sender<()>>>>,
-    done_rx: Arc<Mutex<Option<Receiver<()>>>>,
+    done_rx: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
 }
 
 impl<W: Send + Sync + 'static> Default for BootstrapClientUdp<W> {
@@ -80,7 +80,7 @@ impl<W: Send + Sync + 'static> BootstrapClientUdp<W> {
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
         {
             let mut rx = self.done_rx.lock().unwrap();
             *rx = Some(done_rx);
@@ -223,7 +223,7 @@ impl<W: Send + Sync + 'static> BootstrapClientUdp<W> {
         {
             let mut done_rx = self.done_rx.lock().unwrap();
             if let Some(done_rx) = done_rx.take() {
-                let _ = done_rx.try_recv(); //TODO: Loop until recv?
+                let _ = done_rx.recv();
             }
         }
     }
