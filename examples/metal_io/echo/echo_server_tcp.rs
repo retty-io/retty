@@ -1,6 +1,6 @@
 use bytes::BytesMut;
 use clap::Parser;
-use mio_extras::channel::Sender;
+use retty_io::channel::Sender;
 use std::{io::Write, str::FromStr};
 
 use retty::bootstrap::BootstrapServerTcp;

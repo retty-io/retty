@@ -1,4 +1,4 @@
-use mio_extras::timer::{Timeout, Timer};
+use retty_io::timer::{Timeout, Timer};
 use std::{
     io,
     net::{SocketAddr, ToSocketAddrs},

@@ -3,7 +3,7 @@ use crossbeam::sync::WaitGroup;
 use log::{trace, warn};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::{
+use retty_io::{
     channel::{channel, Sender},
     timer::Builder,
 };

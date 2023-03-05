@@ -42,7 +42,7 @@ pub type PipelineFactoryFn<R, W> = Box<
 >;
 
 #[cfg(feature = "metal-io")]
-use mio_extras::channel::Sender;
+use retty_io::channel::Sender;
 /// Creates a new [Pipeline]
 #[cfg(feature = "metal-io")]
 pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(Sender<R>) -> Arc<Pipeline<R, W>>) + Send + Sync>;

@@ -2,7 +2,7 @@ use bytes::BytesMut;
 use log::{trace, warn};
 use mio::net::TcpStream;
 use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio_extras::{
+use retty_io::{
     channel::{channel, Sender},
     timer::Builder,
 };

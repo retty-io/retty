@@ -1,6 +1,6 @@
 use bytes::BytesMut;
 use clap::Parser;
-use mio_extras::channel::Sender;
+use retty_io::channel::Sender;
 use std::{
     error::Error,
     io::{stdin, Write},

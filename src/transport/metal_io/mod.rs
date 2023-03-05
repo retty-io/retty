@@ -1,5 +1,5 @@
 use log::{trace, warn};
-use mio_extras::channel::Sender;
+use retty_io::channel::Sender;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 
