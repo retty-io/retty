@@ -248,20 +248,20 @@
 //! ```ignore
 //! let mut bootstrap = BootstrapClientTcp::new();
 //! bootstrap.pipeline(Box::new( move |writer: Sender<BytesMut>| {
-//!             let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+//!     let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 //!
-//!             let async_transport_handler = AsyncTransport::new(writer);
-//!             let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
-//!                 LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-//!             ));
-//!             let string_codec_handler = StringCodec::new();
-//!             let echo_handler = EchoHandler::new();
+//!     let async_transport_handler = AsyncTransport::new(writer);
+//!     let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+//!         LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+//!     ));
+//!     let string_codec_handler = StringCodec::new();
+//!     let echo_handler = EchoHandler::new();
 //!
-//!             pipeline.add_back(async_transport_handler);
-//!             pipeline.add_back(line_based_frame_decoder_handler);
-//!             pipeline.add_back(string_codec_handler);
-//!             pipeline.add_back(echo_handler);
-//!             pipeline.finalize()
+//!     pipeline.add_back(async_transport_handler);
+//!     pipeline.add_back(line_based_frame_decoder_handler);
+//!     pipeline.add_back(string_codec_handler);
+//!     pipeline.add_back(echo_handler);
+//!     pipeline.finalize()
 //! }));
 //! ```
 //!
