@@ -3,10 +3,7 @@ use crossbeam::sync::WaitGroup;
 use log::{trace, warn};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Poll, PollOpt, Ready, Token};
-use retty_io::{
-    channel::{channel, Sender},
-    timer::Builder,
-};
+use retty_io::timer::Builder;
 use std::{
     io::{Error, ErrorKind, Read, Write},
     net::ToSocketAddrs,
@@ -21,7 +18,7 @@ use crate::channel::InboundPipeline;
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapServerTcp<W> {
     pipeline_factory_fn: Option<Arc<PipelineFactoryFn<BytesMut, W>>>,
-    close_tx: Arc<Mutex<Option<Sender<()>>>>,
+    close_tx: Arc<Mutex<Option<retty_io::broadcast::Sender<()>>>>,
     wg: Arc<Mutex<Option<WaitGroup>>>,
 }
 
@@ -52,7 +49,7 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
         let listener = super::each_addr(addr, TcpListener::bind)?;
         let pipeline_factory_fn = Arc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        let (close_tx, close_rx) = channel();
+        let (close_tx, close_rx) = retty_io::broadcast::channel();
         {
             let mut tx = self.close_tx.lock().unwrap();
             *tx = Some(close_tx);
@@ -123,10 +120,12 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                             trace!("Accepted connection from: {}", peer);
                             let child_pipeline_factory_fn = Arc::clone(&pipeline_factory_fn);
                             let child_worker = child_wg.clone();
+                            let child_close_rx = close_rx.clone();
                             thread::spawn(move || {
                                 let _ = Self::process_pipeline(
                                     socket,
                                     child_pipeline_factory_fn,
+                                    child_close_rx,
                                     child_worker,
                                 );
                             });
@@ -146,17 +145,17 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
     fn process_pipeline(
         mut socket: TcpStream,
         pipeline_factory_fn: Arc<PipelineFactoryFn<BytesMut, W>>,
-        //TODO: add cancel_rx
+        close_rx: retty_io::broadcast::Receiver<()>,
         worker: WaitGroup,
     ) -> Result<(), Error> {
         let _w = worker;
 
-        let (sender, receiver) = channel();
+        let (sender, receiver) = retty_io::channel::channel();
         let pipeline = (pipeline_factory_fn)(sender);
 
         const SOCKET_WT_TOKEN: Token = Token(0);
         const SOCKET_RD_TOKEN: Token = Token(1);
-        //TODO: const CLOSE_RX_TOKEN: Token = Token(2);
+        const CLOSE_RX_TOKEN: Token = Token(2);
         const TIMEOUT_TOKEN: Token = Token(3);
         const OUTBOUND_EVENT_TOKEN: Token = Token(4);
 
@@ -169,6 +168,12 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
             PollOpt::edge(),
         )?;
         poll.register(&socket, SOCKET_RD_TOKEN, Ready::readable(), PollOpt::edge())?;
+        poll.register(
+            &close_rx,
+            CLOSE_RX_TOKEN,
+            Ready::readable(),
+            PollOpt::edge(),
+        )?;
         poll.register(&timer, TIMEOUT_TOKEN, Ready::readable(), PollOpt::edge())?;
         poll.register(
             &pipeline,
@@ -227,6 +232,10 @@ impl<W: Send + Sync + 'static> BootstrapServerTcp<W> {
                             break 'outer;
                         }
                     },
+                    CLOSE_RX_TOKEN => {
+                        let _ = close_rx.try_recv();
+                        break 'outer;
+                    }
                     TIMEOUT_TOKEN => {
                         pipeline.handle_timeout(Instant::now());
                     }
