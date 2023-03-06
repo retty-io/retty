@@ -1,9 +1,11 @@
 use bytes::BytesMut;
 use crossbeam::sync::WaitGroup;
 use log::{trace, warn};
-use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Poll, PollOpt, Ready, Token};
-use retty_io::timer::Builder;
+use retty_io::{
+    net::{TcpListener, TcpStream},
+    timer::Builder,
+    Events, Poll, PollOpt, Ready, Token,
+};
 use std::{
     io::{Error, ErrorKind, Read, Write},
     net::ToSocketAddrs,

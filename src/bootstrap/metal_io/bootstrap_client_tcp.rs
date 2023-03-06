@@ -1,10 +1,10 @@
 use bytes::BytesMut;
 use log::{trace, warn};
-use mio::net::TcpStream;
-use mio::{Events, Poll, PollOpt, Ready, Token};
 use retty_io::{
     channel::{channel, Sender},
+    net::TcpStream,
     timer::Builder,
+    Events, Poll, PollOpt, Ready, Token,
 };
 use std::{
     io::{Error, Read, Write},

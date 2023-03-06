@@ -1,5 +1,4 @@
-use mio::event::Evented;
-use mio::{Poll, PollOpt, Ready, Registration, SetReadiness, Token};
+use retty_io::{event::Evented, Poll, PollOpt, Ready, Registration, SetReadiness, Token};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
