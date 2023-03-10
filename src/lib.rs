@@ -130,8 +130,8 @@
 //! This needs to be the final handler in the pipeline. Now the definition of the pipeline is needed to handle the requests and responses.
 //! ```ignore
 //! let mut bootstrap = BootstrapServerTcp::new();
-//! bootstrap.pipeline(Box::new(move |writer: Sender<BytesMut>| {
-//!     let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+//! bootstrap.pipeline(Box::new(move |writer: Tx<BytesMut>| {
+//!     let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 //!
 //!     let async_transport_handler = AsyncTransport::new(writer);
 //!     let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
@@ -144,7 +144,7 @@
 //!     pipeline.add_back(line_based_frame_decoder_handler);
 //!     pipeline.add_back(string_codec_handler);
 //!     pipeline.add_back(echo_handler);
-//!     pipeline.finalize()
+//!     Rc::new(pipeline.finalize())
 //! }));
 //! ```
 //!
@@ -170,9 +170,9 @@
 //! bootstrap.bind(format!("{}:{}", host, port))?;
 //!
 //! println!("Press ctrl-c to stop");
-//! tokio::select! {
-//!     _ = tokio::signal::ctrl_c() => {
-//!         bootstrap.stop();
+//! monoio::select! {
+//!     _ = monoio::signal::ctrl_c() => {
+//!         bootstrap.stop().await;
 //!     }
 //! };
 //! ```
@@ -247,8 +247,8 @@
 //! handles writing data.
 //! ```ignore
 //! let mut bootstrap = BootstrapClientTcp::new();
-//! bootstrap.pipeline(Box::new( move |writer: Sender<BytesMut>| {
-//!     let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+//! bootstrap.pipeline(Box::new( move |writer: Tx<BytesMut>| {
+//!     let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 //!
 //!     let async_transport_handler = AsyncTransport::new(writer);
 //!     let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
@@ -261,32 +261,32 @@
 //!     pipeline.add_back(line_based_frame_decoder_handler);
 //!     pipeline.add_back(string_codec_handler);
 //!     pipeline.add_back(echo_handler);
-//!     pipeline.finalize()
+//!     Rc::new(pipeline.finalize())
 //! }));
 //! ```
 //!
 //! Now that all needs to be done is plug the pipeline factory into a BootstrapTcpClient and that’s pretty much it.
 //! Connect to the remote peer and then read line from stdin and write it to pipeline.
 //! ```ignore
-//! let pipeline = bootstrap.connect(transport.peer_addr.as_ref().unwrap())?;
+//! let pipeline = bootstrap.connect(transport.peer_addr.as_ref().unwrap()).await?;
 //!
 //! println!("Enter bye to stop");
 //! let mut buffer = String::new();
-//! while stdin().read_line(&mut buffer).is_ok() {
+//! while monoio::io::stdin().read_line(&mut buffer).await.is_ok() {
 //!     match buffer.trim_end() {
 //!         "" => break,
 //!         line => {
+//!             pipeline.write(format!("{}\r\n", line));
 //!             if line == "bye" {
 //!                 pipeline.close();
 //!                 break;
 //!             }
-//!             pipeline.write(format!("{}\r\n", line));
 //!         }
 //!     };
 //!     buffer.clear();
 //! }
 //!
-//! bootstrap.stop();
+//! bootstrap.stop().await;
 //! ```
 #![doc(html_logo_url = "https://raw.githubusercontent.com/retty-io/retty/master/docs/retty.io.jpg")]
 #![warn(rust_2018_idioms)]

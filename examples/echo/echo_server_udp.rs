@@ -52,6 +52,9 @@ impl InboundHandler for EchoDecoder {
             });
         }
     }
+    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
+        //last handler, no need to fire_poll_timeout
+    }
 }
 
 impl OutboundHandler for EchoEncoder {

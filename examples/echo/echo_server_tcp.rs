@@ -1,7 +1,12 @@
 use bytes::BytesMut;
 use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
-use std::{io::Write, rc::Rc, str::FromStr, time::Duration};
+use std::{
+    io::Write,
+    rc::Rc,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 use retty::bootstrap::BootstrapServerTcp;
 use retty::channel::{
@@ -41,6 +46,9 @@ impl InboundHandler for EchoDecoder {
     }
     fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         ctx.fire_close();
+    }
+    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
+        //last handler, no need to fire_poll_timeout
     }
 }
 
