@@ -15,15 +15,11 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
+use retty::transport::{AsyncTransport, TaggedBytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct EchoDecoder {
-    interval: Duration,
-    timeout: Instant,
-    last_transport: Option<TransportContext>,
-}
+struct EchoDecoder;
 struct EchoEncoder;
 struct EchoHandler {
     decoder: EchoDecoder,
@@ -31,13 +27,9 @@ struct EchoHandler {
 }
 
 impl EchoHandler {
-    fn new(interval: Duration) -> Self {
+    fn new() -> Self {
         EchoHandler {
-            decoder: EchoDecoder {
-                timeout: Instant::now() + interval,
-                interval,
-                last_transport: None,
-            },
+            decoder: EchoDecoder,
             encoder: EchoEncoder,
         }
     }
@@ -52,43 +44,13 @@ impl InboundHandler for EchoDecoder {
             "handling {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
-        if msg.message == "bye" {
-            self.last_transport.take();
-        } else {
-            self.last_transport = Some(msg.transport);
+        if msg.message != "bye" {
             ctx.fire_write(TaggedString {
                 now: Instant::now(),
                 transport: msg.transport,
                 message: format!("{}\r\n", msg.message),
             });
         }
-    }
-
-    fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if self.last_transport.is_some() && self.timeout <= now {
-            println!("EchoHandler timeout at: {:?}", self.timeout);
-            self.interval += Duration::from_secs(1);
-            self.timeout = now + self.interval;
-            if let Some(transport) = &self.last_transport {
-                ctx.fire_write(TaggedString {
-                    now: Instant::now(),
-                    transport: *transport,
-                    message: format!(
-                        "Keep-alive message: next one for interval {:?}\r\n",
-                        self.interval
-                    ),
-                });
-            }
-        }
-
-        //last handler, no need to fire_handle_timeout
-    }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
-        if self.last_transport.is_some() && self.timeout < *eto {
-            *eto = self.timeout;
-        }
-
-        //last handler, no need to fire_poll_timeout
     }
 }
 
@@ -171,7 +133,7 @@ async fn main() -> anyhow::Result<()> {
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
         let string_codec_handler = TaggedStringCodec::new();
-        let echo_handler = EchoHandler::new(Duration::from_secs(10));
+        let echo_handler = EchoHandler::new();
 
         pipeline.add_back(async_transport_handler);
         pipeline.add_back(line_based_frame_decoder_handler);
@@ -182,6 +144,7 @@ async fn main() -> anyhow::Result<()> {
 
     bootstrap.bind(format!("{}:{}", host, port))?;
 
+    //TODO: https://github.com/bytedance/monoio/issues/154
     println!("Press ctrl-c to stop or wait 60s timout");
     println!("try `nc -u {} {}` in another shell", host, port);
     monoio::time::sleep(Duration::from_secs(60)).await;

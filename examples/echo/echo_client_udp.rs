@@ -1,11 +1,11 @@
 use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
 use std::{
-    io::{stdin, Write},
+    io::Write,
     net::SocketAddr,
     rc::Rc,
     str::FromStr,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use retty::bootstrap::BootstrapClientUdp;
@@ -20,7 +20,11 @@ use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct EchoDecoder;
+struct EchoDecoder {
+    interval: Duration,
+    timeout: Instant,
+    transport: Option<TransportContext>,
+}
 struct EchoEncoder;
 struct EchoHandler {
     decoder: EchoDecoder,
@@ -28,9 +32,13 @@ struct EchoHandler {
 }
 
 impl EchoHandler {
-    fn new() -> Self {
+    fn new(interval: Duration) -> Self {
         EchoHandler {
-            decoder: EchoDecoder,
+            decoder: EchoDecoder {
+                timeout: Instant::now() + interval,
+                interval,
+                transport: None,
+            },
             encoder: EchoEncoder,
         }
     }
@@ -45,6 +53,33 @@ impl InboundHandler for EchoDecoder {
             "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
+        self.transport = Some(msg.transport);
+    }
+    fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
+        if self.timeout <= now {
+            println!("EchoHandler timeout at: {:?}", self.timeout);
+            self.interval += Duration::from_secs(1);
+            self.timeout = now + self.interval;
+            if let Some(transport) = &self.transport {
+                ctx.fire_write(TaggedString {
+                    now: Instant::now(),
+                    transport: *transport,
+                    message: format!(
+                        "Keep-alive message: next one for interval {:?}\r\n",
+                        self.interval
+                    ),
+                });
+            }
+        }
+
+        //last handler, no need to fire_handle_timeout
+    }
+    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
+        if self.timeout < *eto {
+            *eto = self.timeout;
+        }
+
+        //last handler, no need to fire_poll_timeout
     }
 }
 
@@ -133,7 +168,7 @@ async fn main() -> anyhow::Result<()> {
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
         let string_codec_handler = TaggedStringCodec::new();
-        let echo_handler = EchoHandler::new();
+        let echo_handler = EchoHandler::new(Duration::from_secs(10));
 
         pipeline.add_back(async_transport_handler);
         pipeline.add_back(line_based_frame_decoder_handler);
@@ -148,6 +183,7 @@ async fn main() -> anyhow::Result<()> {
         .connect(*transport.peer_addr.as_ref().unwrap())
         .await?;
 
+    /*TODO: https://github.com/bytedance/monoio/issues/155
     println!("Enter bye to stop");
     let mut buffer = String::new();
     while stdin().read_line(&mut buffer).is_ok() {
@@ -166,8 +202,21 @@ async fn main() -> anyhow::Result<()> {
             }
         };
         buffer.clear();
-    }
+    }*/
 
+    monoio::time::timeout(Duration::from_secs(1), async {
+        pipeline.write(TaggedString {
+            now: Instant::now(),
+            transport,
+            message: format!("hello\r\n"),
+        });
+    })
+    .await?;
+
+    //TODO: https://github.com/bytedance/monoio/issues/154
+    println!("Press ctrl-c to stop or wait 60s timout");
+    println!("try `nc -u {} {}` in another shell", host, port);
+    monoio::time::sleep(Duration::from_secs(60)).await;
     bootstrap.stop().await;
 
     Ok(())
