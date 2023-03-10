@@ -82,10 +82,10 @@ impl Handler for ChatHandler {
 }
 
 #[derive(Parser)]
-#[command(name = "Chat Client UDP with ECN")]
+#[command(name = "Chat Client UDP")]
 #[command(author = "Rusty Rain <y@liu.mx>")]
 #[command(version = "0.1.0")]
-#[command(about = "An example of chat client udp with ECN", long_about = None)]
+#[command(about = "An example of chat client udp", long_about = None)]
 struct Cli {
     #[arg(short, long)]
     debug: bool,
