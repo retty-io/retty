@@ -6,12 +6,12 @@ use std::rc::Rc;
 
 pub(crate) mod bootstrap_client_tcp;
 pub(crate) mod bootstrap_client_udp;
-//pub(crate) mod bootstrap_server_tcp;
+pub(crate) mod bootstrap_server_tcp;
 pub(crate) mod bootstrap_server_udp;
 
 pub use bootstrap_client_tcp::BootstrapClientTcp;
 pub use bootstrap_client_udp::BootstrapClientUdp;
-//bootstrap_server_tcp::BootstrapServerTcp,
+pub use bootstrap_server_tcp::BootstrapServerTcp;
 pub use bootstrap_server_udp::BootstrapServerUdp;
 
 /// Creates a new [Pipeline]

@@ -16,6 +16,7 @@ bytes = "1.4.0"
 log = "0.4.17"
 monoio = "0.1.0"
 local-sync = "0.1.0"
+waitgroup = "0.1.2"
 
 [dev-dependencies]
 chrono = "0.4.23"
