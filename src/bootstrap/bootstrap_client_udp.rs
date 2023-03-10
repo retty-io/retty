@@ -165,18 +165,19 @@ impl<W: 'static> BootstrapClientUdp<W> {
     }
 
     /// Gracefully stop the client
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
                 let _ = close_tx.send(());
             }
         }
-        {
+        let done_rx = {
             let mut done_rx = self.done_rx.borrow_mut();
-            if let Some(mut done_rx) = done_rx.take() {
-                let _ = done_rx.try_recv(); //TODO: using blocking_recv() https://github.com/monoio-rs/local-sync/issues/2
-            }
+            done_rx.take()
+        };
+        if let Some(mut done_rx) = done_rx {
+            let _ = done_rx.recv().await;
         }
     }
 }

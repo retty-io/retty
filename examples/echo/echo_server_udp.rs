@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Press ctrl-c to stop or wait 60s timout");
     println!("try `nc -u {} {}` in another shell", host, port);
     monoio::time::sleep(Duration::from_secs(60)).await;
-    bootstrap.stop();
+    bootstrap.stop().await;
 
     Ok(())
 }
