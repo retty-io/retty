@@ -22,6 +22,8 @@ chrono = "0.4.23"
 env_logger = "0.10.0"
 clap = { version = "4.1.4", features = ["derive"] }
 anyhow = "1.0.69"
+ctrlc = "3.2.5"
+crossbeam-channel = "0.5"
 
 #[[example]]
 #name = "aio_echo_server_tcp"
@@ -63,10 +65,9 @@ anyhow = "1.0.69"
 #path = "examples/async_io/chat/chat_server_udp_ecn.rs"
 #required-features = ["runtime-tokio"]
 #
-#[[example]]
-#name = "echo_server_udp"
-#path = "examples/echo/echo_server_udp.rs"
-#required-features = ["metal-io"]
+[[example]]
+name = "echo_server_udp"
+path = "examples/echo/echo_server_udp.rs"
 #
 #[[example]]
 #name = "echo_client_udp"

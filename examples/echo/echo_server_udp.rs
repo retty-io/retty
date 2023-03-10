@@ -1,5 +1,6 @@
 use clap::Parser;
-use retty_io::channel::Sender;
+use local_sync::mpsc::unbounded::Tx;
+use std::rc::Rc;
 use std::{
     io::Write,
     str::FromStr,
@@ -136,7 +137,7 @@ struct Cli {
     log_level: String,
 }
 
-#[tokio::main]
+#[monoio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
@@ -162,8 +163,8 @@ async fn main() -> anyhow::Result<()> {
     println!("listening {}:{}...", host, port);
 
     let mut bootstrap = BootstrapServerUdp::new();
-    bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
-        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
+        let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
@@ -176,17 +177,21 @@ async fn main() -> anyhow::Result<()> {
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(echo_handler);
-        pipeline.finalize()
+        Rc::new(pipeline.finalize())
     }));
 
     bootstrap.bind(format!("{}:{}", host, port))?;
 
     println!("Press ctrl-c to stop");
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            bootstrap.stop();
-        }
+    let ctrlc_rx = {
+        let (sender, receiver) = crossbeam_channel::bounded(1);
+        ctrlc::set_handler(move || {
+            let _ = sender.send(());
+        })?;
+        receiver
     };
+    let _ = ctrlc_rx.recv();
+    bootstrap.stop();
 
     Ok(())
 }

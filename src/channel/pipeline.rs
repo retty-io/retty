@@ -66,7 +66,7 @@ impl<R: 'static, W: 'static> Default for Pipeline<R, W> {
 
 impl<R: 'static, W: 'static> Pipeline<R, W> {
     /// Creates a new Pipeline
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             handler_names: Vec::new(),
 
@@ -81,7 +81,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Appends a [Handler] at the last position of this pipeline.
-    fn add_back(&mut self, handler: impl Handler) {
+    pub fn add_back(&mut self, handler: impl Handler) {
         let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         self.handler_names.push(handler_name);
@@ -94,7 +94,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Inserts a [Handler] at the first position of this pipeline.
-    fn add_front(&mut self, handler: impl Handler) {
+    pub fn add_front(&mut self, handler: impl Handler) {
         let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         self.handler_names.insert(0, handler_name);
@@ -107,7 +107,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Removes a [Handler] at the last position of this pipeline.
-    fn remove_back(&mut self) -> Result<(), std::io::Error> {
+    pub fn remove_back(&mut self) -> Result<(), std::io::Error> {
         let len = self.handler_names.len();
         if len == 0 {
             Err(std::io::Error::new(
@@ -128,7 +128,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Removes a [Handler] at the first position of this pipeline.
-    fn remove_front(&mut self) -> Result<(), std::io::Error> {
+    pub fn remove_front(&mut self) -> Result<(), std::io::Error> {
         if self.handler_names.is_empty() {
             Err(std::io::Error::new(
                 ErrorKind::NotFound,
@@ -148,7 +148,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Removes a [Handler] from this pipeline based on handler_name.
-    fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
+    pub fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
         let mut to_be_removed = vec![];
         for (index, name) in self.handler_names.iter().enumerate() {
             if name == handler_name {
@@ -178,12 +178,12 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
 
     #[allow(clippy::len_without_is_empty)]
     /// Returns the number of Handlers in this pipeline.
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.handler_names.len()
     }
 
     /// Finalizes the pipeline.
-    fn finalize(self) -> Self {
+    pub fn finalize(self) -> Self {
         let mut enumerate = self.inbound_contexts.iter().enumerate();
         let ctx_pipe_len = self.inbound_contexts.len();
         for _ in 0..ctx_pipe_len {
