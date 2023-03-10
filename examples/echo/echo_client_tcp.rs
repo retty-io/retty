@@ -1,9 +1,10 @@
 use bytes::BytesMut;
 use clap::Parser;
-use retty_io::channel::Sender;
+use local_sync::mpsc::unbounded::Tx;
 use std::{
     error::Error,
-    io::{stdin, Write},
+    io::Write,
+    rc::Rc,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -53,12 +54,10 @@ impl InboundHandler for EchoDecoder {
         println!("received exception: {}", err);
         ctx.fire_close();
     }
-
     fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         println!("EOF received :(");
         ctx.fire_close();
     }
-
     fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
         if now >= self.timeout {
             println!("EchoHandler timeout at: {:?}", self.timeout);
@@ -72,10 +71,9 @@ impl InboundHandler for EchoDecoder {
 
         //last handler, no need to fire_handle_timeout
     }
-
     fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
         if self.timeout < *eto {
-            *eto = self.timeout
+            *eto = self.timeout;
         }
 
         //last handler, no need to fire_poll_timeout
@@ -127,7 +125,8 @@ struct Cli {
     log_level: String,
 }
 
-fn main() -> anyhow::Result<()> {
+#[monoio::main(driver = "fusion", enable_timer = true)]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
@@ -152,8 +151,8 @@ fn main() -> anyhow::Result<()> {
     println!("Connecting {}:{}...", host, port);
 
     let mut bootstrap = BootstrapClientTcp::new();
-    bootstrap.pipeline(Box::new(move |writer: Sender<BytesMut>| {
-        let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+    bootstrap.pipeline(Box::new(move |writer: Tx<BytesMut>| {
+        let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
@@ -166,11 +165,12 @@ fn main() -> anyhow::Result<()> {
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(echo_handler);
-        pipeline.finalize()
+        Rc::new(pipeline.finalize())
     }));
 
-    let pipeline = bootstrap.connect(format!("{}:{}", host, port))?;
+    let _pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
 
+    /*TODO: https://github.com/bytedance/monoio/issues/155
     println!("Enter bye to stop");
     let mut buffer = String::new();
     while stdin().read_line(&mut buffer).is_ok() {
@@ -185,9 +185,13 @@ fn main() -> anyhow::Result<()> {
             }
         };
         buffer.clear();
-    }
+    }*/
 
-    bootstrap.stop();
+    //TODO: https://github.com/bytedance/monoio/issues/154
+    println!("Press ctrl-c to stop or wait 60s timout");
+    println!("try `nc -u {} {}` in another shell", host, port);
+    monoio::time::sleep(Duration::from_secs(60)).await;
+    bootstrap.stop().await;
 
     Ok(())
 }

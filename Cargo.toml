@@ -76,7 +76,6 @@ path = "examples/echo/echo_client_udp.rs"
 name = "echo_server_tcp"
 path = "examples/echo/echo_server_tcp.rs"
 
-#[[example]]
-#name = "echo_client_tcp"
-#path = "examples/echo/echo_client_tcp.rs"
-#required-features = ["metal-io"]
+[[example]]
+name = "echo_client_tcp"
+path = "examples/echo/echo_client_tcp.rs"
