@@ -1,7 +1,7 @@
 use bytes::BytesMut;
 use clap::Parser;
-use retty_io::channel::Sender;
-use std::{io::Write, str::FromStr};
+use local_sync::mpsc::unbounded::Tx;
+use std::{io::Write, rc::Rc, str::FromStr, time::Duration};
 
 use retty::bootstrap::BootstrapServerTcp;
 use retty::channel::{
@@ -89,7 +89,7 @@ struct Cli {
     log_level: String,
 }
 
-#[tokio::main]
+#[monoio::main(driver = "fusion", enable_timer = true)]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
@@ -115,8 +115,8 @@ async fn main() -> anyhow::Result<()> {
     println!("listening {}:{}...", host, port);
 
     let mut bootstrap = BootstrapServerTcp::new();
-    bootstrap.pipeline(Box::new(move |writer: Sender<BytesMut>| {
-        let pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+    bootstrap.pipeline(Box::new(move |writer: Tx<BytesMut>| {
+        let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
@@ -129,17 +129,16 @@ async fn main() -> anyhow::Result<()> {
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(echo_handler);
-        pipeline.finalize()
+        Rc::new(pipeline.finalize())
     }));
 
     bootstrap.bind(format!("{}:{}", host, port))?;
 
-    println!("Press ctrl-c to stop");
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            bootstrap.stop();
-        }
-    };
+    //TODO: https://github.com/bytedance/monoio/issues/154
+    println!("Press ctrl-c to stop or wait 60s timout");
+    println!("try `nc -u {} {}` in another shell", host, port);
+    monoio::time::sleep(Duration::from_secs(60)).await;
+    bootstrap.stop().await;
 
     Ok(())
 }
