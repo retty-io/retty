@@ -1,13 +1,15 @@
 use log::{trace, warn};
-use std::any::Any;
-use std::cell::RefCell;
-use std::error::Error;
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::time::Instant;
+use std::{
+    any::Any,
+    cell::RefCell,
+    error::Error,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+    time::Instant,
+};
 
-use crate::channel::metal_io::handler_internal::{
+use crate::channel::handler_internal::{
     InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
     OutboundHandlerInternal,
 };

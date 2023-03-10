@@ -1,5 +1,3 @@
-#[cfg(not(feature = "metal-io"))]
-use async_trait::async_trait;
 use bytes::{BufMut, BytesMut};
 use std::time::Instant;
 
@@ -53,46 +51,6 @@ impl Default for TaggedString {
     }
 }
 
-#[cfg(not(feature = "metal-io"))]
-#[async_trait]
-impl InboundHandler for TaggedStringDecoder {
-    type Rin = TaggedBytesMut;
-    type Rout = TaggedString;
-
-    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        match String::from_utf8(msg.message.to_vec()) {
-            Ok(message) => {
-                ctx.fire_read(TaggedString {
-                    now: msg.now,
-                    transport: msg.transport,
-                    message,
-                })
-                .await;
-            }
-            Err(err) => ctx.fire_read_exception(err.into()).await,
-        }
-    }
-}
-
-#[cfg(not(feature = "metal-io"))]
-#[async_trait]
-impl OutboundHandler for TaggedStringEncoder {
-    type Win = TaggedString;
-    type Wout = TaggedBytesMut;
-
-    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-        let mut buf = BytesMut::new();
-        buf.put(msg.message.as_bytes());
-        ctx.fire_write(TaggedBytesMut {
-            now: Instant::now(),
-            transport: msg.transport,
-            message: buf,
-        })
-        .await;
-    }
-}
-
-#[cfg(feature = "metal-io")]
 impl InboundHandler for TaggedStringDecoder {
     type Rin = TaggedBytesMut;
     type Rout = TaggedString;
@@ -111,7 +69,6 @@ impl InboundHandler for TaggedStringDecoder {
     }
 }
 
-#[cfg(feature = "metal-io")]
 impl OutboundHandler for TaggedStringEncoder {
     type Win = TaggedString;
     type Wout = TaggedBytesMut;

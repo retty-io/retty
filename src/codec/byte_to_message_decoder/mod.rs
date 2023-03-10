@@ -1,10 +1,6 @@
 //! Handlers for converting byte to message
-
-#[cfg(not(feature = "metal-io"))]
-use async_trait::async_trait;
-use bytes::BytesMut;
-
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
+use bytes::BytesMut;
 
 mod line_based_frame_decoder;
 mod tagged;
@@ -45,51 +41,6 @@ impl ByteToMessageCodec {
     }
 }
 
-#[cfg(not(feature = "metal-io"))]
-#[async_trait]
-impl InboundHandler for ByteToMessageDecoder {
-    type Rin = BytesMut;
-    type Rout = Self::Rin;
-
-    async fn transport_active(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
-        self.transport_active = true;
-        ctx.fire_transport_active().await;
-    }
-    async fn transport_inactive(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
-        self.transport_active = false;
-        ctx.fire_transport_inactive().await;
-    }
-    async fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, mut msg: Self::Rin) {
-        while self.transport_active {
-            match self.message_decoder.decode(&mut msg) {
-                Ok(message) => {
-                    if let Some(message) = message {
-                        ctx.fire_read(message).await;
-                    } else {
-                        return;
-                    }
-                }
-                Err(err) => {
-                    ctx.fire_read_exception(Box::new(err)).await;
-                    return;
-                }
-            }
-        }
-    }
-}
-
-#[cfg(not(feature = "metal-io"))]
-#[async_trait]
-impl OutboundHandler for ByteToMessageEncoder {
-    type Win = BytesMut;
-    type Wout = Self::Win;
-
-    async fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-        ctx.fire_write(msg).await;
-    }
-}
-
-#[cfg(feature = "metal-io")]
 impl InboundHandler for ByteToMessageDecoder {
     type Rin = BytesMut;
     type Rout = Self::Rin;
@@ -121,7 +72,6 @@ impl InboundHandler for ByteToMessageDecoder {
     }
 }
 
-#[cfg(feature = "metal-io")]
 impl OutboundHandler for ByteToMessageEncoder {
     type Win = BytesMut;
     type Wout = Self::Win;

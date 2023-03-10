@@ -11,89 +11,74 @@ homepage = "https://retty.io"
 keywords = ["networking", "protocols"]
 categories = [ "network-programming", "asynchronous" ]
 
-[features]
-default = ["metal-io"]
-metal-io = ["retty-io", "async-transport/metal-io", "crossbeam"]
-runtime-tokio = ["tokio/rt", "tokio/net", "tokio/sync", "tokio/io-util", "tokio/time", "tokio/macros", "async-transport/runtime-tokio", "waitgroup", "async-trait"]
-runtime-async-std = ["async-io", "async-std", "futures-lite", "tokio/macros", "async-transport/runtime-async-std", "waitgroup", "async-trait"]
-
 [dependencies]
 bytes = "1.4.0"
 log = "0.4.17"
-waitgroup = { version = "0.1.2", optional = true }
-async-trait = { version = "0.1.64", optional = true }
-async-io = { version = "1.12.0", optional = true }
-async-std = { version = "1.12.0", optional = true }
-futures-lite = { version = "1.12.0", optional = true }
-tokio = { version = "1.25.0", optional = true }
-async-transport = { version = "0.4.1", default-features = false, optional = true }
-retty-io = { version = "0.3.0", optional = true }
-crossbeam = { version = "0.8.2", optional = true }
+monoio = "0.1.0"
+local-sync = "0.1.0"
 
 [dev-dependencies]
-tokio = { version = "1.25.0", features = ["full"] }
-futures = "0.3.26"
 chrono = "0.4.23"
 env_logger = "0.10.0"
 clap = { version = "4.1.4", features = ["derive"] }
 anyhow = "1.0.69"
 
-[[example]]
-name = "aio_echo_server_tcp"
-path = "examples/async_io/echo/echo_server_tcp.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_echo_client_tcp"
-path = "examples/async_io/echo/echo_client_tcp.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_echo_server_udp"
-path = "examples/async_io/echo/echo_server_udp.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_echo_client_udp"
-path = "examples/async_io/echo/echo_client_udp.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_chat_client_tcp"
-path = "examples/async_io/chat/chat_client_tcp.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_chat_server_tcp"
-path = "examples/async_io/chat/chat_server_tcp.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_chat_client_udp_ecn"
-path = "examples/async_io/chat/chat_client_udp_ecn.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "aio_chat_server_udp_ecn"
-path = "examples/async_io/chat/chat_server_udp_ecn.rs"
-required-features = ["runtime-tokio"]
-
-[[example]]
-name = "mio_echo_server_udp"
-path = "examples/metal_io/echo/echo_server_udp.rs"
-required-features = ["metal-io"]
-
-[[example]]
-name = "mio_echo_client_udp"
-path = "examples/metal_io/echo/echo_client_udp.rs"
-required-features = ["metal-io"]
-
-[[example]]
-name = "mio_echo_server_tcp"
-path = "examples/metal_io/echo/echo_server_tcp.rs"
-required-features = ["metal-io"]
-
-[[example]]
-name = "mio_echo_client_tcp"
-path = "examples/metal_io/echo/echo_client_tcp.rs"
-required-features = ["metal-io"]
+#[[example]]
+#name = "aio_echo_server_tcp"
+#path = "examples/async_io/echo/echo_server_tcp.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_echo_client_tcp"
+#path = "examples/async_io/echo/echo_client_tcp.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_echo_server_udp"
+#path = "examples/async_io/echo/echo_server_udp.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_echo_client_udp"
+#path = "examples/async_io/echo/echo_client_udp.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_chat_client_tcp"
+#path = "examples/async_io/chat/chat_client_tcp.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_chat_server_tcp"
+#path = "examples/async_io/chat/chat_server_tcp.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_chat_client_udp_ecn"
+#path = "examples/async_io/chat/chat_client_udp_ecn.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "aio_chat_server_udp_ecn"
+#path = "examples/async_io/chat/chat_server_udp_ecn.rs"
+#required-features = ["runtime-tokio"]
+#
+#[[example]]
+#name = "echo_server_udp"
+#path = "examples/echo/echo_server_udp.rs"
+#required-features = ["metal-io"]
+#
+#[[example]]
+#name = "echo_client_udp"
+#path = "examples/echo/echo_client_udp.rs"
+#required-features = ["metal-io"]
+#
+#[[example]]
+#name = "echo_server_tcp"
+#path = "examples/echo/echo_server_tcp.rs"
+#required-features = ["metal-io"]
+#
+#[[example]]
+#name = "echo_client_tcp"
+#path = "examples/echo/echo_client_tcp.rs"
+#required-features = ["metal-io"]

@@ -1,5 +1,5 @@
+use local_sync::mpsc::unbounded::Tx;
 use log::{trace, warn};
-use retty_io::channel::Sender;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 
@@ -9,7 +9,7 @@ struct AsyncTransportDecoder<T> {
     phantom: PhantomData<T>,
 }
 struct AsyncTransportEncoder<T> {
-    writer: Option<Sender<T>>,
+    writer: Option<Tx<T>>,
 }
 
 /// Asynchronous transport handler that reads T and writes T
@@ -20,7 +20,7 @@ pub struct AsyncTransport<T> {
 
 impl<T> AsyncTransport<T> {
     /// Creates a new asynchronous transport handler
-    pub fn new(writer: Sender<T>) -> Self {
+    pub fn new(writer: Tx<T>) -> Self {
         AsyncTransport {
             decoder: AsyncTransportDecoder {
                 phantom: PhantomData,
@@ -48,10 +48,10 @@ impl<T: 'static> OutboundHandler for AsyncTransportEncoder<T> {
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         if let Some(writer) = &self.writer {
             if let Err(err) = writer.send(msg) {
-                warn!("AsyncTransport write error: {}", err);
+                warn!("AsyncTransport write error: {:?}", err);
                 ctx.fire_write_exception(Box::new(std::io::Error::new(
                     ErrorKind::BrokenPipe,
-                    format!("{}", err),
+                    format!("{:?}", err),
                 )));
             };
         }

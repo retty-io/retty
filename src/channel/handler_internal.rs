@@ -1,8 +1,4 @@
-use std::any::Any;
-use std::cell::RefCell;
-use std::error::Error;
-use std::rc::Rc;
-use std::time::Instant;
+use std::{any::Any, cell::RefCell, error::Error, rc::Rc, time::Instant};
 
 #[doc(hidden)]
 pub trait InboundHandlerInternal {

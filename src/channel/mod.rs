@@ -1,19 +1,10 @@
 //! The handler and pipeline APIs which are asynchronous and event-driven abstraction of various transports
+pub(crate) mod handler;
+pub(crate) mod handler_internal;
+pub(crate) mod pipeline;
 
-#[cfg(not(feature = "metal-io"))]
-pub(crate) mod async_io;
-#[cfg(not(feature = "metal-io"))]
-pub use self::async_io::{
+pub use self::{
     handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler},
     handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
-    pipeline::Pipeline,
-};
-
-#[cfg(feature = "metal-io")]
-pub(crate) mod metal_io;
-#[cfg(feature = "metal-io")]
-pub use metal_io::{
-    handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler},
-    handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
-    pipeline::{InboundPipeline, OutboundEvent, OutboundPipeline, Pipeline},
+    pipeline::{InboundPipeline, OutboundPipeline, Pipeline},
 };

@@ -1,23 +1,38 @@
 //! Asynchronous transport abstraction for TCP and UDP
-
-use async_transport::EcnCodepoint;
 use bytes::BytesMut;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
 
-#[cfg(not(feature = "metal-io"))]
-pub(crate) mod async_io;
-#[cfg(not(feature = "metal-io"))]
-pub use self::async_io::{
-    async_transport_tcp::AsyncTransportTcp, async_transport_udp::AsyncTransportUdp,
-    async_transport_udp_ecn::AsyncTransportUdpEcn, AsyncTransportRead, AsyncTransportWrite,
-};
+mod async_transport;
+pub use async_transport::AsyncTransport;
 
-#[cfg(feature = "metal-io")]
-pub(crate) mod metal_io;
-#[cfg(feature = "metal-io")]
-pub use metal_io::AsyncTransport;
+/// Explicit congestion notification codepoint
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum EcnCodepoint {
+    #[doc(hidden)]
+    Ect0 = 0b10,
+    #[doc(hidden)]
+    Ect1 = 0b01,
+    #[doc(hidden)]
+    Ce = 0b11,
+}
+
+impl EcnCodepoint {
+    /// Create new object from the given bits
+    pub fn from_bits(x: u8) -> Option<Self> {
+        use self::EcnCodepoint::*;
+        Some(match x & 0b11 {
+            0b10 => Ect0,
+            0b01 => Ect1,
+            0b11 => Ce,
+            _ => {
+                return None;
+            }
+        })
+    }
+}
 
 /// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
