@@ -4,15 +4,15 @@ use crate::channel::Pipeline;
 use local_sync::mpsc::unbounded::Tx;
 use std::rc::Rc;
 
-//pub(crate) mod bootstrap_client_tcp;
+pub(crate) mod bootstrap_client_tcp;
 pub(crate) mod bootstrap_client_udp;
 //pub(crate) mod bootstrap_server_tcp;
 pub(crate) mod bootstrap_server_udp;
 
-//bootstrap_client_tcp::BootstrapClientTcp,
-pub use self::bootstrap_client_udp::BootstrapClientUdp;
+pub use bootstrap_client_tcp::BootstrapClientTcp;
+pub use bootstrap_client_udp::BootstrapClientUdp;
 //bootstrap_server_tcp::BootstrapServerTcp,
-pub use self::bootstrap_server_udp::BootstrapServerUdp;
+pub use bootstrap_server_udp::BootstrapServerUdp;
 
 /// Creates a new [Pipeline]
 pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(Tx<R>) -> Rc<Pipeline<R, W>>) + Send + Sync>;
