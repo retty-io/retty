@@ -1,8 +1,9 @@
 use clap::Parser;
-use retty_io::channel::Sender;
+use local_sync::mpsc::unbounded::Tx;
 use std::{
     io::{stdin, Write},
     net::SocketAddr,
+    rc::Rc,
     str::FromStr,
     time::Instant,
 };
@@ -92,7 +93,8 @@ struct Cli {
     log_level: String,
 }
 
-fn main() -> anyhow::Result<()> {
+#[monoio::main(driver = "fusion", enable_timer = true)]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
@@ -123,8 +125,8 @@ fn main() -> anyhow::Result<()> {
     };
 
     let mut bootstrap = BootstrapClientUdp::new();
-    bootstrap.pipeline(Box::new(move |writer: Sender<TaggedBytesMut>| {
-        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
+        let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
@@ -137,12 +139,14 @@ fn main() -> anyhow::Result<()> {
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(echo_handler);
-        pipeline.finalize()
+        Rc::new(pipeline.finalize())
     }));
 
     bootstrap.bind(transport.local_addr)?;
 
-    let pipeline = bootstrap.connect(transport.peer_addr.as_ref().unwrap())?;
+    let pipeline = bootstrap
+        .connect(*transport.peer_addr.as_ref().unwrap())
+        .await?;
 
     println!("Enter bye to stop");
     let mut buffer = String::new();

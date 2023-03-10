@@ -2,8 +2,8 @@ use bytes::BytesMut;
 use local_sync::mpsc::unbounded::{channel, Rx, Tx};
 use log::{trace, warn};
 use monoio::{io::Canceller, net::udp::UdpSocket, time::sleep};
-use std::cell::RefCell;
 use std::{
+    cell::RefCell,
     io::Error,
     net::ToSocketAddrs,
     rc::Rc,
@@ -83,6 +83,7 @@ impl<W: 'static> BootstrapServerUdp<W> {
 
                 let timeout = sleep(delay_from_now);
                 let canceller = Canceller::new();
+
                 monoio::select! {
                     _ = close_rx.recv() => {
                         canceller.cancel();

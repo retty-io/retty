@@ -5,12 +5,12 @@ use local_sync::mpsc::unbounded::Tx;
 use std::rc::Rc;
 
 //pub(crate) mod bootstrap_client_tcp;
-//pub(crate) mod bootstrap_client_udp;
+pub(crate) mod bootstrap_client_udp;
 //pub(crate) mod bootstrap_server_tcp;
 pub(crate) mod bootstrap_server_udp;
 
 //bootstrap_client_tcp::BootstrapClientTcp,
-//bootstrap_client_udp::BootstrapClientUdp,
+pub use self::bootstrap_client_udp::BootstrapClientUdp;
 //bootstrap_server_tcp::BootstrapServerTcp,
 pub use self::bootstrap_server_udp::BootstrapServerUdp;
 

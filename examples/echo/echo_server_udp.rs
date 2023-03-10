@@ -1,8 +1,8 @@
 use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
-use std::rc::Rc;
 use std::{
     io::Write,
+    rc::Rc,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -137,7 +137,7 @@ struct Cli {
     log_level: String,
 }
 
-#[monoio::main]
+#[monoio::main(driver = "fusion", enable_timer = true)]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
@@ -182,15 +182,9 @@ async fn main() -> anyhow::Result<()> {
 
     bootstrap.bind(format!("{}:{}", host, port))?;
 
-    println!("Press ctrl-c to stop");
-    let ctrlc_rx = {
-        let (sender, receiver) = crossbeam_channel::bounded(1);
-        ctrlc::set_handler(move || {
-            let _ = sender.send(());
-        })?;
-        receiver
-    };
-    let _ = ctrlc_rx.recv();
+    println!("Press ctrl-c to stop or wait 60s timout");
+    println!("try `nc -u {} {}` in another shell", host, port);
+    monoio::time::sleep(Duration::from_secs(60)).await;
     bootstrap.stop();
 
     Ok(())
