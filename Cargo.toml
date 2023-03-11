@@ -16,7 +16,7 @@ bytes = "1.4.0"
 log = "0.4.17"
 glommio = "0.8.0"
 waitgroup = "0.1.2"
-monoio = {version = "0.1.0", default-features = false, features = ["macros"] }
+tokio = {version = "1.26.0", default-features = false, features = ["macros"] }
 
 [dev-dependencies]
 chrono = "0.4.23"

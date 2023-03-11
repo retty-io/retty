@@ -102,7 +102,7 @@ impl<W: 'static> BootstrapClientUdp<W> {
 
                 let timeout = Timer::new(delay_from_now);
 
-                monoio::select! {
+                tokio::select! {
                     _ = close_rx.recv() => {
                         trace!("pipeline socket exit loop");
                         let _ = done_tx.try_send(());
