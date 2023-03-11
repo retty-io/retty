@@ -1,4 +1,3 @@
-use bytes::BytesMut;
 use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
 use std::{io::Write, rc::Rc, str::FromStr, time::Instant};
@@ -8,10 +7,10 @@ use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
 use retty::codec::{
-    byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
-    string_codec::StringCodec,
+    byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
+    string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::transport::AsyncTransport;
+use retty::transport::{AsyncTransport, TaggedBytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,12 +31,16 @@ impl EchoHandler {
 }
 
 impl InboundHandler for EchoDecoder {
-    type Rin = String;
+    type Rin = TaggedString;
     type Rout = Self::Rin;
 
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("handling {}", msg);
-        ctx.fire_write(format!("{}\r\n", msg));
+        println!("handling {} from {}", msg.message, msg.transport.peer_addr);
+        ctx.fire_write(TaggedString {
+            now: Instant::now(),
+            transport: msg.transport,
+            message: format!("{}\r\n", msg.message),
+        });
     }
     fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         ctx.fire_close();
@@ -48,7 +51,7 @@ impl InboundHandler for EchoDecoder {
 }
 
 impl OutboundHandler for EchoEncoder {
-    type Win = String;
+    type Win = TaggedString;
     type Wout = Self::Win;
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
@@ -57,9 +60,9 @@ impl OutboundHandler for EchoEncoder {
 }
 
 impl Handler for EchoHandler {
-    type Rin = String;
+    type Rin = TaggedString;
     type Rout = Self::Rin;
-    type Win = String;
+    type Win = TaggedString;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
@@ -118,14 +121,14 @@ async fn main() -> anyhow::Result<()> {
     println!("listening {}:{}...", host, port);
 
     let mut bootstrap = BootstrapServerTcp::new();
-    bootstrap.pipeline(Box::new(move |writer: Tx<BytesMut>| {
-        let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
+        let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
-        let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
-        let string_codec_handler = StringCodec::new();
+        let string_codec_handler = TaggedStringCodec::new();
         let echo_handler = EchoHandler::new();
 
         pipeline.add_back(async_transport_handler);

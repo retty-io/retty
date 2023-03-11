@@ -1,12 +1,12 @@
 //! Handlers for converting byte to message
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
+use crate::transport::TaggedBytesMut;
 use bytes::BytesMut;
+use std::time::Instant;
 
 mod line_based_frame_decoder;
-mod tagged;
 
 pub use line_based_frame_decoder::{LineBasedFrameDecoder, TerminatorType};
-pub use tagged::TaggedByteToMessageCodec;
 
 /// This trait allows for decoding messages.
 pub trait MessageDecoder {
@@ -14,35 +14,35 @@ pub trait MessageDecoder {
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, std::io::Error>;
 }
 
-struct ByteToMessageDecoder {
+struct TaggedByteToMessageDecoder {
     transport_active: bool,
     message_decoder: Box<dyn MessageDecoder + Send + Sync>,
 }
 
-struct ByteToMessageEncoder;
+struct TaggedByteToMessageEncoder;
 
-/// A Byte to Message Codec handler that reads with input of BytesMut and output of BytesMut,
-/// or writes with input of BytesMut and output of BytesMut
-pub struct ByteToMessageCodec {
-    decoder: ByteToMessageDecoder,
-    encoder: ByteToMessageEncoder,
+/// A tagged Byte to Message Codec handler that reads with input of TaggedBytesMut and output of TaggedBytesMut,
+/// or writes with input of TaggedBytesMut and output of TaggedBytesMut
+pub struct TaggedByteToMessageCodec {
+    decoder: TaggedByteToMessageDecoder,
+    encoder: TaggedByteToMessageEncoder,
 }
 
-impl ByteToMessageCodec {
-    /// Creates a new ByteToMessageCodec handler
+impl TaggedByteToMessageCodec {
+    /// Creates a new TaggedByteToMessageCodec handler
     pub fn new(message_decoder: Box<dyn MessageDecoder + Send + Sync>) -> Self {
         Self {
-            decoder: ByteToMessageDecoder {
+            decoder: TaggedByteToMessageDecoder {
                 transport_active: false,
                 message_decoder,
             },
-            encoder: ByteToMessageEncoder {},
+            encoder: TaggedByteToMessageEncoder {},
         }
     }
 }
 
-impl InboundHandler for ByteToMessageDecoder {
-    type Rin = BytesMut;
+impl InboundHandler for TaggedByteToMessageDecoder {
+    type Rin = TaggedBytesMut;
     type Rout = Self::Rin;
 
     fn transport_active(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
@@ -55,10 +55,14 @@ impl InboundHandler for ByteToMessageDecoder {
     }
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, mut msg: Self::Rin) {
         while self.transport_active {
-            match self.message_decoder.decode(&mut msg) {
+            match self.message_decoder.decode(&mut msg.message) {
                 Ok(message) => {
                     if let Some(message) = message {
-                        ctx.fire_read(message);
+                        ctx.fire_read(TaggedBytesMut {
+                            now: Instant::now(),
+                            transport: msg.transport,
+                            message,
+                        });
                     } else {
                         return;
                     }
@@ -72,8 +76,8 @@ impl InboundHandler for ByteToMessageDecoder {
     }
 }
 
-impl OutboundHandler for ByteToMessageEncoder {
-    type Win = BytesMut;
+impl OutboundHandler for TaggedByteToMessageEncoder {
+    type Win = TaggedBytesMut;
     type Wout = Self::Win;
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
@@ -81,14 +85,14 @@ impl OutboundHandler for ByteToMessageEncoder {
     }
 }
 
-impl Handler for ByteToMessageCodec {
-    type Rin = BytesMut;
+impl Handler for TaggedByteToMessageCodec {
+    type Rin = TaggedBytesMut;
     type Rout = Self::Rin;
-    type Win = BytesMut;
+    type Win = TaggedBytesMut;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
-        "ByteToMessageCodec"
+        "TaggedByteToMessageCodec"
     }
 
     fn split(

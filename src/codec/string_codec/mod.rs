@@ -1,72 +1,99 @@
-//! Handlers for converting between (Tagged)BytesMut and (Tagged)String
-
-mod tagged;
+//! Handlers for converting between TaggedBytesMut and TaggedString
 
 use bytes::{BufMut, BytesMut};
+use std::time::Instant;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
+use crate::transport::{TaggedBytesMut, TransportContext};
 
-pub use tagged::{TaggedString, TaggedStringCodec};
+struct TaggedStringDecoder;
+struct TaggedStringEncoder;
 
-struct StringDecoder;
-struct StringEncoder;
-
-/// A StringCodec handler that reads with input of BytesMut and output of String,
-/// or writes with input of String and output of BytesMut
-pub struct StringCodec {
-    decoder: StringDecoder,
-    encoder: StringEncoder,
+/// A tagged StringCodec handler that reads with input of TaggedBytesMut and output of TaggedString,
+/// or writes with input of TaggedString and output of TaggedBytesMut
+pub struct TaggedStringCodec {
+    decoder: TaggedStringDecoder,
+    encoder: TaggedStringEncoder,
 }
 
-impl Default for StringCodec {
+impl Default for TaggedStringCodec {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl StringCodec {
-    /// Creates a new StringCodec handler
+impl TaggedStringCodec {
+    /// Creates a new TaggedStringCodec handler
     pub fn new() -> Self {
-        StringCodec {
-            decoder: StringDecoder {},
-            encoder: StringEncoder {},
+        TaggedStringCodec {
+            decoder: TaggedStringDecoder {},
+            encoder: TaggedStringEncoder {},
         }
     }
 }
 
-impl InboundHandler for StringDecoder {
-    type Rin = BytesMut;
-    type Rout = String;
+/// A tagged String with [TransportContext]
+#[derive(Clone)]
+pub struct TaggedString {
+    /// Received/Sent time
+    pub now: Instant,
+    /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
+    pub transport: TransportContext,
+    /// Message body with String type
+    pub message: String,
+}
+
+impl Default for TaggedString {
+    fn default() -> Self {
+        Self {
+            now: Instant::now(),
+            transport: TransportContext::default(),
+            message: String::new(),
+        }
+    }
+}
+
+impl InboundHandler for TaggedStringDecoder {
+    type Rin = TaggedBytesMut;
+    type Rout = TaggedString;
 
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        match String::from_utf8(msg.to_vec()) {
+        match String::from_utf8(msg.message.to_vec()) {
             Ok(message) => {
-                ctx.fire_read(message);
+                ctx.fire_read(TaggedString {
+                    now: msg.now,
+                    transport: msg.transport,
+                    message,
+                });
             }
             Err(err) => ctx.fire_read_exception(err.into()),
         }
     }
 }
 
-impl OutboundHandler for StringEncoder {
-    type Win = String;
-    type Wout = BytesMut;
+impl OutboundHandler for TaggedStringEncoder {
+    type Win = TaggedString;
+    type Wout = TaggedBytesMut;
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         let mut buf = BytesMut::new();
-        buf.put(msg.as_bytes());
-        ctx.fire_write(buf);
+        buf.put(msg.message.as_bytes());
+        ctx.fire_write(TaggedBytesMut {
+            now: Instant::now(),
+            transport: msg.transport,
+            message: buf,
+        });
     }
 }
 
-impl Handler for StringCodec {
-    type Rin = BytesMut;
-    type Rout = String;
-    type Win = String;
-    type Wout = BytesMut;
+impl Handler for TaggedStringCodec {
+    type Rin = TaggedBytesMut;
+    type Rout = TaggedString;
+    type Win = TaggedString;
+    type Wout = TaggedBytesMut;
 
     fn name(&self) -> &str {
-        "StringCodec"
+        "TaggedStringCodec"
     }
 
     fn split(

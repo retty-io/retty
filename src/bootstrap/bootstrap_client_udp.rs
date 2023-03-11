@@ -85,20 +85,18 @@ impl<W: 'static> BootstrapClientUdp<W> {
             pipeline.transport_active();
             loop {
                 if let Ok(transmit) = receiver.try_recv() {
-                    if let Some(peer_addr) = transmit.transport.peer_addr {
-                        let (res, _) = socket.send_to(transmit.message, peer_addr).await;
-                        match res {
-                            Ok(n) => {
-                                trace!("socket write {} bytes", n);
-                                continue;
-                            }
-                            Err(err) => {
-                                warn!("socket write error {}", err);
-                                break;
-                            }
+                    let (res, _) = socket
+                        .send_to(transmit.message, transmit.transport.peer_addr)
+                        .await;
+                    match res {
+                        Ok(n) => {
+                            trace!("socket write {} bytes", n);
+                            continue;
                         }
-                    } else {
-                        trace!("socket write error due to none peer_addr");
+                        Err(err) => {
+                            warn!("socket write error {}", err);
+                            break;
+                        }
                     }
                 }
 
@@ -130,19 +128,15 @@ impl<W: 'static> BootstrapClientUdp<W> {
                     opt = receiver.recv() => {
                         canceller.cancel();
                         if let Some(transmit) = opt {
-                            if let Some(peer_addr) = transmit.transport.peer_addr {
-                                let (res, _) = socket.send_to(transmit.message, peer_addr).await;
-                                match res {
-                                    Ok(n) => {
-                                        trace!("socket write {} bytes", n);
-                                    }
-                                    Err(err) => {
-                                        warn!("socket write error {}", err);
-                                        break;
-                                    }
+                            let (res, _) = socket.send_to(transmit.message, transmit.transport.peer_addr).await;
+                            match res {
+                                Ok(n) => {
+                                    trace!("socket write {} bytes", n);
                                 }
-                            } else {
-                                trace!("socket write error due to none peer_addr");
+                                Err(err) => {
+                                    warn!("socket write error {}", err);
+                                    break;
+                                }
                             }
                         } else {
                             warn!("pipeline recv error");
@@ -162,7 +156,7 @@ impl<W: 'static> BootstrapClientUdp<W> {
                                     now: Instant::now(),
                                     transport: TransportContext {
                                         local_addr,
-                                        peer_addr: Some(peer_addr),
+                                        peer_addr,
                                         ecn: None,
                                     },
                                     message: BytesMut::from(&buf[..n]),

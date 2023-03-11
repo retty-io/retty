@@ -51,7 +51,7 @@ impl InboundHandler for EchoDecoder {
 
     fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
-            "received back: {} from {:?}",
+            "received back: {} from {}",
             msg.message, msg.transport.peer_addr
         );
         self.transport = Some(msg.transport);
@@ -156,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
 
     let transport = TransportContext {
         local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
+        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
         ecn: None,
     };
 
@@ -180,9 +180,7 @@ async fn main() -> anyhow::Result<()> {
 
     bootstrap.bind(transport.local_addr)?;
 
-    let pipeline = bootstrap
-        .connect(*transport.peer_addr.as_ref().unwrap())
-        .await?;
+    let pipeline = bootstrap.connect(transport.peer_addr).await?;
 
     println!("Enter bye to stop");
     let (mut tx, mut rx) = futures::channel::mpsc::channel(8);

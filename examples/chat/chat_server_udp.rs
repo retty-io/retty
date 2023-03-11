@@ -1,45 +1,34 @@
-use async_trait::async_trait;
 use clap::Parser;
-use std::collections::HashSet;
-use std::io::Write;
-use std::net::SocketAddr;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Instant;
+use local_sync::mpsc::unbounded::Tx;
+use std::{cell::RefCell, collections::HashMap, io::Write, rc::Rc, str::FromStr, time::Instant};
 
-use retty::bootstrap::BootstrapServerUdpEcn;
+use retty::bootstrap::BootstrapServerUdp;
 use retty::channel::{
-    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
+    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, OutboundPipeline,
+    Pipeline,
 };
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::runtime::{default_runtime, sync::Mutex};
-use retty::transport::{
-    AsyncTransportUdpEcn, AsyncTransportWrite, TaggedBytesMut, TransportContext,
-};
+use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
-    peers: HashSet<SocketAddr>,
+    peers: HashMap<SocketAddr, Rc<dyn OutboundPipeline>>,
 }
 
 impl Shared {
     /// Create a new, empty, instance of `Shared`.
     fn new() -> Self {
         Shared {
-            peers: HashSet::new(),
+            peers: HashMap::new(),
         }
     }
 
-    fn contains(&self, peer: &SocketAddr) -> bool {
-        self.peers.contains(peer)
-    }
-
-    fn join(&mut self, peer: SocketAddr) {
+    fn join(&mut self, peer: SocketAddr, pipeline: Rc<dyn OutboundPipeline>) {
         println!("{} joined", peer);
-        self.peers.insert(peer);
+        self.peers.insert(peer, pipeline);
     }
 
     fn leave(&mut self, peer: &SocketAddr) {
@@ -48,21 +37,13 @@ impl Shared {
     }
 
     /// Send message to every peer, except for the sender.
-    async fn broadcast(
-        &mut self,
-        ctx: &InboundContext<TaggedString, TaggedString>,
-        sender: SocketAddr,
-        message: TaggedString,
-    ) {
-        print!(
-            "broadcast message: ECN {:?} and MSG {}",
-            message.transport.ecn, message.message,
-        );
-        for peer in self.peers.iter() {
+    fn broadcast(&self, sender: SocketAddr, msg: TaggedString) {
+        print!("broadcast message: {}", msg.message);
+        for (peer, pipeline) in self.peers.iter() {
             if *peer != sender {
-                let mut msg = message.clone();
-                msg.transport.peer_addr = Some(*peer);
-                let _ = ctx.fire_write(msg).await;
+                let mut msg = msg.clone();
+                msg.transport.peer_addr = *peer;
+                let _ = pipeline.fire_write(msg);
             }
         }
     }
@@ -70,7 +51,7 @@ impl Shared {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ChatDecoder {
-    state: Arc<Mutex<Shared>>,
+    state: Rc<RefCell<Shared>>,
 }
 struct ChatEncoder;
 struct ChatHandler {
@@ -79,7 +60,7 @@ struct ChatHandler {
 }
 
 impl ChatHandler {
-    fn new(state: Arc<Mutex<Shared>>) -> Self {
+    fn new(state: Rc<RefCell<Shared>>) -> Self {
         ChatHandler {
             decoder: ChatDecoder { state },
             encoder: ChatEncoder,

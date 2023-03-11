@@ -16,10 +16,11 @@ use std::{
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
+use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
 pub struct BootstrapClientTcp<W> {
-    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<BytesMut, W>>>,
+    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     close_tx: Rc<RefCell<Option<Tx<()>>>>,
     done_rx: Rc<RefCell<Option<Rx<()>>>>,
 }
@@ -41,7 +42,10 @@ impl<W: 'static> BootstrapClientTcp<W> {
     }
 
     /// Creates pipeline instances from when calling [BootstrapClientTcp::connect].
-    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
+    pub fn pipeline(
+        &mut self,
+        pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
+    ) -> &mut Self {
         self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
         self
     }
@@ -52,6 +56,8 @@ impl<W: 'static> BootstrapClientTcp<W> {
         addr: A,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
         let mut socket = TcpStream::connect(addr).await?;
+        let local_addr = socket.local_addr()?;
+        let peer_addr = socket.peer_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
         let (sender, mut receiver) = channel();
@@ -74,7 +80,7 @@ impl<W: 'static> BootstrapClientTcp<W> {
             pipeline.transport_active();
             loop {
                 if let Ok(transmit) = receiver.try_recv() {
-                    let (res, _) = socket.write(transmit).await;
+                    let (res, _) = socket.write(transmit.message).await;
                     match res {
                         Ok(n) => {
                             trace!("socket write {} bytes", n);
@@ -115,7 +121,7 @@ impl<W: 'static> BootstrapClientTcp<W> {
                     opt = receiver.recv() => {
                         canceller.cancel();
                         if let Some(transmit) = opt {
-                            let (res, _) = socket.write(transmit).await;
+                            let (res, _) = socket.write(transmit.message).await;
                             match res {
                                 Ok(n) => {
                                     trace!("socket write {} bytes", n);
@@ -139,7 +145,15 @@ impl<W: 'static> BootstrapClientTcp<W> {
                                 }
 
                                 trace!("socket read {} bytes", n);
-                                pipeline.read(BytesMut::from(&buf[..n]));
+                                pipeline.read(TaggedBytesMut {
+                                    now: Instant::now(),
+                                    transport: TransportContext {
+                                        local_addr,
+                                        peer_addr,
+                                        ecn: None,
+                                    },
+                                    message: BytesMut::from(&buf[..n]),
+                                });
                             }
                             Err(err) => {
                                 warn!("socket read error {}", err);

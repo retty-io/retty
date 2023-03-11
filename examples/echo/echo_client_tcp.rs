@@ -1,10 +1,10 @@
-use bytes::BytesMut;
 use clap::Parser;
 use futures::StreamExt;
 use local_sync::mpsc::unbounded::Tx;
 use std::{
     error::Error,
     io::Write,
+    net::SocketAddr,
     rc::Rc,
     str::FromStr,
     time::{Duration, Instant},
@@ -15,16 +15,17 @@ use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
 use retty::codec::{
-    byte_to_message_decoder::{ByteToMessageCodec, LineBasedFrameDecoder, TerminatorType},
-    string_codec::StringCodec,
+    byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
+    string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::transport::AsyncTransport;
+use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct EchoDecoder {
     interval: Duration,
     timeout: Instant,
+    transport: Option<TransportContext>,
 }
 struct EchoEncoder;
 struct EchoHandler {
@@ -38,6 +39,7 @@ impl EchoHandler {
             decoder: EchoDecoder {
                 timeout: Instant::now() + interval,
                 interval,
+                transport: None,
             },
             encoder: EchoEncoder,
         }
@@ -45,11 +47,15 @@ impl EchoHandler {
 }
 
 impl InboundHandler for EchoDecoder {
-    type Rin = String;
+    type Rin = TaggedString;
     type Rout = Self::Rin;
 
     fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("received back: {}", msg);
+        println!(
+            "received back: {} from {}",
+            msg.message, msg.transport.peer_addr
+        );
+        self.transport = Some(msg.transport);
     }
     fn read_exception(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, err: Box<dyn Error>) {
         println!("received exception: {}", err);
@@ -60,14 +66,20 @@ impl InboundHandler for EchoDecoder {
         ctx.fire_close();
     }
     fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if now >= self.timeout {
+        if self.timeout <= now {
             println!("EchoHandler timeout at: {:?}", self.timeout);
             self.interval += Duration::from_secs(1);
             self.timeout = now + self.interval;
-            ctx.fire_write(format!(
-                "Keep-alive message: next one for interval {:?}\r\n",
-                self.interval
-            ));
+            if let Some(transport) = &self.transport {
+                ctx.fire_write(TaggedString {
+                    now: Instant::now(),
+                    transport: *transport,
+                    message: format!(
+                        "Keep-alive message: next one for interval {:?}\r\n",
+                        self.interval
+                    ),
+                });
+            }
         }
 
         //last handler, no need to fire_handle_timeout
@@ -82,7 +94,7 @@ impl InboundHandler for EchoDecoder {
 }
 
 impl OutboundHandler for EchoEncoder {
-    type Win = String;
+    type Win = TaggedString;
     type Wout = Self::Win;
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
@@ -91,9 +103,9 @@ impl OutboundHandler for EchoEncoder {
 }
 
 impl Handler for EchoHandler {
-    type Rin = String;
+    type Rin = TaggedString;
     type Rout = Self::Rin;
-    type Win = String;
+    type Win = TaggedString;
     type Wout = Self::Win;
 
     fn name(&self) -> &str {
@@ -151,15 +163,21 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Connecting {}:{}...", host, port);
 
+    let transport = TransportContext {
+        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
+        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
+        ecn: None,
+    };
+
     let mut bootstrap = BootstrapClientTcp::new();
-    bootstrap.pipeline(Box::new(move |writer: Tx<BytesMut>| {
-        let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
+        let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
-        let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
-        let string_codec_handler = StringCodec::new();
+        let string_codec_handler = TaggedStringCodec::new();
         let echo_handler = EchoHandler::new(Duration::from_secs(10));
 
         pipeline.add_back(async_transport_handler);
@@ -169,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
         Rc::new(pipeline.finalize())
     }));
 
-    let pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
+    let pipeline = bootstrap.connect(transport.peer_addr).await?;
 
     let (mut tx, mut rx) = futures::channel::mpsc::channel(8);
     std::thread::spawn(move || {
@@ -190,7 +208,11 @@ async fn main() -> anyhow::Result<()> {
         }
     });
     while let Some(line) = rx.next().await {
-        pipeline.write(format!("{}\r\n", line));
+        pipeline.write(TaggedString {
+            now: Instant::now(),
+            transport,
+            message: format!("{}\r\n", line),
+        });
         if line == "bye" {
             pipeline.close();
             break;

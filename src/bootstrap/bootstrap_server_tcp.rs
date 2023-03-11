@@ -17,10 +17,11 @@ use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::InboundPipeline;
+use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapServerTcp<W> {
-    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<BytesMut, W>>>,
+    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     close_tx: Rc<RefCell<Option<Tx<()>>>>,
     wg: Rc<RefCell<Option<WaitGroup>>>,
 }
@@ -42,7 +43,10 @@ impl<W: 'static> BootstrapServerTcp<W> {
     }
 
     /// Creates pipeline instances from when calling [BootstrapServerTcp::bind].
-    pub fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<BytesMut, W>) -> &mut Self {
+    pub fn pipeline(
+        &mut self,
+        pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
+    ) -> &mut Self {
         self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
         self
     }
@@ -91,7 +95,7 @@ impl<W: 'static> BootstrapServerTcp<W> {
                                 broadcast_close.push(child_close_tx);
                                 let child_worker = child_wg.worker();
                                 monoio::spawn(async move {
-                                    Self::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx, child_worker)
+                                    let _ = Self::process_pipeline(socket, child_pipeline_factory_fn, child_close_rx, child_worker)
                                         .await;
                                 });
                             }
@@ -115,19 +119,22 @@ impl<W: 'static> BootstrapServerTcp<W> {
 
     async fn process_pipeline(
         mut socket: TcpStream,
-        pipeline_factory_fn: Rc<PipelineFactoryFn<BytesMut, W>>,
+        pipeline_factory_fn: Rc<PipelineFactoryFn<TaggedBytesMut, W>>,
         mut close_rx: Rx<()>,
         worker: Worker,
-    ) {
+    ) -> Result<(), Error> {
         let _w = worker;
 
         let (sender, mut receiver) = channel();
         let pipeline = (pipeline_factory_fn)(sender);
 
+        let local_addr = socket.local_addr()?;
+        let peer_addr = socket.peer_addr()?;
+
         pipeline.transport_active();
         loop {
             if let Ok(transmit) = receiver.try_recv() {
-                let (res, _) = socket.write(transmit).await;
+                let (res, _) = socket.write(transmit.message).await;
                 match res {
                     Ok(n) => {
                         trace!("socket write {} bytes", n);
@@ -167,7 +174,7 @@ impl<W: 'static> BootstrapServerTcp<W> {
                 opt = receiver.recv() => {
                     canceller.cancel();
                     if let Some(transmit) = opt {
-                        let (res, _) = socket.write(transmit).await;
+                        let (res, _) = socket.write(transmit.message).await;
                         match res {
                             Ok(n) => {
                                 trace!("socket write {} bytes", n);
@@ -191,7 +198,15 @@ impl<W: 'static> BootstrapServerTcp<W> {
                             }
 
                             trace!("socket read {} bytes", n);
-                            pipeline.read(BytesMut::from(&buf[..n]));
+                            pipeline.read(TaggedBytesMut {
+                                    now: Instant::now(),
+                                    transport: TransportContext {
+                                        local_addr,
+                                        peer_addr,
+                                        ecn: None,
+                                    },
+                                    message: BytesMut::from(&buf[..n]),
+                                });
                         }
                         Err(err) => {
                             warn!("socket read error {}", err);
@@ -202,6 +217,8 @@ impl<W: 'static> BootstrapServerTcp<W> {
             }
         }
         pipeline.transport_inactive();
+
+        Ok(())
     }
 
     /// Gracefully stop the server
