@@ -201,9 +201,9 @@ async fn test_echo_udp() {
         assert!(tx.send(client_count).is_ok());
     });
 
+    let client_count = rx.await.unwrap();
     assert!(server_done_rx.await.is_ok());
 
-    let client_count = rx.await.unwrap();
     let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
     assert_eq!(*client_count, *server_count);
     assert_eq!(ITER + 1, *client_count)
