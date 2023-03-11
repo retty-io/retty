@@ -14,7 +14,8 @@ jobs:
     name: Build and test
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'macos-latest']
+        os:
+          - ubuntu-latest
         toolchain:
           - nightly
     runs-on: ${{ matrix.os }}

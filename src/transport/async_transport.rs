@@ -1,4 +1,4 @@
-use local_sync::mpsc::unbounded::Tx;
+use glommio::channels::local_channel::LocalSender;
 use log::{trace, warn};
 use std::io::ErrorKind;
 use std::marker::PhantomData;
@@ -9,7 +9,7 @@ struct AsyncTransportDecoder<T> {
     phantom: PhantomData<T>,
 }
 struct AsyncTransportEncoder<T> {
-    writer: Option<Tx<T>>,
+    writer: Option<LocalSender<T>>,
 }
 
 /// Asynchronous transport handler that reads T and writes T
@@ -20,7 +20,7 @@ pub struct AsyncTransport<T> {
 
 impl<T> AsyncTransport<T> {
     /// Creates a new asynchronous transport handler
-    pub fn new(writer: Tx<T>) -> Self {
+    pub fn new(writer: LocalSender<T>) -> Self {
         AsyncTransport {
             decoder: AsyncTransportDecoder {
                 phantom: PhantomData,
@@ -47,7 +47,7 @@ impl<T: 'static> OutboundHandler for AsyncTransportEncoder<T> {
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         if let Some(writer) = &self.writer {
-            if let Err(err) = writer.send(msg) {
+            if let Err(err) = writer.try_send(msg) {
                 warn!("AsyncTransport write error: {:?}", err);
                 ctx.fire_write_exception(Box::new(std::io::Error::new(
                     ErrorKind::BrokenPipe,

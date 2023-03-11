@@ -1,6 +1,9 @@
-use local_sync::mpsc::unbounded::{channel, Rx, Tx};
+use bytes::BytesMut;
+use glommio::{
+    channels::local_channel::{new_unbounded, LocalReceiver, LocalSender},
+    {net::UdpSocket, timer::Timer},
+};
 use log::{trace, warn};
-use monoio::{io::Canceller, net::udp::UdpSocket, time::sleep};
 use std::{
     cell::RefCell,
     io::Error,
@@ -11,13 +14,13 @@ use std::{
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::InboundPipeline;
-use crate::transport::TaggedBytesMut;
+use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
 pub struct BootstrapServerUdp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
-    close_tx: Rc<RefCell<Option<Tx<()>>>>,
-    done_rx: Rc<RefCell<Option<Rx<()>>>>,
+    close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
+    done_rx: Rc<RefCell<Option<LocalReceiver<()>>>>,
 }
 
 impl<W: 'static> Default for BootstrapServerUdp<W> {
@@ -51,40 +54,26 @@ impl<W: 'static> BootstrapServerUdp<W> {
         let local_addr = socket.local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
-        let (sender, mut receiver) = channel();
-        let pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>> = (pipeline_factory_fn)(sender);
+        let (sender, receiver) = new_unbounded();
+        let pipeline = (pipeline_factory_fn)(sender);
 
-        let (close_tx, mut close_rx) = channel();
+        let (close_tx, close_rx) = new_unbounded();
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = channel();
+        let (done_tx, done_rx) = new_unbounded();
         {
             let mut rx = self.done_rx.borrow_mut();
             *rx = Some(done_rx);
         }
 
-        monoio::spawn(async move {
+        glommio::spawn_local(async move {
+            let mut buf = vec![0u8; 2048];
+
             pipeline.transport_active();
             loop {
-                if let Ok(transmit) = receiver.try_recv() {
-                    let (res, _) = socket
-                        .send_to(transmit.message, transmit.transport.peer_addr)
-                        .await;
-                    match res {
-                        Ok(n) => {
-                            trace!("socket write {} bytes", n);
-                            continue;
-                        }
-                        Err(err) => {
-                            warn!("socket write error {}", err);
-                            break;
-                        }
-                    }
-                }
-
                 let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto);
 
@@ -96,40 +85,20 @@ impl<W: 'static> BootstrapServerUdp<W> {
                     continue;
                 }
 
-                let canceller = Canceller::new();
-                let handler = canceller.handle();
-
-                let timeout = sleep(delay_from_now);
-                monoio::pin!(timeout);
-                let socket_recv = socket.cancelable_recv_from(Vec::with_capacity(1500), handler);
-                monoio::pin!(socket_recv);
+                let timeout = Timer::new(delay_from_now);
 
                 monoio::select! {
                     _ = close_rx.recv() => {
-                        canceller.cancel();
                         trace!("pipeline socket exit loop");
-                        let _ = done_tx.send(());
+                        let _ = done_tx.try_send(());
                         break;
                     }
-                    _ = &mut timeout => {
-                        canceller.cancel();
-                        let result = socket_recv.await;
-                        if super::process_packet(result, &pipeline, local_addr) {
-                            break;
-                        }
-
+                    _ = timeout => {
                         pipeline.handle_timeout(Instant::now());
                     }
                     opt = receiver.recv() => {
-                        canceller.cancel();
-                        let result = socket_recv.await;
-                        if super::process_packet(result, &pipeline, local_addr) {
-                            break;
-                        }
-
                         if let Some(transmit) = opt {
-                            let (res, _) = socket.send_to(transmit.message, transmit.transport.peer_addr).await;
-                            match res {
+                            match socket.send_to(&transmit.message, transmit.transport.peer_addr).await {
                                 Ok(n) => {
                                     trace!("socket write {} bytes", n);
                                 }
@@ -143,15 +112,35 @@ impl<W: 'static> BootstrapServerUdp<W> {
                             break;
                         }
                     }
-                    result = &mut socket_recv => {
-                        if super::process_packet(result, &pipeline, local_addr) {
-                            break;
+                    res = socket.recv_from(&mut buf) => {
+                        match res {
+                            Ok((n, peer_addr)) => {
+                                if n == 0 {
+                                    pipeline.read_eof();
+                                    break;
+                                }
+
+                                trace!("socket read {} bytes", n);
+                                pipeline.read(TaggedBytesMut {
+                                    now: Instant::now(),
+                                    transport: TransportContext {
+                                        local_addr,
+                                        peer_addr,
+                                        ecn: None,
+                                    },
+                                    message: BytesMut::from(&buf[..n]),
+                                });
+                            }
+                            Err(err) => {
+                                warn!("socket read error {}", err);
+                                break;
+                            }
                         }
                     }
                 }
             }
             pipeline.transport_inactive();
-        });
+        }).detach();
 
         Ok(local_addr)
     }
@@ -161,14 +150,14 @@ impl<W: 'static> BootstrapServerUdp<W> {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.send(());
+                let _ = close_tx.try_send(());
             }
         }
         let done_rx = {
             let mut done_rx = self.done_rx.borrow_mut();
             done_rx.take()
         };
-        if let Some(mut done_rx) = done_rx {
+        if let Some(done_rx) = done_rx {
             let _ = done_rx.recv().await;
         }
     }
