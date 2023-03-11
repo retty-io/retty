@@ -1,4 +1,5 @@
 use clap::Parser;
+use futures::StreamExt;
 use local_sync::mpsc::unbounded::Tx;
 use std::{
     io::Write,
@@ -183,37 +184,37 @@ async fn main() -> anyhow::Result<()> {
         .connect(*transport.peer_addr.as_ref().unwrap())
         .await?;
 
-    /*TODO: https://github.com/bytedance/monoio/issues/155
     println!("Enter bye to stop");
-    let mut buffer = String::new();
-    while stdin().read_line(&mut buffer).is_ok() {
-        match buffer.trim_end() {
-            "" => break,
-            line => {
-                pipeline.write(TaggedString {
-                    now: Instant::now(),
-                    transport,
-                    message: format!("{}\r\n", line),
-                });
-                if line == "bye" {
-                    pipeline.close();
-                    break;
+    let (mut tx, mut rx) = futures::channel::mpsc::channel(8);
+    std::thread::spawn(move || {
+        let mut buffer = String::new();
+        while std::io::stdin().read_line(&mut buffer).is_ok() {
+            match buffer.trim_end() {
+                "" => break,
+                line => {
+                    if tx.try_send(line.to_string()).is_err() {
+                        break;
+                    }
+                    if line == "bye" {
+                        break;
+                    }
                 }
-            }
-        };
-        buffer.clear();
-    }*/
-
-    monoio::time::timeout(Duration::from_secs(1), async {
+            };
+            buffer.clear();
+        }
+    });
+    while let Some(line) = rx.next().await {
         pipeline.write(TaggedString {
             now: Instant::now(),
             transport,
-            message: format!("hello\r\n"),
+            message: format!("{}\r\n", line),
         });
-    })
-    .await?;
+        if line == "bye" {
+            pipeline.close();
+            break;
+        }
+    }
 
-    monoio::time::sleep(Duration::from_secs(60)).await;
     bootstrap.stop().await;
 
     Ok(())

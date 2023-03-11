@@ -150,6 +150,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("Error setting Ctrl-C handler");
     });
     let _ = rx.await;
+
     bootstrap.stop().await;
 
     Ok(())

@@ -1,5 +1,6 @@
 use bytes::BytesMut;
 use clap::Parser;
+use futures::StreamExt;
 use local_sync::mpsc::unbounded::Tx;
 use std::{
     error::Error,
@@ -168,19 +169,19 @@ async fn main() -> anyhow::Result<()> {
         Rc::new(pipeline.finalize())
     }));
 
-    let _pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
+    let pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
 
-    /*println!("Enter bye to stop");
-    let (tx, rx) = futures::channel::mpsc::unbounded();
+    let (mut tx, mut rx) = futures::channel::mpsc::channel(8);
     std::thread::spawn(move || {
         let mut buffer = String::new();
         while std::io::stdin().read_line(&mut buffer).is_ok() {
             match buffer.trim_end() {
                 "" => break,
                 line => {
-                    pipeline.write(format!("{}\r\n", line));
+                    if tx.try_send(line.to_string()).is_err() {
+                        break;
+                    }
                     if line == "bye" {
-                        pipeline.close();
                         break;
                     }
                 }
@@ -188,9 +189,14 @@ async fn main() -> anyhow::Result<()> {
             buffer.clear();
         }
     });
-    */
+    while let Some(line) = rx.next().await {
+        pipeline.write(format!("{}\r\n", line));
+        if line == "bye" {
+            pipeline.close();
+            break;
+        }
+    }
 
-    monoio::time::sleep(Duration::from_secs(60)).await;
     bootstrap.stop().await;
 
     Ok(())
