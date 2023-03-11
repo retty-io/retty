@@ -1,12 +1,7 @@
 use clap::Parser;
 use futures::StreamExt;
 use local_sync::mpsc::unbounded::Tx;
-use std::{
-    io::Write,
-    net::SocketAddr,
-    str::FromStr,
-    time::{Duration, Instant},
-};
+use std::{io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapClientUdp;
 use retty::channel::{
@@ -20,11 +15,7 @@ use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct EchoDecoder {
-    interval: Duration,
-    timeout: Instant,
-    transport: Option<TransportContext>,
-}
+struct EchoDecoder;
 struct EchoEncoder;
 struct EchoHandler {
     decoder: EchoDecoder,
@@ -32,13 +23,9 @@ struct EchoHandler {
 }
 
 impl EchoHandler {
-    fn new(interval: Duration) -> Self {
+    fn new() -> Self {
         EchoHandler {
-            decoder: EchoDecoder {
-                timeout: Instant::now() + interval,
-                interval,
-                transport: None,
-            },
+            decoder: EchoDecoder,
             encoder: EchoEncoder,
         }
     }
@@ -53,32 +40,8 @@ impl InboundHandler for EchoDecoder {
             "received back: {} from {}",
             msg.message, msg.transport.peer_addr
         );
-        self.transport = Some(msg.transport);
     }
-    fn handle_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, now: Instant) {
-        if self.timeout <= now {
-            println!("EchoHandler timeout at: {:?}", self.timeout);
-            self.interval += Duration::from_secs(1);
-            self.timeout = now + self.interval;
-            if let Some(transport) = &self.transport {
-                ctx.fire_write(TaggedString {
-                    now: Instant::now(),
-                    transport: *transport,
-                    message: format!(
-                        "Keep-alive message: next one for interval {:?}\r\n",
-                        self.interval
-                    ),
-                });
-            }
-        }
-
-        //last handler, no need to fire_handle_timeout
-    }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
-        if self.timeout < *eto {
-            *eto = self.timeout;
-        }
-
+    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
         //last handler, no need to fire_poll_timeout
     }
 }
@@ -168,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
         let string_codec_handler = TaggedStringCodec::new();
-        let echo_handler = EchoHandler::new(Duration::from_secs(10));
+        let echo_handler = EchoHandler::new();
 
         pipeline.add_back(async_transport_handler);
         pipeline.add_back(line_based_frame_decoder_handler);

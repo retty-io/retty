@@ -26,34 +26,27 @@ anyhow = "1.0.69"
 ctrlc = "3.2.5"
 futures = "0.3.26"
 
-#[[example]]
-#name = "chat_client_tcp"
-#path = "examples/chat/chat_client_tcp.rs"
-
 [[example]]
 name = "chat_server_tcp"
-path = "examples/chat/chat_server_tcp.rs"
+path = "examples/chat_server_tcp.rs"
 
-#[[example]]
-#name = "chat_client_udp"
-#path = "examples/chat/chat_client_udp.rs"
+[[example]]
+name = "chat_server_udp"
+path = "examples/chat_server_udp.rs"
 
-#[[example]]
-#name = "chat_server_udp"
-#path = "examples/chat/chat_server_udp.rs"
+[[example]]
+name = "client_udp"
+path = "examples/client_udp.rs"
+
+[[example]]
+name = "client_tcp"
+path = "examples/client_tcp.rs"
 
 [[example]]
 name = "echo_server_udp"
-path = "examples/echo/echo_server_udp.rs"
-
-[[example]]
-name = "echo_client_udp"
-path = "examples/echo/echo_client_udp.rs"
+path = "examples/echo_server_udp.rs"
 
 [[example]]
 name = "echo_server_tcp"
-path = "examples/echo/echo_server_tcp.rs"
+path = "examples/echo_server_tcp.rs"
 
-[[example]]
-name = "echo_client_tcp"
-path = "examples/echo/echo_client_tcp.rs"

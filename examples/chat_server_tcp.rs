@@ -57,8 +57,8 @@ impl Shared {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ChatDecoder {
     state: Rc<RefCell<Shared>>,
-    peer: Option<SocketAddr>,
     pipeline: Weak<dyn OutboundPipeline<TaggedString>>,
+    peer: Option<SocketAddr>,
 }
 struct ChatEncoder;
 struct ChatHandler {
@@ -71,8 +71,8 @@ impl ChatHandler {
         ChatHandler {
             decoder: ChatDecoder {
                 state,
-                peer: None,
                 pipeline,
+                peer: None,
             },
             encoder: ChatEncoder,
         }
@@ -84,7 +84,11 @@ impl InboundHandler for ChatDecoder {
     type Rout = Self::Rin;
 
     fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("received: {}", msg.message);
+        println!(
+            "received: {} from {} to {}",
+            msg.message, msg.transport.peer_addr, msg.transport.local_addr
+        );
+
         if self.peer.is_none() {
             self.peer = Some(msg.transport.peer_addr);
             let mut s = self.state.borrow_mut();
@@ -113,6 +117,9 @@ impl InboundHandler for ChatDecoder {
             s.leave(peer);
         }
         ctx.fire_close();
+    }
+    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
+        //last handler, no need to fire_poll_timeout
     }
 }
 
@@ -193,10 +200,10 @@ async fn main() -> anyhow::Result<()> {
     let state = Rc::new(RefCell::new(Shared::new()));
 
     let mut bootstrap = BootstrapServerTcp::new();
-    bootstrap.pipeline(Box::new(move |write: Tx<TaggedBytesMut>| {
+    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
         let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
-        let async_transport_handler = AsyncTransport::new(write);
+        let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
