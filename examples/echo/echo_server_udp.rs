@@ -1,11 +1,6 @@
 use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
-use std::{
-    io::Write,
-    rc::Rc,
-    str::FromStr,
-    time::{Duration, Instant},
-};
+use std::{io::Write, rc::Rc, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapServerUdp;
 use retty::channel::{
@@ -147,10 +142,19 @@ async fn main() -> anyhow::Result<()> {
 
     bootstrap.bind(format!("{}:{}", host, port))?;
 
-    //TODO: https://github.com/bytedance/monoio/issues/154
-    println!("Press ctrl-c to stop or wait 60s timout");
+    println!("Press ctrl-c to stop");
     println!("try `nc -u {} {}` in another shell", host, port);
-    monoio::time::sleep(Duration::from_secs(60)).await;
+    let (tx, rx) = futures::channel::oneshot::channel();
+    std::thread::spawn(move || {
+        let mut tx = Some(tx);
+        ctrlc::set_handler(move || {
+            if let Some(tx) = tx.take() {
+                let _ = tx.send(());
+            }
+        })
+        .expect("Error setting Ctrl-C handler");
+    });
+    let _ = rx.await;
     bootstrap.stop().await;
 
     Ok(())

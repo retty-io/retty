@@ -170,25 +170,26 @@ async fn main() -> anyhow::Result<()> {
 
     let _pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
 
-    /*TODO: https://github.com/bytedance/monoio/issues/155
-    println!("Enter bye to stop");
-    let mut buffer = String::new();
-    while stdin().read_line(&mut buffer).is_ok() {
-        match buffer.trim_end() {
-            "" => break,
-            line => {
-                pipeline.write(format!("{}\r\n", line));
-                if line == "bye" {
-                    pipeline.close();
-                    break;
+    /*println!("Enter bye to stop");
+    let (tx, rx) = futures::channel::mpsc::unbounded();
+    std::thread::spawn(move || {
+        let mut buffer = String::new();
+        while std::io::stdin().read_line(&mut buffer).is_ok() {
+            match buffer.trim_end() {
+                "" => break,
+                line => {
+                    pipeline.write(format!("{}\r\n", line));
+                    if line == "bye" {
+                        pipeline.close();
+                        break;
+                    }
                 }
-            }
-        };
-        buffer.clear();
-    }*/
+            };
+            buffer.clear();
+        }
+    });
+    */
 
-    //TODO: https://github.com/bytedance/monoio/issues/154
-    println!("Press ctrl-c to stop or wait 60s timout");
     monoio::time::sleep(Duration::from_secs(60)).await;
     bootstrap.stop().await;
 

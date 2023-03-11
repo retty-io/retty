@@ -213,8 +213,6 @@ async fn main() -> anyhow::Result<()> {
     })
     .await?;
 
-    //TODO: https://github.com/bytedance/monoio/issues/154
-    println!("Press ctrl-c to stop or wait 60s timout");
     monoio::time::sleep(Duration::from_secs(60)).await;
     bootstrap.stop().await;
 
