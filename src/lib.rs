@@ -268,7 +268,7 @@
 //! Now that all needs to be done is plug the pipeline factory into a BootstrapTcpClient and that’s pretty much it.
 //! Connect to the remote peer and then read line from stdin and write it to pipeline.
 //! ```ignore
-//! let pipeline = bootstrap.connect(transport.peer_addr.as_ref().unwrap()).await?;
+//! let pipeline = bootstrap.connect(format!("{}:{}", host, port)).await?;
 //!
 //! println!("Enter bye to stop");
 //! let mut buffer = String::new();
