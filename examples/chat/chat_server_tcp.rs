@@ -1,8 +1,8 @@
 use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
 use std::{
-    cell::RefCell, collections::HashMap, io::Write, net::SocketAddr, rc::Rc, str::FromStr,
-    time::Instant,
+    cell::RefCell, collections::HashMap, io::Write, net::SocketAddr, rc::Rc, rc::Weak,
+    str::FromStr, time::Instant,
 };
 
 use retty::bootstrap::BootstrapServerTcp;
@@ -18,7 +18,7 @@ use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
-    peers: HashMap<SocketAddr, Rc<dyn OutboundPipeline<TaggedString>>>,
+    peers: HashMap<SocketAddr, Weak<dyn OutboundPipeline<TaggedString>>>,
 }
 
 impl Shared {
@@ -29,7 +29,7 @@ impl Shared {
         }
     }
 
-    fn _join(&mut self, peer: SocketAddr, pipeline: Rc<dyn OutboundPipeline<TaggedString>>) {
+    fn join(&mut self, peer: SocketAddr, pipeline: Weak<dyn OutboundPipeline<TaggedString>>) {
         println!("{} joined", peer);
         self.peers.insert(peer, pipeline);
     }
@@ -46,7 +46,9 @@ impl Shared {
             if *peer != sender {
                 let mut msg = msg.clone();
                 msg.transport.peer_addr = *peer;
-                let _ = pipeline.write(msg);
+                if let Some(pipeline) = pipeline.upgrade() {
+                    let _ = pipeline.write(msg);
+                }
             }
         }
     }
@@ -56,6 +58,7 @@ impl Shared {
 struct ChatDecoder {
     state: Rc<RefCell<Shared>>,
     peer: Option<SocketAddr>,
+    pipeline: Weak<dyn OutboundPipeline<TaggedString>>,
 }
 struct ChatEncoder;
 struct ChatHandler {
@@ -64,9 +67,13 @@ struct ChatHandler {
 }
 
 impl ChatHandler {
-    fn new(state: Rc<RefCell<Shared>>) -> Self {
+    fn new(state: Rc<RefCell<Shared>>, pipeline: Weak<dyn OutboundPipeline<TaggedString>>) -> Self {
         ChatHandler {
-            decoder: ChatDecoder { state, peer: None },
+            decoder: ChatDecoder {
+                state,
+                peer: None,
+                pipeline,
+            },
             encoder: ChatEncoder,
         }
     }
@@ -80,8 +87,8 @@ impl InboundHandler for ChatDecoder {
         println!("received: {}", msg.message);
         if self.peer.is_none() {
             self.peer = Some(msg.transport.peer_addr);
-            //let mut s = self.state.borrow_mut();
-            //s.join(msg.transport.peer_addr);
+            let mut s = self.state.borrow_mut();
+            s.join(msg.transport.peer_addr, self.pipeline.clone());
         }
 
         let s = self.state.borrow();
@@ -187,20 +194,21 @@ async fn main() -> anyhow::Result<()> {
 
     let mut bootstrap = BootstrapServerTcp::new();
     bootstrap.pipeline(Box::new(move |write: Tx<TaggedBytesMut>| {
-        let pipeline: Pipeline<TaggedBytesMut, String> = Pipeline::new();
+        let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
         let async_transport_handler = AsyncTransport::new(write);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
             LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
         ));
         let string_codec_handler = TaggedStringCodec::new();
-        let chat_handler = ChatHandler::new(state.clone());
+        let pipeline_wr = Rc::downgrade(&pipeline);
+        let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
 
         pipeline.add_back(async_transport_handler);
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(chat_handler);
-        pipeline.finalize()
+        pipeline.update()
     }));
 
     bootstrap.bind(format!("{}:{}", host, port))?;
