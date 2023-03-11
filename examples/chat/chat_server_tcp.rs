@@ -187,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut bootstrap = BootstrapServerTcp::new();
     bootstrap.pipeline(Box::new(move |write: Tx<TaggedBytesMut>| {
-        let mut pipeline: Pipeline<TaggedBytesMut, String> = Pipeline::new();
+        let pipeline: Pipeline<TaggedBytesMut, String> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(write);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
@@ -200,7 +200,7 @@ async fn main() -> anyhow::Result<()> {
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(chat_handler);
-        Rc::new(pipeline.finalize())
+        pipeline.finalize()
     }));
 
     bootstrap.bind(format!("{}:{}", host, port))?;

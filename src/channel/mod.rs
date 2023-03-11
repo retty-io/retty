@@ -2,6 +2,7 @@
 pub(crate) mod handler;
 pub(crate) mod handler_internal;
 pub(crate) mod pipeline;
+pub(crate) mod pipeline_internal;
 
 pub use self::{
     handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler},

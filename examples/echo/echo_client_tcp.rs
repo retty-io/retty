@@ -5,7 +5,6 @@ use std::{
     error::Error,
     io::Write,
     net::SocketAddr,
-    rc::Rc,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -171,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut bootstrap = BootstrapClientTcp::new();
     bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
-        let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
         let async_transport_handler = AsyncTransport::new(writer);
         let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
@@ -184,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
         pipeline.add_back(line_based_frame_decoder_handler);
         pipeline.add_back(string_codec_handler);
         pipeline.add_back(echo_handler);
-        Rc::new(pipeline.finalize())
+        pipeline.finalize()
     }));
 
     let pipeline = bootstrap.connect(transport.peer_addr).await?;
