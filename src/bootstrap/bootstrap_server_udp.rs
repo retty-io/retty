@@ -1,4 +1,3 @@
-use bytes::BytesMut;
 use local_sync::mpsc::unbounded::{channel, Rx, Tx};
 use log::{trace, warn};
 use monoio::{io::Canceller, net::udp::UdpSocket, time::sleep};
@@ -12,7 +11,7 @@ use std::{
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::InboundPipeline;
-use crate::transport::{TaggedBytesMut, TransportContext};
+use crate::transport::TaggedBytesMut;
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP servers.
 pub struct BootstrapServerUdp<W> {
@@ -115,7 +114,7 @@ impl<W: 'static> BootstrapServerUdp<W> {
                     _ = &mut timeout => {
                         canceller.cancel();
                         let result = socket_recv.await;
-                        if Self::process_packet(result, &pipeline, local_addr) {
+                        if super::process_packet(result, &pipeline, local_addr) {
                             break;
                         }
 
@@ -124,7 +123,7 @@ impl<W: 'static> BootstrapServerUdp<W> {
                     opt = receiver.recv() => {
                         canceller.cancel();
                         let result = socket_recv.await;
-                        if Self::process_packet(result, &pipeline, local_addr) {
+                        if super::process_packet(result, &pipeline, local_addr) {
                             break;
                         }
 
@@ -145,7 +144,7 @@ impl<W: 'static> BootstrapServerUdp<W> {
                         }
                     }
                     result = &mut socket_recv => {
-                        if Self::process_packet(result, &pipeline, local_addr) {
+                        if super::process_packet(result, &pipeline, local_addr) {
                             break;
                         }
                     }
@@ -172,43 +171,5 @@ impl<W: 'static> BootstrapServerUdp<W> {
         if let Some(mut done_rx) = done_rx {
             let _ = done_rx.recv().await;
         }
-    }
-
-    fn process_packet(
-        result: monoio::BufResult<(usize, SocketAddr), Vec<u8>>,
-        pipeline: &Rc<dyn InboundPipeline<TaggedBytesMut>>,
-        local_addr: SocketAddr,
-    ) -> bool {
-        let (res, buf) = result;
-        match res {
-            Err(err) if err.raw_os_error() == Some(125) => {
-                // Canceled success
-                //TODO: return _buf to buffer_pool
-                return false;
-            }
-            Err(err) => {
-                warn!("socket read error {}", err);
-                return true;
-            }
-            Ok((n, peer_addr)) => {
-                if n == 0 {
-                    pipeline.read_eof();
-                    return true;
-                }
-
-                trace!("socket read {} bytes", n);
-                pipeline.read(TaggedBytesMut {
-                    now: Instant::now(),
-                    transport: TransportContext {
-                        local_addr,
-                        peer_addr,
-                        ecn: None,
-                    },
-                    message: BytesMut::from(&buf[..n]),
-                });
-            }
-        }
-
-        false
     }
 }
