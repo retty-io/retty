@@ -2,6 +2,7 @@ use bytes::BytesMut;
 use local_sync::mpsc::unbounded::{channel, Rx, Tx};
 use log::{trace, warn};
 use monoio::{io::Canceller, net::udp::UdpSocket, time::sleep};
+use std::net::SocketAddr;
 use std::{
     cell::RefCell,
     io::Error,
@@ -46,8 +47,8 @@ impl<W: 'static> BootstrapServerUdp<W> {
         self
     }
 
-    /// Binds local address and port
-    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<(), Error> {
+    /// Binds local address and port, return local socket address
+    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
         let socket = UdpSocket::bind(addr)?;
         let local_addr = socket.local_addr()?;
 
@@ -159,7 +160,7 @@ impl<W: 'static> BootstrapServerUdp<W> {
             pipeline.transport_inactive();
         });
 
-        Ok(())
+        Ok(local_addr)
     }
 
     /// Gracefully stop the server
