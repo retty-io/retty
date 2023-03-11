@@ -103,7 +103,11 @@ impl<W: 'static> BootstrapServerTcp<W> {
                     }
                 }
             }
-            child_wg.wait();
+            //TODO: https://github.com/monoio-rs/local-sync/issues/3
+            for child_close_tx in broadcast_close {
+                let _ = child_close_tx.send(());
+            }
+            child_wg.wait().await;
         });
 
         Ok(())
