@@ -84,6 +84,24 @@ impl<W: 'static> BootstrapClientUdp<W> {
         monoio::spawn(async move {
             pipeline.transport_active();
             loop {
+                if let Ok(transmit) = receiver.try_recv() {
+                    if let Some(peer_addr) = transmit.transport.peer_addr {
+                        let (res, _) = socket.send_to(transmit.message, peer_addr).await;
+                        match res {
+                            Ok(n) => {
+                                trace!("socket write {} bytes", n);
+                                continue;
+                            }
+                            Err(err) => {
+                                warn!("socket write error {}", err);
+                                break;
+                            }
+                        }
+                    } else {
+                        trace!("socket write error due to none peer_addr");
+                    }
+                }
+
                 let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto);
 

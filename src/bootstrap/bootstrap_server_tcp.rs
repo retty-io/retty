@@ -126,6 +126,20 @@ impl<W: 'static> BootstrapServerTcp<W> {
 
         pipeline.transport_active();
         loop {
+            if let Ok(transmit) = receiver.try_recv() {
+                let (res, _) = socket.write(transmit).await;
+                match res {
+                    Ok(n) => {
+                        trace!("socket write {} bytes", n);
+                        continue;
+                    }
+                    Err(err) => {
+                        warn!("socket write error {}", err);
+                        break;
+                    }
+                }
+            }
+
             let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
             pipeline.poll_timeout(&mut eto);
 
