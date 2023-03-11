@@ -2,11 +2,10 @@ use bytes::BytesMut;
 use local_sync::mpsc::unbounded::{channel, Rx, Tx};
 use log::{trace, warn};
 use monoio::{io::Canceller, net::udp::UdpSocket, time::sleep};
-use std::net::SocketAddr;
 use std::{
     cell::RefCell,
     io::Error,
-    net::ToSocketAddrs,
+    net::{SocketAddr, ToSocketAddrs},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -54,7 +53,7 @@ impl<W: 'static> BootstrapServerUdp<W> {
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
         let (sender, mut receiver) = channel();
-        let pipeline = (pipeline_factory_fn)(sender);
+        let pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>> = (pipeline_factory_fn)(sender);
 
         let (close_tx, mut close_rx) = channel();
         {
@@ -98,8 +97,13 @@ impl<W: 'static> BootstrapServerUdp<W> {
                     continue;
                 }
 
-                let timeout = sleep(delay_from_now);
                 let canceller = Canceller::new();
+                let handler = canceller.handle();
+
+                let timeout = sleep(delay_from_now);
+                monoio::pin!(timeout);
+                let socket_recv = socket.cancelable_recv_from(Vec::with_capacity(1500), handler);
+                monoio::pin!(socket_recv);
 
                 monoio::select! {
                     _ = close_rx.recv() => {
@@ -108,12 +112,22 @@ impl<W: 'static> BootstrapServerUdp<W> {
                         let _ = done_tx.send(());
                         break;
                     }
-                    _ = timeout => {
+                    _ = &mut timeout => {
                         canceller.cancel();
+                        let result = socket_recv.await;
+                        if Self::process_packet(result, &pipeline, local_addr) {
+                            break;
+                        }
+
                         pipeline.handle_timeout(Instant::now());
                     }
                     opt = receiver.recv() => {
                         canceller.cancel();
+                        let result = socket_recv.await;
+                        if Self::process_packet(result, &pipeline, local_addr) {
+                            break;
+                        }
+
                         if let Some(transmit) = opt {
                             let (res, _) = socket.send_to(transmit.message, transmit.transport.peer_addr).await;
                             match res {
@@ -130,29 +144,9 @@ impl<W: 'static> BootstrapServerUdp<W> {
                             break;
                         }
                     }
-                    (res, buf) = socket.cancelable_recv_from(Vec::with_capacity(1500), canceller.handle()) => {
-                        match res {
-                            Ok((n, peer_addr)) => {
-                                if n == 0 {
-                                    pipeline.read_eof();
-                                    break;
-                                }
-
-                                trace!("socket read {} bytes", n);
-                                pipeline.read(TaggedBytesMut {
-                                    now: Instant::now(),
-                                    transport: TransportContext {
-                                        local_addr,
-                                        peer_addr,
-                                        ecn: None,
-                                    },
-                                    message: BytesMut::from(&buf[..n]),
-                                });
-                            }
-                            Err(err) => {
-                                warn!("socket read error {}", err);
-                                break;
-                            }
+                    result = &mut socket_recv => {
+                        if Self::process_packet(result, &pipeline, local_addr) {
+                            break;
                         }
                     }
                 }
@@ -178,5 +172,43 @@ impl<W: 'static> BootstrapServerUdp<W> {
         if let Some(mut done_rx) = done_rx {
             let _ = done_rx.recv().await;
         }
+    }
+
+    fn process_packet(
+        result: monoio::BufResult<(usize, SocketAddr), Vec<u8>>,
+        pipeline: &Rc<dyn InboundPipeline<TaggedBytesMut>>,
+        local_addr: SocketAddr,
+    ) -> bool {
+        let (res, buf) = result;
+        match res {
+            Err(err) if err.raw_os_error() == Some(125) => {
+                // Canceled success
+                //TODO: return _buf to buffer_pool
+                return false;
+            }
+            Err(err) => {
+                warn!("socket read error {}", err);
+                return true;
+            }
+            Ok((n, peer_addr)) => {
+                if n == 0 {
+                    pipeline.read_eof();
+                    return true;
+                }
+
+                trace!("socket read {} bytes", n);
+                pipeline.read(TaggedBytesMut {
+                    now: Instant::now(),
+                    transport: TransportContext {
+                        local_addr,
+                        peer_addr,
+                        ecn: None,
+                    },
+                    message: BytesMut::from(&buf[..n]),
+                });
+            }
+        }
+
+        false
     }
 }
