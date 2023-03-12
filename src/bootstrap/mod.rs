@@ -4,12 +4,12 @@ use crate::channel::Pipeline;
 use glommio::channels::local_channel::LocalSender;
 use std::rc::Rc;
 
-//pub(crate) mod bootstrap_client_tcp;
-//pub(crate) mod bootstrap_server_tcp;
+mod bootstrap_tcp;
 mod bootstrap_udp;
 
-//pub use bootstrap_client_tcp::BootstrapClientTcp;
-//pub use bootstrap_server_tcp::BootstrapServerTcp;
+pub use bootstrap_tcp::{
+    bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
+};
 pub use bootstrap_udp::{
     bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
 };

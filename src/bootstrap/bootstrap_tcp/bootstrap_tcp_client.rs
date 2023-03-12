@@ -1,11 +1,11 @@
 use bytes::BytesMut;
-use local_sync::mpsc::unbounded::{channel, Rx, Tx};
-use log::{trace, warn};
-use monoio::{
-    io::{AsyncWriteRent, CancelableAsyncReadRent, Canceller},
-    net::tcp::TcpStream,
-    time::sleep,
+use futures_lite::{AsyncReadExt, AsyncWriteExt};
+use glommio::{
+    channels::local_channel::{new_unbounded, LocalSender},
+    net::TcpStream,
+    timer::Timer,
 };
+use log::{trace, warn};
 use std::{
     cell::RefCell,
     io::Error,
@@ -13,35 +13,36 @@ use std::{
     rc::Rc,
     time::{Duration, Instant},
 };
+use waitgroup::WaitGroup;
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
-pub struct BootstrapClientTcp<W> {
+pub struct BootstrapTcpClient<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
-    close_tx: Rc<RefCell<Option<Tx<()>>>>,
-    done_rx: Rc<RefCell<Option<Rx<()>>>>,
+    close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
+    wg: Rc<RefCell<Option<WaitGroup>>>,
 }
 
-impl<W: 'static> Default for BootstrapClientTcp<W> {
+impl<W: 'static> Default for BootstrapTcpClient<W> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<W: 'static> BootstrapClientTcp<W> {
-    /// Creates a new BootstrapClientTcp
+impl<W: 'static> BootstrapTcpClient<W> {
+    /// Creates a new BootstrapTcpClient
     pub fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
             close_tx: Rc::new(RefCell::new(None)),
-            done_rx: Rc::new(RefCell::new(None)),
+            wg: Rc::new(RefCell::new(None)),
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapClientTcp::connect].
+    /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
     pub fn pipeline(
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
@@ -60,39 +61,33 @@ impl<W: 'static> BootstrapClientTcp<W> {
         let peer_addr = socket.peer_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
-        let (sender, mut receiver) = channel();
+        let (sender, receiver) = new_unbounded();
         let pipeline = (pipeline_factory_fn)(sender);
         let pipeline_wr = Rc::clone(&pipeline);
 
-        let (close_tx, mut close_rx) = channel();
+        let (close_tx, close_rx) = new_unbounded();
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = channel();
-        {
-            let mut rx = self.done_rx.borrow_mut();
-            *rx = Some(done_rx);
-        }
+        let worker = {
+            let workgroup = WaitGroup::new();
+            let worker = workgroup.worker();
+            {
+                let mut wg = self.wg.borrow_mut();
+                *wg = Some(workgroup);
+            }
+            worker
+        };
 
-        monoio::spawn(async move {
+        glommio::spawn_local(async move {
+            let _w = worker;
+
+            let mut buf = vec![0u8; 2048];
+
             pipeline.transport_active();
             loop {
-                if let Ok(transmit) = receiver.try_recv() {
-                    let (res, _) = socket.write(transmit.message).await;
-                    match res {
-                        Ok(n) => {
-                            trace!("socket write {} bytes", n);
-                            continue;
-                        }
-                        Err(err) => {
-                            warn!("socket write error {}", err);
-                            break;
-                        }
-                    }
-                }
-
                 let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto);
 
@@ -104,25 +99,19 @@ impl<W: 'static> BootstrapClientTcp<W> {
                     continue;
                 }
 
-                let timeout = sleep(delay_from_now);
-                let canceller = Canceller::new();
+                let timeout = Timer::new(delay_from_now);
 
-                monoio::select! {
+                tokio::select! {
                     _ = close_rx.recv() => {
-                        canceller.cancel();
                         trace!("pipeline socket exit loop");
-                        let _ = done_tx.send(());
                         break;
                     }
                     _ = timeout => {
-                        canceller.cancel();
                         pipeline.handle_timeout(Instant::now());
                     }
                     opt = receiver.recv() => {
-                        canceller.cancel();
                         if let Some(transmit) = opt {
-                            let (res, _) = socket.write(transmit.message).await;
-                            match res {
+                            match socket.write(&transmit.message).await {
                                 Ok(n) => {
                                     trace!("socket write {} bytes", n);
                                 }
@@ -136,7 +125,7 @@ impl<W: 'static> BootstrapClientTcp<W> {
                             break;
                         }
                     }
-                    (res, buf) = socket.cancelable_read(Vec::with_capacity(1500), canceller.handle()) => {
+                    res = socket.read(&mut buf) => {
                         match res {
                             Ok(n) => {
                                 if n == 0 {
@@ -164,7 +153,8 @@ impl<W: 'static> BootstrapClientTcp<W> {
                 }
             }
             pipeline.transport_inactive();
-        });
+        })
+        .detach();
 
         Ok(pipeline_wr)
     }
@@ -174,15 +164,15 @@ impl<W: 'static> BootstrapClientTcp<W> {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.send(());
+                let _ = close_tx.try_send(());
             }
         }
-        let done_rx = {
-            let mut done_rx = self.done_rx.borrow_mut();
-            done_rx.take()
+        let wg = {
+            let mut wg = self.wg.borrow_mut();
+            wg.take()
         };
-        if let Some(mut done_rx) = done_rx {
-            let _ = done_rx.recv().await;
+        if let Some(wg) = wg {
+            wg.wait().await;
         }
     }
 }

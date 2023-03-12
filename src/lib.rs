@@ -163,7 +163,7 @@
 //!     * Inbound: receives a std::string and writes it to the pipeline, which will send the message outbound.
 //!     * Outbound: receives a std::string and forwards it to StringCodec.
 //!
-//! Now that all needs to be done is plug the pipeline factory into a [BootstrapServerTcp](crate::bootstrap::BootstrapServerTcp) and that’s pretty much it.
+//! Now that all needs to be done is plug the pipeline factory into a [BootstrapServerTcp](crate::bootstrap::BootstrapTcpServer) and that’s pretty much it.
 //! Bind a local host:port and wait for it to stop.
 //!
 //! ```ignore

@@ -2,7 +2,7 @@ use clap::Parser;
 use local_sync::mpsc::unbounded::Tx;
 use std::{io::Write, str::FromStr, time::Instant};
 
-use retty::bootstrap::BootstrapServerTcp;
+use retty::bootstrap::BootstrapTcpServer;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -120,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    let mut bootstrap = BootstrapServerTcp::new();
+    let mut bootstrap = BootstrapTcpServer::new();
     bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
         let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
