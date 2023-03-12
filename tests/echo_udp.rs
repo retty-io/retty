@@ -51,6 +51,10 @@ impl InboundHandler for EchoDecoder {
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         {
             let mut count = self.count.borrow_mut();
+            println!(
+                "is_server = {}, count = {}, msg = {}",
+                self.is_server, *count, msg.message
+            );
             *count += 1;
         }
 
@@ -104,7 +108,7 @@ impl Handler for EchoHandler {
 }
 
 #[cfg(unix)]
-#[monoio::test(timer_enabled = true)]
+#[monoio::test(driver = "legacy", timer_enabled = true)]
 async fn test_echo_udp() {
     const ITER: usize = 1024;
 
@@ -172,9 +176,7 @@ async fn test_echo_udp() {
         client.bind(client_addr).unwrap();
         let pipeline = client.connect(server_addr).await.unwrap();
 
-        let message = format!("hello world\r\n");
-
-        for _ in 0..ITER {
+        for i in 0..ITER {
             // write
             pipeline.write(TaggedString {
                 now: Instant::now(),
@@ -183,7 +185,7 @@ async fn test_echo_udp() {
                     peer_addr: server_addr,
                     ecn: None,
                 },
-                message: message.clone(),
+                message: format!("{}\r\n", i),
             });
         }
         pipeline.write(TaggedString {
