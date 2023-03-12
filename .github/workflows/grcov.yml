@@ -37,11 +37,8 @@ jobs:
           version: latest
           use-tool-cache: true
 
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --no-fail-fast ${{ matrix.cargo_flags }}
+      - name: Run cargo test
+        run: sudo -E bash -c "ulimit -Sl 512 && ulimit -Hl 512 && /home/runner/.cargo/bin/cargo test --all --no-fail-fast"
         env:
           CARGO_INCREMENTAL: "0"
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort -Cdebug-assertions=off'
