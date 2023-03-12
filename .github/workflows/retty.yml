@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Run tests
-        run: sudo -E bash -c "ulimit -Sl 512 && ulimit -Hl 512 && /home/runner/.cargo/bin/cargo test --verbose"
+        run: sudo -E bash -c "ulimit -Sl 512 && ulimit -Hl 512 cargo test --verbose"
 
   rustfmt_and_clippy:
     name: Check rustfmt style && run clippy
