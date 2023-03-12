@@ -1,6 +1,6 @@
 use clap::Parser;
 use futures::StreamExt;
-use local_sync::mpsc::unbounded::Tx;
+use glommio::channels::local_channel::LocalSender;
 use std::{io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapUdpClient;
@@ -91,8 +91,7 @@ struct Cli {
     log_level: String,
 }
 
-#[monoio::main(driver = "fusion", enable_timer = true)]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
@@ -122,60 +121,66 @@ async fn main() -> anyhow::Result<()> {
         ecn: None,
     };
 
-    let mut bootstrap = BootstrapUdpClient::new();
-    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
-        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+    let handler = glommio::LocalExecutorBuilder::default()
+        .spawn(move || async move {
+            let mut bootstrap = BootstrapUdpClient::new();
+            bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-        let async_transport_handler = AsyncTransport::new(writer);
-        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-            LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-        ));
-        let string_codec_handler = TaggedStringCodec::new();
-        let echo_handler = EchoHandler::new();
+                let async_transport_handler = AsyncTransport::new(writer);
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = TaggedStringCodec::new();
+                let echo_handler = EchoHandler::new();
 
-        pipeline.add_back(async_transport_handler);
-        pipeline.add_back(line_based_frame_decoder_handler);
-        pipeline.add_back(string_codec_handler);
-        pipeline.add_back(echo_handler);
-        pipeline.finalize()
-    }));
+                pipeline.add_back(async_transport_handler);
+                pipeline.add_back(line_based_frame_decoder_handler);
+                pipeline.add_back(string_codec_handler);
+                pipeline.add_back(echo_handler);
+                pipeline.finalize()
+            }));
 
-    bootstrap.bind(transport.local_addr)?;
+            bootstrap.bind(transport.local_addr).unwrap();
 
-    let pipeline = bootstrap.connect(transport.peer_addr).await?;
+            let pipeline = bootstrap.connect(transport.peer_addr).await.unwrap();
 
-    println!("Enter bye to stop");
-    let (mut tx, mut rx) = futures::channel::mpsc::channel(8);
-    std::thread::spawn(move || {
-        let mut buffer = String::new();
-        while std::io::stdin().read_line(&mut buffer).is_ok() {
-            match buffer.trim_end() {
-                "" => break,
-                line => {
-                    if tx.try_send(line.to_string()).is_err() {
-                        break;
-                    }
-                    if line == "bye" {
-                        break;
-                    }
+            println!("Enter bye to stop");
+            let (mut tx, mut rx) = futures::channel::mpsc::channel(8);
+            std::thread::spawn(move || {
+                let mut buffer = String::new();
+                while std::io::stdin().read_line(&mut buffer).is_ok() {
+                    match buffer.trim_end() {
+                        "" => break,
+                        line => {
+                            if tx.try_send(line.to_string()).is_err() {
+                                break;
+                            }
+                            if line == "bye" {
+                                break;
+                            }
+                        }
+                    };
+                    buffer.clear();
                 }
-            };
-            buffer.clear();
-        }
-    });
-    while let Some(line) = rx.next().await {
-        pipeline.write(TaggedString {
-            now: Instant::now(),
-            transport,
-            message: format!("{}\r\n", line),
-        });
-        if line == "bye" {
-            pipeline.close();
-            break;
-        }
-    }
+            });
+            while let Some(line) = rx.next().await {
+                pipeline.write(TaggedString {
+                    now: Instant::now(),
+                    transport,
+                    message: format!("{}\r\n", line),
+                });
+                if line == "bye" {
+                    pipeline.close();
+                    break;
+                }
+            }
 
-    bootstrap.stop().await;
+            bootstrap.stop().await;
+        })
+        .unwrap();
+
+    handler.join().unwrap();
 
     Ok(())
 }

@@ -34,19 +34,19 @@ futures = "0.3.26"
 #[[example]]
 #name = "chat_server_udp"
 #path = "examples/chat_server_udp.rs"
-#
-#[[example]]
-#name = "client_udp"
-#path = "examples/client_udp.rs"
+
+[[example]]
+name = "client_udp"
+path = "examples/client_udp.rs"
 
 [[example]]
 name = "client_tcp"
 path = "examples/client_tcp.rs"
 
-#[[example]]
-#name = "echo_server_udp"
-#path = "examples/echo_server_udp.rs"
-#
+[[example]]
+name = "echo_server_udp"
+path = "examples/echo_server_udp.rs"
+
 [[example]]
 name = "echo_server_tcp"
 path = "examples/echo_server_tcp.rs"

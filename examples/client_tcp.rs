@@ -100,37 +100,37 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
-    let hander = glommio::LocalExecutorBuilder::default()
+    let cli = Cli::parse();
+    let host = cli.host;
+    let port = cli.port;
+    let log_level = log::LevelFilter::from_str(&cli.log_level)?;
+    if cli.debug {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{}:{} [{}] {} - {}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    record.level(),
+                    chrono::Local::now().format("%H:%M:%S.%6f"),
+                    record.args()
+                )
+            })
+            .filter(None, log_level)
+            .init();
+    }
+
+    println!("Connecting {}:{}...", host, port);
+
+    let transport = TransportContext {
+        local_addr: SocketAddr::from_str("0.0.0.0:0")?,
+        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
+        ecn: None,
+    };
+
+    let handler = glommio::LocalExecutorBuilder::default()
         .spawn(move || async move {
-            let cli = Cli::parse();
-            let host = cli.host;
-            let port = cli.port;
-            let log_level = log::LevelFilter::from_str(&cli.log_level).unwrap();
-            if cli.debug {
-                env_logger::Builder::new()
-                    .format(|buf, record| {
-                        writeln!(
-                            buf,
-                            "{}:{} [{}] {} - {}",
-                            record.file().unwrap_or("unknown"),
-                            record.line().unwrap_or(0),
-                            record.level(),
-                            chrono::Local::now().format("%H:%M:%S.%6f"),
-                            record.args()
-                        )
-                    })
-                    .filter(None, log_level)
-                    .init();
-            }
-
-            println!("Connecting {}:{}...", host, port);
-
-            let transport = TransportContext {
-                local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
-                peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port)).unwrap(),
-                ecn: None,
-            };
-
             let mut bootstrap = BootstrapTcpClient::new();
             bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
                 let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
@@ -186,7 +186,7 @@ fn main() -> anyhow::Result<()> {
         })
         .unwrap();
 
-    hander.join().unwrap();
+    handler.join().unwrap();
 
     Ok(())
 }

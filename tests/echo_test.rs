@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_echo_udp() {
-        let hander = glommio::LocalExecutorBuilder::default()
+        let handler = glommio::LocalExecutorBuilder::default()
             .spawn(move || async move {
                 const ITER: usize = 1024;
 
@@ -222,12 +222,12 @@ mod tests {
             })
             .unwrap();
 
-        hander.join().unwrap();
+        handler.join().unwrap();
     }
 
     #[test]
     fn test_echo_tcp() {
-        let hander = glommio::LocalExecutorBuilder::default()
+        let handler = glommio::LocalExecutorBuilder::default()
             .spawn(move || async move {
                 const ITER: usize = 10;
 
@@ -333,6 +333,6 @@ mod tests {
             })
             .unwrap();
 
-        hander.join().unwrap();
+        handler.join().unwrap();
     }
 }
