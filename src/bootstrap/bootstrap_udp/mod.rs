@@ -6,7 +6,7 @@ use glommio::{
 use log::{trace, warn};
 use std::{
     cell::RefCell,
-    io::Error,
+    io::{Error, ErrorKind},
     net::{SocketAddr, ToSocketAddrs},
     rc::Rc,
     time::{Duration, Instant},
@@ -16,23 +16,24 @@ use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
 use crate::transport::{TaggedBytesMut, TransportContext};
 
-/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
-pub struct BootstrapClientUdp<W> {
+pub(crate) mod bootstrap_udp_client;
+pub(crate) mod bootstrap_udp_server;
+
+struct BootstrapUdp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
     done_rx: Rc<RefCell<Option<LocalReceiver<()>>>>,
     socket: Option<Rc<UdpSocket>>,
 }
 
-impl<W: 'static> Default for BootstrapClientUdp<W> {
+impl<W: 'static> Default for BootstrapUdp<W> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<W: 'static> BootstrapClientUdp<W> {
-    /// Creates a new BootstrapClientUdp
-    pub fn new() -> Self {
+impl<W: 'static> BootstrapUdp<W> {
+    fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
             close_tx: Rc::new(RefCell::new(None)),
@@ -41,30 +42,22 @@ impl<W: 'static> BootstrapClientUdp<W> {
         }
     }
 
-    /// Creates pipeline instances from when calling [BootstrapClientUdp::connect].
-    pub fn pipeline(
-        &mut self,
-        pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
-    ) -> &mut Self {
+    fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) {
         self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
-        self
     }
 
-    /// Binds local address and port, return local socket address
-    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
-        let socket = Rc::new(UdpSocket::bind(addr)?);
+    fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
+        let socket = UdpSocket::bind(addr)?;
         let local_addr = socket.local_addr()?;
-        self.socket = Some(socket);
+        self.socket = Some(Rc::new(socket));
         Ok(local_addr)
     }
 
-    /// Connects to the remote peer
-    pub async fn connect(
-        &mut self,
-        addr: SocketAddr,
-    ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
-        let socket = Rc::clone(self.socket.as_ref().unwrap());
-        socket.connect(addr).await?;
+    fn serve(&mut self) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
+        let socket = Rc::clone(self.socket.as_ref().ok_or(Error::new(
+            ErrorKind::AddrNotAvailable,
+            "socket is not bind yet",
+        ))?);
         let local_addr = socket.local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
@@ -160,8 +153,7 @@ impl<W: 'static> BootstrapClientUdp<W> {
         Ok(pipeline_wr)
     }
 
-    /// Gracefully stop the client
-    pub async fn stop(&self) {
+    async fn stop(&self) {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {

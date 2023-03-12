@@ -5,7 +5,7 @@ mod tests {
     use std::rc::Rc;
     use std::{net::SocketAddr, str::FromStr, time::Instant};
 
-    use retty::bootstrap::{BootstrapClientUdp, BootstrapServerUdp};
+    use retty::bootstrap::{BootstrapUdpClient, BootstrapUdpServer};
     use retty::channel::{
         Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
     };
@@ -123,7 +123,7 @@ mod tests {
                 let (server_done_tx, server_done_rx) = new_unbounded();
                 let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
-                let mut server = BootstrapServerUdp::new();
+                let mut server = BootstrapUdpServer::new();
                 server.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
                     let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
@@ -153,7 +153,7 @@ mod tests {
                     let (client_done_tx, client_done_rx) = new_unbounded();
                     let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
-                    let mut client = BootstrapClientUdp::new();
+                    let mut client = BootstrapUdpClient::new();
                     client.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
                         let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 

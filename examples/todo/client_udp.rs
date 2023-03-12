@@ -3,7 +3,7 @@ use futures::StreamExt;
 use local_sync::mpsc::unbounded::Tx;
 use std::{io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
-use retty::bootstrap::BootstrapClientUdp;
+use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -122,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
         ecn: None,
     };
 
-    let mut bootstrap = BootstrapClientUdp::new();
+    let mut bootstrap = BootstrapUdpClient::new();
     bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
         let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 

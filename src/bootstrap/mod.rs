@@ -5,14 +5,14 @@ use glommio::channels::local_channel::LocalSender;
 use std::rc::Rc;
 
 //pub(crate) mod bootstrap_client_tcp;
-pub(crate) mod bootstrap_client_udp;
 //pub(crate) mod bootstrap_server_tcp;
-pub(crate) mod bootstrap_server_udp;
+mod bootstrap_udp;
 
 //pub use bootstrap_client_tcp::BootstrapClientTcp;
-pub use bootstrap_client_udp::BootstrapClientUdp;
 //pub use bootstrap_server_tcp::BootstrapServerTcp;
-pub use bootstrap_server_udp::BootstrapServerUdp;
+pub use bootstrap_udp::{
+    bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
+};
 
 /// Creates a new [Pipeline]
 pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(LocalSender<R>) -> Rc<Pipeline<R, W>>)>;
