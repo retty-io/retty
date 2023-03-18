@@ -57,7 +57,10 @@ mod tests {
             {
                 let mut count = self.count.borrow_mut();
                 *count += 1;
-                println!("is_server = {}, count = {}", self.is_server, *count);
+                println!(
+                    "is_server = {}, count = {} msg = {}",
+                    self.is_server, *count, msg.message
+                );
             }
 
             if self.is_server {
@@ -183,9 +186,7 @@ mod tests {
                     client.bind(client_addr).unwrap();
                     let pipeline = client.connect(server_addr).await.unwrap();
 
-                    let message = format!("hello world\r\n");
-
-                    for _ in 0..ITER {
+                    for i in 0..ITER {
                         // write
                         pipeline.write(TaggedString {
                             now: Instant::now(),
@@ -194,8 +195,9 @@ mod tests {
                                 peer_addr: server_addr,
                                 ecn: None,
                             },
-                            message: message.clone(),
+                            message: format!("{}\r\n", i),
                         });
+                        glommio::yield_if_needed().await;
                     }
                     pipeline.write(TaggedString {
                         now: Instant::now(),
@@ -206,6 +208,7 @@ mod tests {
                         },
                         message: format!("bye\r\n"),
                     });
+                    glommio::yield_if_needed().await;
 
                     assert!(client_done_rx.recv().await.is_some());
 
@@ -294,9 +297,7 @@ mod tests {
 
                     let pipeline = client.connect(server_addr).await.unwrap();
 
-                    let message = format!("hello world\r\n");
-
-                    for _ in 0..ITER {
+                    for i in 0..ITER {
                         // write
                         pipeline.write(TaggedString {
                             now: Instant::now(),
@@ -305,8 +306,9 @@ mod tests {
                                 peer_addr: server_addr,
                                 ecn: None,
                             },
-                            message: message.clone(),
+                            message: format!("{}\r\n", i),
                         });
+                        glommio::yield_if_needed().await;
                     }
                     pipeline.write(TaggedString {
                         now: Instant::now(),
@@ -317,6 +319,7 @@ mod tests {
                         },
                         message: format!("bye\r\n"),
                     });
+                    glommio::yield_if_needed().await;
 
                     assert!(client_done_rx.recv().await.is_some());
 
