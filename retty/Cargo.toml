@@ -1,0 +1,52 @@
+[package]
+name = "retty"
+version = "0.18.1"
+authors = ["Rusty Rain <y@liu.mx>"]
+edition = "2021"
+description = "Retty — an asynchronous Rust networking framework that makes it easy to build protocols, application clients/servers."
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/retty"
+repository = "https://github.com/retty-io/retty"
+homepage = "https://retty.io"
+keywords = ["networking", "protocols"]
+categories = [ "network-programming", "asynchronous" ]
+
+[dependencies]
+bytes = "1.4.0"
+log = "0.4.17"
+monoio = { version = "0.1.0", features = ["sync"] }
+local-sync = "0.1.0"
+waitgroup = "0.1.2"
+
+[dev-dependencies]
+chrono = "0.4.23"
+env_logger = "0.10.0"
+clap = { version = "4.1.8", features = ["derive"] }
+anyhow = "1.0.69"
+ctrlc = "3.2.5"
+futures = "0.3.26"
+
+[[example]]
+name = "chat_server_tcp"
+path = "examples/chat_server_tcp.rs"
+
+[[example]]
+name = "chat_server_udp"
+path = "examples/chat_server_udp.rs"
+
+[[example]]
+name = "client_udp"
+path = "examples/client_udp.rs"
+
+[[example]]
+name = "client_tcp"
+path = "examples/client_tcp.rs"
+
+[[example]]
+name = "echo_server_udp"
+path = "examples/echo_server_udp.rs"
+
+[[example]]
+name = "echo_server_tcp"
+path = "examples/echo_server_tcp.rs"
+

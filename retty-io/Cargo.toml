@@ -1,0 +1,74 @@
+[package]
+name = "retty-io"
+version = "0.4.0"
+authors = ["Rusty Rain <y@liu.mx>"]
+description = "Yet another thread-per-core IO runtime"
+edition = "2021"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/retty-io"
+repository = "https://github.com/retty-io/retty-io"
+homepage = "https://retty.io"
+keywords = ["networking", "protocols"]
+categories = [ "network-programming", "asynchronous" ]
+
+
+# common dependencies
+[dependencies]
+retty-macros = {path = "../retty-macros", optional = true}
+
+auto-const-array = "0.2"
+fxhash = "0.2"
+libc = "0.2"
+pin-project-lite = "0.2"
+socket2 = {version = "0.5", features = ["all"]}
+
+bytes = {version = "1", optional = true}
+flume = {version = "0.10", optional = true}
+mio = {version = "0.8", features = [
+  "net",
+  "os-poll",
+  "os-ext",
+]}
+threadpool = {version = "1", optional = true}
+tokio = {version = "1.26.0", default-features = false, optional = true}
+tracing = {version = "0.1", default-features = false, features = [
+  "std",
+], optional = true}
+
+# windows dependencies(will be added when windows support finished)
+# [target.'cfg(windows)'.dependencies]
+# windows = {version = "0.43.0", features = [
+#   "Data_Xml_Dom",
+#   "Win32_Foundation",
+#   "Win32_Security",
+#   "Win32_System_Threading",
+#   "Win32_UI_WindowsAndMessaging",
+# ]}
+
+# unix dependencies
+[target.'cfg(unix)'.dependencies]
+nix = {version = "0.25", optional = true}
+
+[dev-dependencies]
+futures = "0.3"
+local-sync = "0.1"
+tempfile = "3.2"
+
+[features]
+# enanle zero copy(enable SOCK_ZEROCOPY + MSG_ZEROCOPY flag)
+# WARNING: this feature may cause performance degradation
+zero-copy = []
+# splice op(require kernel 5.7+)
+splice = []
+# enable `async main` macros support
+macros = ["retty-macros"]
+# allow waker to be sent across threads
+sync = ["flume", "threadpool"]
+# enable bind cpu set
+utils = ["nix"]
+# enable debug if you want to know what runtime does
+debug = ["tracing"]
+# tokio-compatiable(only have effect when legacy is enabled and iouring is not)
+tokio-compat = ["tokio"]
+# by default both iouring and legacy are enabled
+default = ["bytes", "macros", "utils"]

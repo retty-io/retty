@@ -1,0 +1,20 @@
+[package]
+name = "retty-macros"
+version = "0.4.0"
+authors = ["Rusty Rain <y@liu.mx>"]
+description = "Retty Proc Macros"
+edition = "2021"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/retty-io"
+repository = "https://github.com/retty-io/retty-io"
+homepage = "https://retty.io"
+keywords = ["networking", "protocols"]
+categories = [ "network-programming", "asynchronous" ]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1"
+syn = { version = "1.0", features = ["full"] }
