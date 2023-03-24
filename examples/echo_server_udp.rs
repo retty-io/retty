@@ -35,7 +35,10 @@ impl InboundHandler for EchoDecoder {
     type Rout = Self::Rin;
 
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!("handling {} from {}", msg.message, msg.transport.peer_addr);
+        println!(
+            "handling {} from {:?}",
+            msg.message, msg.transport.peer_addr
+        );
         if msg.message != "bye" {
             ctx.fire_write(TaggedString {
                 now: Instant::now(),

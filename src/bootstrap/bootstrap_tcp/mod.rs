@@ -154,7 +154,6 @@ impl<W: 'static> BootstrapTcp<W> {
         let _w = worker;
 
         let local_addr = socket.get_ref().local_addr()?;
-        let peer_addr = socket.get_ref().peer_addr()?;
 
         let mut buf = vec![0u8; 2048];
 
@@ -210,7 +209,7 @@ impl<W: 'static> BootstrapTcp<W> {
                                     now: Instant::now(),
                                     transport: TransportContext {
                                         local_addr,
-                                        peer_addr,
+                                        peer_addr: None,
                                         ecn: None,
                                     },
                                     message: BytesMut::from(&buf[..n]),

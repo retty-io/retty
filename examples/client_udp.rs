@@ -37,7 +37,7 @@ impl InboundHandler for EchoDecoder {
 
     fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         println!(
-            "received back: {} from {}",
+            "received back: {} from {:?}",
             msg.message, msg.transport.peer_addr
         );
     }
@@ -117,7 +117,7 @@ fn main() -> anyhow::Result<()> {
 
     let transport = TransportContext {
         local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
+        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
         ecn: None,
     };
 

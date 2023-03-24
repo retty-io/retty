@@ -40,7 +40,7 @@ pub struct TransportContext {
     /// Local socket address, either IPv4 or IPv6
     pub local_addr: SocketAddr,
     /// Peer socket address, either IPv4 or IPv6
-    pub peer_addr: SocketAddr,
+    pub peer_addr: Option<SocketAddr>,
     /// Explicit congestion notification bits to set on the packet
     pub ecn: Option<EcnCodepoint>,
 }
@@ -49,7 +49,7 @@ impl Default for TransportContext {
     fn default() -> Self {
         Self {
             local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
-            peer_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
+            peer_addr: None,
             ecn: None,
         }
     }

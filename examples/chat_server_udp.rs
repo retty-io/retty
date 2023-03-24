@@ -49,7 +49,7 @@ impl Shared {
         for (peer, pipeline) in self.peers.iter() {
             if *peer != sender {
                 let mut msg = msg.clone();
-                msg.transport.peer_addr = *peer;
+                msg.transport.peer_addr = Some(*peer);
                 if let Some(pipeline) = pipeline.upgrade() {
                     let _ = pipeline.write(msg);
                 }
@@ -83,20 +83,21 @@ impl InboundHandler for ChatDecoder {
     type Rout = Self::Rin;
 
     fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+        let peer_addr = *msg.transport.peer_addr.as_ref().unwrap();
         println!(
-            "received: {} from {} to {}",
-            msg.message, msg.transport.peer_addr, msg.transport.local_addr
+            "received: {} from {:?} to {}",
+            msg.message, peer_addr, msg.transport.local_addr
         );
 
         let mut s = self.state.borrow_mut();
         if msg.message == "bye" {
-            s.leave(&msg.transport.peer_addr);
+            s.leave(&peer_addr);
         } else {
-            if !s.contains(&msg.transport.peer_addr) {
-                s.join(msg.transport.peer_addr, self.pipeline.clone());
+            if !s.contains(&peer_addr) {
+                s.join(peer_addr, self.pipeline.clone());
             }
             s.broadcast(
-                msg.transport.peer_addr,
+                peer_addr,
                 TaggedString {
                     now: Instant::now(),
                     transport: TransportContext {

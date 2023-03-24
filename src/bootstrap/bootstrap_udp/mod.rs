@@ -102,14 +102,19 @@ impl<W: 'static> BootstrapUdp<W> {
                     }
                     opt = receiver.recv() => {
                         if let Some(transmit) = opt {
-                            match socket.send_to(&transmit.message, transmit.transport.peer_addr).await {
-                                Ok(n) => {
-                                    trace!("socket write {} bytes", n);
+                            if let Some(peer_addr) = transmit.transport.peer_addr {
+                                match socket.send_to(&transmit.message, peer_addr).await {
+                                    Ok(n) => {
+                                        trace!("socket write {} bytes", n);
+                                    }
+                                    Err(err) => {
+                                        warn!("socket write error {}", err);
+                                        break;
+                                    }
                                 }
-                                Err(err) => {
-                                    warn!("socket write error {}", err);
-                                    break;
-                                }
+                            } else {
+                                warn!("socket write error due to peer_addr is missing");
+                                break;
                             }
                         } else {
                             warn!("pipeline recv error");
@@ -129,7 +134,7 @@ impl<W: 'static> BootstrapUdp<W> {
                                     now: Instant::now(),
                                     transport: TransportContext {
                                         local_addr,
-                                        peer_addr,
+                                        peer_addr: Some(peer_addr),
                                         ecn: None,
                                     },
                                     message: BytesMut::from(&buf[..n]),
@@ -144,7 +149,8 @@ impl<W: 'static> BootstrapUdp<W> {
                 }
             }
             pipeline.transport_inactive();
-        }).detach();
+        })
+        .detach();
 
         Ok((local_addr, pipeline_wr))
     }
