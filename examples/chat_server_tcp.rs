@@ -1,5 +1,5 @@
 use clap::Parser;
-use local_sync::mpsc::unbounded::Tx;
+use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::{
     cell::RefCell, collections::HashMap, io::Write, net::SocketAddr, rc::Rc, rc::Weak,
     str::FromStr, time::Instant,
@@ -168,8 +168,7 @@ struct Cli {
     log_level: String,
 }
 
-#[monoio::main(driver = "fusion", enable_timer = true)]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let host = cli.host;
     let port = cli.port;
@@ -193,48 +192,50 @@ async fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    // Create the shared state. This is how all the peers communicate.
-    // The server task will hold a handle to this. For every new client, the
-    // `state` handle is cloned and passed into the handler that processes the
-    // client connection.
-    let state = Rc::new(RefCell::new(Shared::new()));
+    smol::run(async move {
+        // Create the shared state. This is how all the peers communicate.
+        // The server task will hold a handle to this. For every new client, the
+        // `state` handle is cloned and passed into the handler that processes the
+        // client connection.
+        let state = Rc::new(RefCell::new(Shared::new()));
 
-    let mut bootstrap = BootstrapTcpServer::new();
-    bootstrap.pipeline(Box::new(move |writer: Tx<TaggedBytesMut>| {
-        let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
+        let mut bootstrap = BootstrapTcpServer::new();
+        bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
+            let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
-        let async_transport_handler = AsyncTransport::new(writer);
-        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-            LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-        ));
-        let string_codec_handler = TaggedStringCodec::new();
-        let pipeline_wr = Rc::downgrade(&pipeline);
-        let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
+            let async_transport_handler = AsyncTransport::new(writer);
+            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+            ));
+            let string_codec_handler = TaggedStringCodec::new();
+            let pipeline_wr = Rc::downgrade(&pipeline);
+            let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
 
-        pipeline.add_back(async_transport_handler);
-        pipeline.add_back(line_based_frame_decoder_handler);
-        pipeline.add_back(string_codec_handler);
-        pipeline.add_back(chat_handler);
-        pipeline.update()
-    }));
+            pipeline.add_back(async_transport_handler);
+            pipeline.add_back(line_based_frame_decoder_handler);
+            pipeline.add_back(string_codec_handler);
+            pipeline.add_back(chat_handler);
+            pipeline.update()
+        }));
 
-    bootstrap.bind(format!("{}:{}", host, port))?;
+        bootstrap.bind(format!("{}:{}", host, port)).unwrap();
 
-    println!("Press ctrl-c to stop");
-    println!("try `nc {} {}` in another shell", host, port);
-    let (tx, rx) = futures::channel::oneshot::channel();
-    std::thread::spawn(move || {
-        let mut tx = Some(tx);
-        ctrlc::set_handler(move || {
-            if let Some(tx) = tx.take() {
-                let _ = tx.send(());
-            }
-        })
-        .expect("Error setting Ctrl-C handler");
+        println!("Press ctrl-c to stop");
+        println!("try `nc {} {}` in another shell", host, port);
+        let (tx, rx) = futures::channel::oneshot::channel();
+        std::thread::spawn(move || {
+            let mut tx = Some(tx);
+            ctrlc::set_handler(move || {
+                if let Some(tx) = tx.take() {
+                    let _ = tx.send(());
+                }
+            })
+            .expect("Error setting Ctrl-C handler");
+        });
+        let _ = rx.await;
+
+        bootstrap.stop().await;
     });
-    let _ = rx.await;
-
-    bootstrap.stop().await;
 
     Ok(())
 }
