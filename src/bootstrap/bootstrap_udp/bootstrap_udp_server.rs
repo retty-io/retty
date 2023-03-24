@@ -29,7 +29,7 @@ impl<W: 'static> BootstrapUdpServer<W> {
     }
 
     /// Binds local address and port, return local socket address
-    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
+    pub fn bind<A: ToString>(&mut self, addr: A) -> Result<SocketAddr, Error> {
         let local_addr = self.internal.bind(addr)?;
         let _ = self.internal.serve()?;
         Ok(local_addr)

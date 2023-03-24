@@ -1,10 +1,7 @@
 use bytes::BytesMut;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use glommio::{
-    channels::local_channel::{new_unbounded, LocalSender},
-    net::TcpStream,
-    timer::Timer,
-};
+use glommio::{net::TcpStream, timer::Timer};
+use local_sync::mpsc::unbounded::Tx as LocalSender;
 use log::{trace, warn};
 use std::{
     cell::RefCell,

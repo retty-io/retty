@@ -1,13 +1,13 @@
 use bytes::BytesMut;
-use glommio::{
-    channels::local_channel::{new_unbounded, LocalReceiver, LocalSender},
-    {net::UdpSocket, timer::Timer},
+use local_sync::mpsc::{
+    unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
 };
 use log::{trace, warn};
+use smol::{Async, Task, Timer};
 use std::{
     cell::RefCell,
     io::{Error, ErrorKind},
-    net::{SocketAddr, ToSocketAddrs},
+    net::{SocketAddr, UdpSocket},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -23,7 +23,7 @@ struct BootstrapUdp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
     done_rx: Rc<RefCell<Option<LocalReceiver<()>>>>,
-    socket: Option<Rc<UdpSocket>>,
+    socket: Option<Rc<Async<UdpSocket>>>,
 }
 
 impl<W: 'static> Default for BootstrapUdp<W> {
@@ -46,9 +46,9 @@ impl<W: 'static> BootstrapUdp<W> {
         self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
     }
 
-    fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
-        let socket = UdpSocket::bind(addr)?;
-        let local_addr = socket.local_addr()?;
+    fn bind<A: ToString>(&mut self, addr: A) -> Result<SocketAddr, Error> {
+        let socket = Async::<UdpSocket>::bind(addr)?;
+        let local_addr = socket.get_ref().local_addr()?;
         self.socket = Some(Rc::new(socket));
         Ok(local_addr)
     }
@@ -58,26 +58,26 @@ impl<W: 'static> BootstrapUdp<W> {
             ErrorKind::AddrNotAvailable,
             "socket is not bind yet",
         ))?);
-        let local_addr = socket.local_addr()?;
+        let local_addr = socket.get_ref().local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
-        let (sender, receiver) = new_unbounded();
+        let (sender, mut receiver) = channel();
         let pipeline = (pipeline_factory_fn)(sender);
         let pipeline_wr = Rc::clone(&pipeline);
 
-        let (close_tx, close_rx) = new_unbounded();
+        let (close_tx, mut close_rx) = channel();
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = new_unbounded();
+        let (done_tx, done_rx) = channel();
         {
             let mut rx = self.done_rx.borrow_mut();
             *rx = Some(done_rx);
         }
 
-        glommio::spawn_local(async move {
+        Task::local(async move {
             let mut buf = vec![0u8; 2048];
 
             pipeline.transport_active();
@@ -93,12 +93,12 @@ impl<W: 'static> BootstrapUdp<W> {
                     continue;
                 }
 
-                let timeout = Timer::new(delay_from_now);
+                let timeout = Timer::after(delay_from_now);
 
                 tokio::select! {
                     _ = close_rx.recv() => {
                         trace!("pipeline socket exit loop");
-                        let _ = done_tx.try_send(());
+                        let _ = done_tx.send(());
                         break;
                     }
                     _ = timeout => {
@@ -157,14 +157,14 @@ impl<W: 'static> BootstrapUdp<W> {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.try_send(());
+                let _ = close_tx.send(());
             }
         }
         let done_rx = {
             let mut done_rx = self.done_rx.borrow_mut();
             done_rx.take()
         };
-        if let Some(done_rx) = done_rx {
+        if let Some(mut done_rx) = done_rx {
             let _ = done_rx.recv().await;
         }
     }

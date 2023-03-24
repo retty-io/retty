@@ -1,5 +1,5 @@
 use clap::Parser;
-use glommio::channels::local_channel::LocalSender;
+use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::{io::Write, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapUdpServer;

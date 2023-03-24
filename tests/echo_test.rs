@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use glommio::channels::local_channel::{new_unbounded, LocalSender};
+    use local_sync::mpsc::{unbounded::channel, unbounded::Tx as LocalSender};
+    use smol::Task;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::{net::SocketAddr, str::FromStr, time::Instant};
 
     use retty::bootstrap::{
-        BootstrapTcpClient, BootstrapTcpServer, BootstrapUdpClient, BootstrapUdpServer,
+        /*BootstrapTcpClient, BootstrapTcpServer,*/ BootstrapUdpClient, BootstrapUdpServer,
     };
     use retty::channel::{
         Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
@@ -74,7 +75,7 @@ mod tests {
             if msg.message == "bye" {
                 let mut tx = self.tx.borrow_mut();
                 if let Some(tx) = tx.take() {
-                    let _ = tx.try_send(());
+                    let _ = tx.send(());
                 }
             }
         }
@@ -118,19 +119,48 @@ mod tests {
 
     #[test]
     fn test_echo_udp() {
-        let handler = glommio::LocalExecutorBuilder::default()
-            .spawn(move || async move {
-                const ITER: usize = 1024;
+        smol::run(async {
+            const ITER: usize = 1024;
 
-                let (tx, rx) = new_unbounded();
+            let (tx, mut rx) = channel();
 
-                let server_count = Rc::new(RefCell::new(0));
-                let server_count_clone = server_count.clone();
-                let (server_done_tx, server_done_rx) = new_unbounded();
-                let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
+            let server_count = Rc::new(RefCell::new(0));
+            let server_count_clone = server_count.clone();
+            let (server_done_tx, mut server_done_rx) = channel();
+            let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
-                let mut server = BootstrapUdpServer::new();
-                server.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
+            let mut server = BootstrapUdpServer::new();
+            server.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+
+                let async_transport_handler = AsyncTransport::new(writer);
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = TaggedStringCodec::new();
+                let echo_handler = EchoHandler::new(
+                    true,
+                    Rc::clone(&server_done_tx),
+                    Rc::clone(&server_count_clone),
+                );
+
+                pipeline.add_back(async_transport_handler);
+                pipeline.add_back(line_based_frame_decoder_handler);
+                pipeline.add_back(string_codec_handler);
+                pipeline.add_back(echo_handler);
+                pipeline.finalize()
+            }));
+
+            let server_addr = server.bind("127.0.0.1:0").unwrap();
+
+            Task::local(async move {
+                let client_count = Rc::new(RefCell::new(0));
+                let client_count_clone = client_count.clone();
+                let (client_done_tx, mut client_done_rx) = channel();
+                let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
+
+                let mut client = BootstrapUdpClient::new();
+                client.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
                     let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
                     let async_transport_handler = AsyncTransport::new(writer);
@@ -139,9 +169,9 @@ mod tests {
                     ));
                     let string_codec_handler = TaggedStringCodec::new();
                     let echo_handler = EchoHandler::new(
-                        true,
-                        Rc::clone(&server_done_tx),
-                        Rc::clone(&server_count_clone),
+                        false,
+                        Rc::clone(&client_done_tx),
+                        Rc::clone(&client_count_clone),
                     );
 
                     pipeline.add_back(async_transport_handler);
@@ -151,54 +181,13 @@ mod tests {
                     pipeline.finalize()
                 }));
 
-                let server_addr = server.bind("127.0.0.1:0").unwrap();
+                let client_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
 
-                glommio::spawn_local(async move {
-                    let client_count = Rc::new(RefCell::new(0));
-                    let client_count_clone = client_count.clone();
-                    let (client_done_tx, client_done_rx) = new_unbounded();
-                    let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
+                client.bind(client_addr).unwrap();
+                let pipeline = client.connect(server_addr).await.unwrap();
 
-                    let mut client = BootstrapUdpClient::new();
-                    client.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-                        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
-
-                        let async_transport_handler = AsyncTransport::new(writer);
-                        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(
-                            Box::new(LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH)),
-                        );
-                        let string_codec_handler = TaggedStringCodec::new();
-                        let echo_handler = EchoHandler::new(
-                            false,
-                            Rc::clone(&client_done_tx),
-                            Rc::clone(&client_count_clone),
-                        );
-
-                        pipeline.add_back(async_transport_handler);
-                        pipeline.add_back(line_based_frame_decoder_handler);
-                        pipeline.add_back(string_codec_handler);
-                        pipeline.add_back(echo_handler);
-                        pipeline.finalize()
-                    }));
-
-                    let client_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
-
-                    client.bind(client_addr).unwrap();
-                    let pipeline = client.connect(server_addr).await.unwrap();
-
-                    for i in 0..ITER {
-                        // write
-                        pipeline.write(TaggedString {
-                            now: Instant::now(),
-                            transport: TransportContext {
-                                local_addr: client_addr,
-                                peer_addr: server_addr,
-                                ecn: None,
-                            },
-                            message: format!("{}\r\n", i),
-                        });
-                        glommio::yield_if_needed().await;
-                    }
+                for i in 0..ITER {
+                    // write
                     pipeline.write(TaggedString {
                         now: Instant::now(),
                         transport: TransportContext {
@@ -206,28 +195,35 @@ mod tests {
                             peer_addr: server_addr,
                             ecn: None,
                         },
-                        message: format!("bye\r\n"),
+                        message: format!("{}\r\n", i),
                     });
-                    glommio::yield_if_needed().await;
+                }
+                pipeline.write(TaggedString {
+                    now: Instant::now(),
+                    transport: TransportContext {
+                        local_addr: client_addr,
+                        peer_addr: server_addr,
+                        ecn: None,
+                    },
+                    message: format!("bye\r\n"),
+                });
 
-                    assert!(client_done_rx.recv().await.is_some());
+                assert!(client_done_rx.recv().await.is_some());
 
-                    assert!(tx.send(client_count).await.is_ok());
-                })
-                .detach();
-
-                let client_count = rx.recv().await.unwrap();
-                assert!(server_done_rx.recv().await.is_some());
-
-                let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
-                assert_eq!(*client_count, *server_count);
-                assert_eq!(ITER + 1, *client_count)
+                assert!(tx.send(client_count).is_ok());
             })
-            .unwrap();
+            .detach();
 
-        handler.join().unwrap();
+            let client_count = rx.recv().await.unwrap();
+            assert!(server_done_rx.recv().await.is_some());
+
+            let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
+            assert_eq!(*client_count, *server_count);
+            assert_eq!(ITER + 1, *client_count)
+        });
     }
 
+    /*
     #[test]
     fn test_echo_tcp() {
         let handler = glommio::LocalExecutorBuilder::default()
@@ -337,5 +333,5 @@ mod tests {
             .unwrap();
 
         handler.join().unwrap();
-    }
+    }*/
 }

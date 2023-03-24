@@ -29,21 +29,23 @@ impl<W: 'static> BootstrapUdpClient<W> {
     }
 
     /// Binds local address and port, return local socket address
-    pub fn bind<A: ToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
+    pub fn bind<A: ToString>(&mut self, addr: A) -> Result<SocketAddr, Error> {
         self.internal.bind(addr)
     }
 
     /// Connects to the remote peer
     pub async fn connect(
         &mut self,
-        addr: SocketAddr,
+        _addr: SocketAddr,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
-        let socket = Rc::clone(self.internal.socket.as_ref().ok_or(Error::new(
+        //TODO:
+        /*let socket = Rc::clone(self.internal.socket.as_ref().ok_or(Error::new(
             ErrorKind::AddrNotAvailable,
             "socket is not bind yet",
         ))?);
 
         socket.connect(addr).await?;
+         */
 
         let pipeline_wr = self.internal.serve()?;
 

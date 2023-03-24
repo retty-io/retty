@@ -15,7 +15,8 @@ categories = [ "network-programming", "asynchronous" ]
 bytes = "1.4.0"
 log = "0.4.17"
 waitgroup = "0.1.2"
-glommio = "0.8.0"
+smol = "0.1.18"
+local-sync = "0.1.0"
 futures-lite = "1.12.0"
 tokio = {version = "1.26.0", default-features = false, features = ["macros"] }
 
@@ -35,19 +36,19 @@ futures = "0.3.26"
 #name = "chat_server_udp"
 #path = "examples/chat_server_udp.rs"
 
-[[example]]
-name = "client_udp"
-path = "examples/client_udp.rs"
+#[[example]]
+#name = "client_udp"
+#path = "examples/client_udp.rs"
 
-[[example]]
-name = "client_tcp"
-path = "examples/client_tcp.rs"
+#[[example]]
+#name = "client_tcp"
+#path = "examples/client_tcp.rs"
 
-[[example]]
-name = "echo_server_udp"
-path = "examples/echo_server_udp.rs"
+#[[example]]
+#name = "echo_server_udp"
+#path = "examples/echo_server_udp.rs"
 
-[[example]]
-name = "echo_server_tcp"
-path = "examples/echo_server_tcp.rs"
+#[[example]]
+#name = "echo_server_tcp"
+#path = "examples/echo_server_tcp.rs"
 

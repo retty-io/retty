@@ -1,6 +1,6 @@
 use clap::Parser;
 use futures::StreamExt;
-use glommio::channels::local_channel::LocalSender;
+use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::{io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapUdpClient;
