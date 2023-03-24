@@ -208,6 +208,8 @@ mod tests {
                 assert!(client_done_rx.recv().await.is_some());
 
                 assert!(tx.send(client_count).is_ok());
+
+                client.stop().await;
             })
             .detach();
 
@@ -216,7 +218,9 @@ mod tests {
 
             let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
             assert_eq!(*client_count, *server_count);
-            assert_eq!(ITER + 1, *client_count)
+            assert_eq!(ITER + 1, *client_count);
+
+            server.stop().await;
         });
     }
 
@@ -313,6 +317,8 @@ mod tests {
                 assert!(client_done_rx.recv().await.is_some());
 
                 assert!(tx.send(client_count).is_ok());
+
+                client.stop().await;
             })
             .detach();
 
@@ -321,7 +327,9 @@ mod tests {
 
             let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
             assert_eq!(*client_count, *server_count);
-            assert_eq!(ITER + 1, *client_count)
+            assert_eq!(ITER + 1, *client_count);
+
+            server.stop().await;
         });
     }
 }
