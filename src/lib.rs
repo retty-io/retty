@@ -153,10 +153,10 @@
 //! * [AsyncTransport](crate::transport::AsyncTransport)
 //!     * Inbound: Reads a raw data stream from the socket and converts it into a zero-copy byte buffer.
 //!     * Outbound: Writes the contents of a zero-copy byte buffer to the underlying socket.
-//! * [ByteToMessageCodec](crate::codec::byte_to_message_decoder::ByteToMessageCodec)
+//! * [ByteToMessageCodec](crate::codec::byte_to_message_decoder::TaggedByteToMessageCodec)
 //!     * Inbound: receives a zero-copy byte buffer and splits on line-endings
 //!     * Outbound: just passes the byte buffer to AsyncTransportTcp
-//! * [StringCodec](crate::codec::string_codec::StringCodec)
+//! * [StringCodec](crate::codec::string_codec::TaggedStringCodec)
 //!     * Inbound: receives a byte buffer and decodes it into a std::string and pass up to the EchoHandler.
 //!     * Outbound: receives a std::string and encodes it into a byte buffer and pass down to the ByteToMessageCodec.
 //! * EchoHandler

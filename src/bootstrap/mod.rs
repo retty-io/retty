@@ -10,9 +10,7 @@ mod bootstrap_udp;
 /*pub use bootstrap_tcp::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
 };*/
-pub use bootstrap_udp::{
-    bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
-};
+pub use bootstrap_udp::BootstrapUdp;
 
 /// Creates a new [Pipeline]
 pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(LocalSender<R>) -> Rc<Pipeline<R, W>>)>;

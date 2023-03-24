@@ -4,11 +4,9 @@ mod tests {
     use smol::Task;
     use std::cell::RefCell;
     use std::rc::Rc;
-    use std::{net::SocketAddr, str::FromStr, time::Instant};
+    use std::time::Instant;
 
-    use retty::bootstrap::{
-        /*BootstrapTcpClient, BootstrapTcpServer,*/ BootstrapUdpClient, BootstrapUdpServer,
-    };
+    use retty::bootstrap::BootstrapUdp;
     use retty::channel::{
         Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
     };
@@ -129,7 +127,7 @@ mod tests {
             let (server_done_tx, mut server_done_rx) = channel();
             let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
-            let mut server = BootstrapUdpServer::new();
+            let mut server = BootstrapUdp::new();
             server.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
                 let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
@@ -151,7 +149,7 @@ mod tests {
                 pipeline.finalize()
             }));
 
-            let server_addr = server.bind("127.0.0.1:0").unwrap();
+            let (server_addr, _) = server.bind("127.0.0.1:0").unwrap();
 
             Task::local(async move {
                 let client_count = Rc::new(RefCell::new(0));
@@ -159,7 +157,7 @@ mod tests {
                 let (client_done_tx, mut client_done_rx) = channel();
                 let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
-                let mut client = BootstrapUdpClient::new();
+                let mut client = BootstrapUdp::new();
                 client.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
                     let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
@@ -181,10 +179,7 @@ mod tests {
                     pipeline.finalize()
                 }));
 
-                let client_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
-
-                client.bind(client_addr).unwrap();
-                let pipeline = client.connect(server_addr).await.unwrap();
+                let (client_addr, pipeline) = client.bind("127.0.0.1:0").unwrap();
 
                 for i in 0..ITER {
                     // write
