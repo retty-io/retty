@@ -5,22 +5,22 @@ use std::marker::PhantomData;
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 use crate::transport::AsyncTransportWrite;
 
-struct AsyncTransportDecoder<T> {
-    phantom: PhantomData<T>,
+struct AsyncTransportDecoder<R> {
+    phantom: PhantomData<R>,
 }
-struct AsyncTransportEncoder<T> {
-    writer: Option<AsyncTransportWrite<T>>,
-}
-
-/// Asynchronous transport handler that reads T and writes T
-pub struct AsyncTransport<T> {
-    decoder: AsyncTransportDecoder<T>,
-    encoder: AsyncTransportEncoder<T>,
+struct AsyncTransportEncoder<R> {
+    writer: Option<AsyncTransportWrite<R>>,
 }
 
-impl<T> AsyncTransport<T> {
+/// Asynchronous transport handler that writes R
+pub struct AsyncTransport<R> {
+    decoder: AsyncTransportDecoder<R>,
+    encoder: AsyncTransportEncoder<R>,
+}
+
+impl<R> AsyncTransport<R> {
     /// Creates a new asynchronous transport handler
-    pub fn new(writer: AsyncTransportWrite<T>) -> Self {
+    pub fn new(writer: AsyncTransportWrite<R>) -> Self {
         AsyncTransport {
             decoder: AsyncTransportDecoder {
                 phantom: PhantomData,
@@ -32,8 +32,8 @@ impl<T> AsyncTransport<T> {
     }
 }
 
-impl<T: 'static> InboundHandler for AsyncTransportDecoder<T> {
-    type Rin = T;
+impl<R: 'static> InboundHandler for AsyncTransportDecoder<R> {
+    type Rin = R;
     type Rout = Self::Rin;
 
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
@@ -41,8 +41,8 @@ impl<T: 'static> InboundHandler for AsyncTransportDecoder<T> {
     }
 }
 
-impl<T: 'static> OutboundHandler for AsyncTransportEncoder<T> {
-    type Win = T;
+impl<R: 'static> OutboundHandler for AsyncTransportEncoder<R> {
+    type Win = R;
     type Wout = Self::Win;
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
@@ -62,8 +62,8 @@ impl<T: 'static> OutboundHandler for AsyncTransportEncoder<T> {
     }
 }
 
-impl<T: 'static> Handler for AsyncTransport<T> {
-    type Rin = T;
+impl<R: 'static> Handler for AsyncTransport<R> {
+    type Rin = R;
     type Rout = Self::Rin;
     type Win = Self::Rin;
     type Wout = Self::Rin;

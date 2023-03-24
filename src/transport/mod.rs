@@ -77,14 +77,6 @@ impl Default for TaggedBytesMut {
     }
 }
 
-/// Obtains local address and peer address
-pub trait TransportAddress {
-    /// Returns the local address
-    fn local_addr(&self) -> std::io::Result<SocketAddr>;
-    /// Returns the peer address
-    fn peer_addr(&self) -> std::io::Result<SocketAddr>;
-}
-
 /// Write half of an asynchronous transport
 pub struct AsyncTransportWrite<R> {
     pub(crate) sender: LocalSender<R>,

@@ -130,21 +130,21 @@
 //! This needs to be the final handler in the pipeline. Now the definition of the pipeline is needed to handle the requests and responses.
 //! ```ignore
 //! let mut bootstrap = BootstrapServerTcp::new();
-//! bootstrap.pipeline(Box::new(move |writer: Tx<BytesMut>| {
-//!     let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+//! bootstrap.pipeline(Box::new(move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+//!     let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 //!
 //!     let async_transport_handler = AsyncTransport::new(writer);
-//!     let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+//!     let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
 //!         LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
 //!     ));
-//!     let string_codec_handler = StringCodec::new();
+//!     let string_codec_handler = TaggedStringCodec::new();
 //!     let echo_handler = EchoHandler::new();
 //!
 //!     pipeline.add_back(async_transport_handler);
 //!     pipeline.add_back(line_based_frame_decoder_handler);
 //!     pipeline.add_back(string_codec_handler);
 //!     pipeline.add_back(echo_handler);
-//!     Rc::new(pipeline.finalize())
+//!     pipeline.finalize()
 //! }));
 //! ```
 //!
@@ -153,15 +153,15 @@
 //! * [AsyncTransport](crate::transport::AsyncTransport)
 //!     * Inbound: Reads a raw data stream from the socket and converts it into a zero-copy byte buffer.
 //!     * Outbound: Writes the contents of a zero-copy byte buffer to the underlying socket.
-//! * [ByteToMessageCodec](crate::codec::byte_to_message_decoder::TaggedByteToMessageCodec)
+//! * [TaggedByteToMessageCodec](crate::codec::byte_to_message_decoder::TaggedByteToMessageCodec)
 //!     * Inbound: receives a zero-copy byte buffer and splits on line-endings
-//!     * Outbound: just passes the byte buffer to AsyncTransportTcp
-//! * [StringCodec](crate::codec::string_codec::TaggedStringCodec)
+//!     * Outbound: just passes the byte buffer to AsyncTransport
+//! * [TaggedStringCodec](crate::codec::string_codec::TaggedStringCodec)
 //!     * Inbound: receives a byte buffer and decodes it into a std::string and pass up to the EchoHandler.
-//!     * Outbound: receives a std::string and encodes it into a byte buffer and pass down to the ByteToMessageCodec.
+//!     * Outbound: receives a std::string and encodes it into a byte buffer and pass down to the TaggedByteToMessageCodec.
 //! * EchoHandler
 //!     * Inbound: receives a std::string and writes it to the pipeline, which will send the message outbound.
-//!     * Outbound: receives a std::string and forwards it to StringCodec.
+//!     * Outbound: receives a std::string and forwards it to TaggedStringCodec.
 //!
 //! Now that all needs to be done is plug the pipeline factory into a [BootstrapServerTcp](crate::bootstrap::BootstrapTcpServer) and that’s pretty much it.
 //! Bind a local host:port and wait for it to stop.
@@ -170,8 +170,8 @@
 //! bootstrap.bind(format!("{}:{}", host, port))?;
 //!
 //! println!("Press ctrl-c to stop");
-//! monoio::select! {
-//!     _ = monoio::signal::ctrl_c() => {
+//! tokio::select! {
+//!     _ = tokio::signal::ctrl_c() => {
 //!         bootstrap.stop().await;
 //!     }
 //! };
@@ -247,21 +247,21 @@
 //! handles writing data.
 //! ```ignore
 //! let mut bootstrap = BootstrapClientTcp::new();
-//! bootstrap.pipeline(Box::new( move |writer: Tx<BytesMut>| {
-//!     let mut pipeline: Pipeline<BytesMut, String> = Pipeline::new();
+//! bootstrap.pipeline(Box::new( move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+//!     let mut pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 //!
 //!     let async_transport_handler = AsyncTransport::new(writer);
-//!     let line_based_frame_decoder_handler = ByteToMessageCodec::new(Box::new(
+//!     let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
 //!         LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
 //!     ));
-//!     let string_codec_handler = StringCodec::new();
+//!     let string_codec_handler = TaggedStringCodec::new();
 //!     let echo_handler = EchoHandler::new();
 //!
 //!     pipeline.add_back(async_transport_handler);
 //!     pipeline.add_back(line_based_frame_decoder_handler);
 //!     pipeline.add_back(string_codec_handler);
 //!     pipeline.add_back(echo_handler);
-//!     Rc::new(pipeline.finalize())
+//!     pipeline.finalize()
 //! }));
 //! ```
 //!
@@ -272,7 +272,7 @@
 //!
 //! println!("Enter bye to stop");
 //! let mut buffer = String::new();
-//! while monoio::io::stdin().read_line(&mut buffer).await.is_ok() {
+//! while tokio::io::stdin().read_line(&mut buffer).await.is_ok() {
 //!     match buffer.trim_end() {
 //!         "" => break,
 //!         line => {
