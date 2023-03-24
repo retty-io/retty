@@ -3,9 +3,7 @@ pub(crate) mod bootstrap_tcp_server;
 
 use bytes::BytesMut;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use local_sync::mpsc::{
-    unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
-};
+use local_sync::mpsc::{unbounded::channel, unbounded::Rx as LocalReceiver};
 use log::{trace, warn};
 use smol::{Async, Task, Timer};
 use std::net::SocketAddr;
@@ -24,7 +22,7 @@ use crate::transport::{TaggedBytesMut, TransportContext};
 
 struct BootstrapTcp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
-    close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
+    close_tx: Rc<RefCell<Option<async_channel::Sender<()>>>>, //TODO: replace it with local_sync::broadcast channel
     wg: Rc<RefCell<Option<WaitGroup>>>,
 }
 
@@ -53,7 +51,7 @@ impl<W: 'static> BootstrapTcp<W> {
         let local_addr = listener.get_ref().local_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        let (close_tx, mut close_rx) = channel();
+        let (close_tx, close_rx) = async_channel::bounded(1);
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
@@ -71,11 +69,8 @@ impl<W: 'static> BootstrapTcp<W> {
 
         Task::local(async move {
             let _w = worker;
+
             let child_wg = WaitGroup::new();
-
-            //TODO
-            let mut broadcast_close = vec![];
-
             loop {
                 tokio::select! {
                     _ = close_rx.recv() => {
@@ -89,8 +84,7 @@ impl<W: 'static> BootstrapTcp<W> {
                                 // moved to the new task and processed there.
                                 let (sender, receiver) = channel();
                                 let pipeline_rd = (pipeline_factory_fn)(sender);
-                                let (child_close_tx, child_close_rx) = channel();
-                                broadcast_close.push(child_close_tx);
+                                let child_close_rx = close_rx.clone();
                                 let child_worker = child_wg.worker();
                                 Task::local(async move {
                                     let _ = Self::process_pipeline(socket,
@@ -108,10 +102,6 @@ impl<W: 'static> BootstrapTcp<W> {
                     }
                 }
             }
-            //TODO
-            for child_close_tx in broadcast_close {
-                let _ = child_close_tx.send(());
-            }
             child_wg.wait().await;
         })
         .detach();
@@ -127,7 +117,7 @@ impl<W: 'static> BootstrapTcp<W> {
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        let (close_tx, close_rx) = channel();
+        let (close_tx, close_rx) = async_channel::bounded(1);
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
@@ -158,7 +148,7 @@ impl<W: 'static> BootstrapTcp<W> {
         mut socket: Async<TcpStream>,
         pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>>,
         mut receiver: LocalReceiver<TaggedBytesMut>,
-        mut close_rx: LocalReceiver<()>,
+        close_rx: async_channel::Receiver<()>,
         worker: Worker,
     ) -> Result<(), Error> {
         let _w = worker;
@@ -243,7 +233,7 @@ impl<W: 'static> BootstrapTcp<W> {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.send(());
+                let _ = close_tx.try_send(());
             }
         }
         let wg = {
