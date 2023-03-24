@@ -2,7 +2,7 @@ use clap::Parser;
 use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::{io::Write, str::FromStr, time::Instant};
 
-use retty::bootstrap::BootstrapUdpServer;
+use retty::bootstrap::BootstrapUdp;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -118,47 +118,43 @@ fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    let handler = glommio::LocalExecutorBuilder::default()
-        .spawn(move || async move {
-            let mut bootstrap = BootstrapUdpServer::new();
-            bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+    smol::run(async move {
+        let mut bootstrap = BootstrapUdp::new();
+        bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
+            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                let async_transport_handler = AsyncTransport::new(writer);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = EchoHandler::new();
+            let async_transport_handler = AsyncTransport::new(writer);
+            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+            ));
+            let string_codec_handler = TaggedStringCodec::new();
+            let echo_handler = EchoHandler::new();
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(echo_handler);
-                pipeline.finalize()
-            }));
+            pipeline.add_back(async_transport_handler);
+            pipeline.add_back(line_based_frame_decoder_handler);
+            pipeline.add_back(string_codec_handler);
+            pipeline.add_back(echo_handler);
+            pipeline.finalize()
+        }));
 
-            bootstrap.bind(format!("{}:{}", host, port)).unwrap();
+        bootstrap.bind(format!("{}:{}", host, port)).unwrap();
 
-            println!("Press ctrl-c to stop");
-            println!("try `nc -u {} {}` in another shell", host, port);
-            let (tx, rx) = futures::channel::oneshot::channel();
-            std::thread::spawn(move || {
-                let mut tx = Some(tx);
-                ctrlc::set_handler(move || {
-                    if let Some(tx) = tx.take() {
-                        let _ = tx.send(());
-                    }
-                })
-                .expect("Error setting Ctrl-C handler");
-            });
-            let _ = rx.await;
+        println!("Press ctrl-c to stop");
+        println!("try `nc -u {} {}` in another shell", host, port);
+        let (tx, rx) = futures::channel::oneshot::channel();
+        std::thread::spawn(move || {
+            let mut tx = Some(tx);
+            ctrlc::set_handler(move || {
+                if let Some(tx) = tx.take() {
+                    let _ = tx.send(());
+                }
+            })
+            .expect("Error setting Ctrl-C handler");
+        });
+        let _ = rx.await;
 
-            bootstrap.stop().await;
-        })
-        .unwrap();
-
-    handler.join().unwrap();
+        bootstrap.stop().await;
+    });
 
     Ok(())
 }
