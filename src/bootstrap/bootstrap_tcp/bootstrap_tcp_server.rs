@@ -1,16 +1,15 @@
 use bytes::BytesMut;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use glommio::{
-    channels::local_channel::{new_unbounded, LocalReceiver, LocalSender},
-    net::{TcpListener, TcpStream},
-    timer::Timer,
+use local_sync::mpsc::{
+    unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
 };
 use log::{trace, warn};
+use smol::{Async, Task, Timer};
 use std::net::SocketAddr;
 use std::{
     cell::RefCell,
     io::Error,
-    net::ToSocketAddrs,
+    net::{TcpListener, TcpStream},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -53,12 +52,12 @@ impl<W: 'static> BootstrapTcpServer<W> {
     }
 
     /// Binds local address and port
-    pub fn bind<A: ToSocketAddrs>(&self, addr: A) -> Result<SocketAddr, Error> {
-        let listener = TcpListener::bind(addr)?;
-        let local_addr = listener.local_addr()?;
+    pub fn bind<A: ToString>(&self, addr: A) -> Result<SocketAddr, Error> {
+        let listener = Async::<TcpListener>::bind(addr)?;
+        let local_addr = listener.get_ref().local_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        let (close_tx, close_rx) = new_unbounded();
+        let (close_tx, mut close_rx) = channel();
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
@@ -74,7 +73,7 @@ impl<W: 'static> BootstrapTcpServer<W> {
             worker
         };
 
-        glommio::spawn_local(async move {
+        Task::local(async move {
             let _w = worker;
             let child_wg = WaitGroup::new();
 
@@ -89,14 +88,14 @@ impl<W: 'static> BootstrapTcpServer<W> {
                     }
                     res = listener.accept() => {
                         match res {
-                            Ok(socket) => {
+                            Ok((socket,_)) => {
                                 // A new task is spawned for each inbound socket. The socket is
                                 // moved to the new task and processed there.
                                 let child_pipeline_factory_fn = Rc::clone(&pipeline_factory_fn);
-                                let (child_close_tx, child_close_rx) = new_unbounded();
+                                let (child_close_tx, child_close_rx) = channel();
                                 broadcast_close.push(child_close_tx);
                                 let child_worker = child_wg.worker();
-                                glommio::spawn_local(async move {
+                                Task::local(async move {
                                     let _ = Self::process_pipeline(socket,
                                                                    child_pipeline_factory_fn,
                                                                    child_close_rx,
@@ -113,7 +112,7 @@ impl<W: 'static> BootstrapTcpServer<W> {
             }
             //TODO
             for child_close_tx in broadcast_close {
-                let _ = child_close_tx.try_send(());
+                let _ = child_close_tx.send(());
             }
             child_wg.wait().await;
         })
@@ -123,18 +122,18 @@ impl<W: 'static> BootstrapTcpServer<W> {
     }
 
     async fn process_pipeline(
-        mut socket: TcpStream,
+        mut socket: Async<TcpStream>,
         pipeline_factory_fn: Rc<PipelineFactoryFn<TaggedBytesMut, W>>,
-        close_rx: LocalReceiver<()>,
+        mut close_rx: LocalReceiver<()>,
         worker: Worker,
     ) -> Result<(), Error> {
         let _w = worker;
 
-        let (sender, receiver) = new_unbounded();
+        let (sender, mut receiver) = channel();
         let pipeline = (pipeline_factory_fn)(sender);
 
-        let local_addr = socket.local_addr()?;
-        let peer_addr = socket.peer_addr()?;
+        let local_addr = socket.get_ref().local_addr()?;
+        let peer_addr = socket.get_ref().peer_addr()?;
 
         let mut buf = vec![0u8; 2048];
 
@@ -151,7 +150,7 @@ impl<W: 'static> BootstrapTcpServer<W> {
                 continue;
             }
 
-            let timeout = Timer::new(delay_from_now);
+            let timeout = Timer::after(delay_from_now);
 
             tokio::select! {
                 _ = close_rx.recv() => {
@@ -214,7 +213,7 @@ impl<W: 'static> BootstrapTcpServer<W> {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.try_send(());
+                let _ = close_tx.send(());
             }
         }
         let wg = {

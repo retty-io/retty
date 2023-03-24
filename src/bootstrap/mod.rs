@@ -4,12 +4,12 @@ use crate::channel::Pipeline;
 use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::rc::Rc;
 
-//mod bootstrap_tcp;
+mod bootstrap_tcp;
 mod bootstrap_udp;
 
-/*pub use bootstrap_tcp::{
+pub use bootstrap_tcp::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
-};*/
+};
 pub use bootstrap_udp::BootstrapUdp;
 
 /// Creates a new [Pipeline]
