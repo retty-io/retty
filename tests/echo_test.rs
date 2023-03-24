@@ -18,7 +18,7 @@ mod tests {
         },
         string_codec::{TaggedString, TaggedStringCodec},
     };
-    use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
+    use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -130,26 +130,28 @@ mod tests {
             let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
             let mut server = BootstrapUdp::new();
-            server.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+            server.pipeline(Box::new(
+                move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                let async_transport_handler = AsyncTransport::new(writer);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = EchoHandler::new(
-                    true,
-                    Rc::clone(&server_done_tx),
-                    Rc::clone(&server_count_clone),
-                );
+                    let async_transport_handler = AsyncTransport::new(writer);
+                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                    ));
+                    let string_codec_handler = TaggedStringCodec::new();
+                    let echo_handler = EchoHandler::new(
+                        true,
+                        Rc::clone(&server_done_tx),
+                        Rc::clone(&server_count_clone),
+                    );
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(echo_handler);
-                pipeline.finalize()
-            }));
+                    pipeline.add_back(async_transport_handler);
+                    pipeline.add_back(line_based_frame_decoder_handler);
+                    pipeline.add_back(string_codec_handler);
+                    pipeline.add_back(echo_handler);
+                    pipeline.finalize()
+                },
+            ));
 
             let (server_addr, _) = server.bind("127.0.0.1:0").unwrap();
 
@@ -160,26 +162,28 @@ mod tests {
                 let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
                 let mut client = BootstrapUdp::new();
-                client.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                client.pipeline(Box::new(
+                    move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                    let async_transport_handler = AsyncTransport::new(writer);
-                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                    ));
-                    let string_codec_handler = TaggedStringCodec::new();
-                    let echo_handler = EchoHandler::new(
-                        false,
-                        Rc::clone(&client_done_tx),
-                        Rc::clone(&client_count_clone),
-                    );
+                        let async_transport_handler = AsyncTransport::new(writer);
+                        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(
+                            Box::new(LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH)),
+                        );
+                        let string_codec_handler = TaggedStringCodec::new();
+                        let echo_handler = EchoHandler::new(
+                            false,
+                            Rc::clone(&client_done_tx),
+                            Rc::clone(&client_count_clone),
+                        );
 
-                    pipeline.add_back(async_transport_handler);
-                    pipeline.add_back(line_based_frame_decoder_handler);
-                    pipeline.add_back(string_codec_handler);
-                    pipeline.add_back(echo_handler);
-                    pipeline.finalize()
-                }));
+                        pipeline.add_back(async_transport_handler);
+                        pipeline.add_back(line_based_frame_decoder_handler);
+                        pipeline.add_back(string_codec_handler);
+                        pipeline.add_back(echo_handler);
+                        pipeline.finalize()
+                    },
+                ));
 
                 let (client_addr, pipeline) = client.bind("127.0.0.1:0").unwrap();
 
@@ -237,26 +241,28 @@ mod tests {
             let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
             let mut server = BootstrapTcpServer::new();
-            server.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+            server.pipeline(Box::new(
+                move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                let async_transport_handler = AsyncTransport::new(writer);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = EchoHandler::new(
-                    true,
-                    Rc::clone(&server_done_tx),
-                    Rc::clone(&server_count_clone),
-                );
+                    let async_transport_handler = AsyncTransport::new(writer);
+                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                    ));
+                    let string_codec_handler = TaggedStringCodec::new();
+                    let echo_handler = EchoHandler::new(
+                        true,
+                        Rc::clone(&server_done_tx),
+                        Rc::clone(&server_count_clone),
+                    );
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(echo_handler);
-                pipeline.finalize()
-            }));
+                    pipeline.add_back(async_transport_handler);
+                    pipeline.add_back(line_based_frame_decoder_handler);
+                    pipeline.add_back(string_codec_handler);
+                    pipeline.add_back(echo_handler);
+                    pipeline.finalize()
+                },
+            ));
 
             let server_addr = server.bind("127.0.0.1:0").unwrap();
 
@@ -267,26 +273,28 @@ mod tests {
                 let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
                 let mut client = BootstrapTcpClient::new();
-                client.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                client.pipeline(Box::new(
+                    move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                    let async_transport_handler = AsyncTransport::new(writer);
-                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                    ));
-                    let string_codec_handler = TaggedStringCodec::new();
-                    let echo_handler = EchoHandler::new(
-                        false,
-                        Rc::clone(&client_done_tx),
-                        Rc::clone(&client_count_clone),
-                    );
+                        let async_transport_handler = AsyncTransport::new(writer);
+                        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(
+                            Box::new(LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH)),
+                        );
+                        let string_codec_handler = TaggedStringCodec::new();
+                        let echo_handler = EchoHandler::new(
+                            false,
+                            Rc::clone(&client_done_tx),
+                            Rc::clone(&client_count_clone),
+                        );
 
-                    pipeline.add_back(async_transport_handler);
-                    pipeline.add_back(line_based_frame_decoder_handler);
-                    pipeline.add_back(string_codec_handler);
-                    pipeline.add_back(echo_handler);
-                    pipeline.finalize()
-                }));
+                        pipeline.add_back(async_transport_handler);
+                        pipeline.add_back(line_based_frame_decoder_handler);
+                        pipeline.add_back(string_codec_handler);
+                        pipeline.add_back(echo_handler);
+                        pipeline.finalize()
+                    },
+                ));
 
                 let client_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
 

@@ -18,7 +18,7 @@ use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
-use crate::transport::{TaggedBytesMut, TransportContext};
+use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 struct BootstrapTcp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
@@ -79,11 +79,18 @@ impl<W: 'static> BootstrapTcp<W> {
                     }
                     res = listener.accept() => {
                         match res {
-                            Ok((socket,_)) => {
+                            Ok((socket, peer_addr)) => {
                                 // A new task is spawned for each inbound socket. The socket is
                                 // moved to the new task and processed there.
                                 let (sender, receiver) = channel();
-                                let pipeline_rd = (pipeline_factory_fn)(sender);
+                                let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite {
+                                    sender,
+                                    transport: TransportContext {
+                                        local_addr,
+                                        peer_addr: Some(peer_addr),
+                                        ecn: None,
+                                    },
+                                });
                                 let child_close_rx = close_rx.clone();
                                 let child_worker = child_wg.worker();
                                 Task::local(async move {
@@ -114,7 +121,8 @@ impl<W: 'static> BootstrapTcp<W> {
         addr: A,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
         let socket = Async::<TcpStream>::connect(addr).await?;
-
+        let local_addr = socket.get_ref().local_addr()?;
+        let peer_addr = socket.get_ref().peer_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, close_rx) = async_channel::bounded(1);
@@ -134,7 +142,14 @@ impl<W: 'static> BootstrapTcp<W> {
         };
 
         let (sender, receiver) = channel();
-        let pipeline_rd = (pipeline_factory_fn)(sender);
+        let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite {
+            sender,
+            transport: TransportContext {
+                local_addr,
+                peer_addr: Some(peer_addr),
+                ecn: None,
+            },
+        });
         let pipeline_wr = Rc::clone(&pipeline_rd);
         Task::local(async move {
             let _ = Self::process_pipeline(socket, pipeline_rd, receiver, close_rx, worker).await;

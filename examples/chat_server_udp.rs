@@ -1,5 +1,4 @@
 use clap::Parser;
-use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::{
     cell::RefCell, collections::HashMap, io::Write, net::SocketAddr, rc::Rc, rc::Weak,
     str::FromStr, time::Instant,
@@ -14,7 +13,7 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
+use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
@@ -192,23 +191,25 @@ fn main() -> anyhow::Result<()> {
         let state = Rc::new(RefCell::new(Shared::new()));
 
         let mut bootstrap = BootstrapUdp::new();
-        bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-            let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
+        bootstrap.pipeline(Box::new(
+            move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
-            let async_transport_handler = AsyncTransport::new(writer);
-            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-            ));
-            let string_codec_handler = TaggedStringCodec::new();
-            let pipeline_wr = Rc::downgrade(&pipeline);
-            let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
+                let async_transport_handler = AsyncTransport::new(writer);
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = TaggedStringCodec::new();
+                let pipeline_wr = Rc::downgrade(&pipeline);
+                let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
 
-            pipeline.add_back(async_transport_handler);
-            pipeline.add_back(line_based_frame_decoder_handler);
-            pipeline.add_back(string_codec_handler);
-            pipeline.add_back(chat_handler);
-            pipeline.update()
-        }));
+                pipeline.add_back(async_transport_handler);
+                pipeline.add_back(line_based_frame_decoder_handler);
+                pipeline.add_back(string_codec_handler);
+                pipeline.add_back(chat_handler);
+                pipeline.update()
+            },
+        ));
 
         bootstrap.bind(format!("{}:{}", host, port)).unwrap();
 

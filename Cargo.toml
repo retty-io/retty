@@ -29,9 +29,9 @@ anyhow = "1.0.69"
 ctrlc = "3.2.5"
 futures = "0.3.26"
 
-#[[example]]
-#name = "chat_server_tcp"
-#path = "examples/chat_server_tcp.rs"
+[[example]]
+name = "chat_server_tcp"
+path = "examples/chat_server_tcp.rs"
 
 [[example]]
 name = "chat_server_udp"

@@ -14,7 +14,7 @@ use std::{
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
-use crate::transport::{TaggedBytesMut, TransportContext};
+use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients or servers.
 pub struct BootstrapUdp<W> {
@@ -58,7 +58,14 @@ impl<W: 'static> BootstrapUdp<W> {
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
         let (sender, mut receiver) = channel();
-        let pipeline = (pipeline_factory_fn)(sender);
+        let pipeline = (pipeline_factory_fn)(AsyncTransportWrite {
+            sender,
+            transport: TransportContext {
+                local_addr,
+                peer_addr: None,
+                ecn: None,
+            },
+        });
         let pipeline_wr = Rc::clone(&pipeline);
 
         let (close_tx, mut close_rx) = channel();

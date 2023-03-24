@@ -1,6 +1,5 @@
 use clap::Parser;
 use futures::StreamExt;
-use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::{error::Error, io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapTcpClient;
@@ -11,7 +10,7 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
-use retty::transport::{AsyncTransport, TaggedBytesMut, TransportContext};
+use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,22 +130,24 @@ fn main() -> anyhow::Result<()> {
 
     smol::run(async move {
         let mut bootstrap = BootstrapTcpClient::new();
-        bootstrap.pipeline(Box::new(move |writer: LocalSender<TaggedBytesMut>| {
-            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        bootstrap.pipeline(Box::new(
+            move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-            let async_transport_handler = AsyncTransport::new(writer);
-            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-            ));
-            let string_codec_handler = TaggedStringCodec::new();
-            let echo_handler = EchoHandler::new();
+                let async_transport_handler = AsyncTransport::new(writer);
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = TaggedStringCodec::new();
+                let echo_handler = EchoHandler::new();
 
-            pipeline.add_back(async_transport_handler);
-            pipeline.add_back(line_based_frame_decoder_handler);
-            pipeline.add_back(string_codec_handler);
-            pipeline.add_back(echo_handler);
-            pipeline.finalize()
-        }));
+                pipeline.add_back(async_transport_handler);
+                pipeline.add_back(line_based_frame_decoder_handler);
+                pipeline.add_back(string_codec_handler);
+                pipeline.add_back(echo_handler);
+                pipeline.finalize()
+            },
+        ));
 
         let pipeline = bootstrap
             .connect(format!("{}:{}", host, port))

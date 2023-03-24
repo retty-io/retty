@@ -1,5 +1,6 @@
 //! Asynchronous transport abstraction for TCP and UDP
 use bytes::BytesMut;
+use local_sync::mpsc::unbounded::Tx as LocalSender;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
@@ -82,4 +83,17 @@ pub trait TransportAddress {
     fn local_addr(&self) -> std::io::Result<SocketAddr>;
     /// Returns the peer address
     fn peer_addr(&self) -> std::io::Result<SocketAddr>;
+}
+
+/// Write half of an asynchronous transport
+pub struct AsyncTransportWrite<R> {
+    pub(crate) sender: LocalSender<R>,
+    pub(crate) transport: TransportContext,
+}
+
+impl<R> AsyncTransportWrite<R> {
+    /// Returns transport context
+    pub fn get_transport(&self) -> TransportContext {
+        self.transport
+    }
 }
