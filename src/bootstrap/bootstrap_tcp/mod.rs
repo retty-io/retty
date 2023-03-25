@@ -25,7 +25,7 @@ use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 struct BootstrapTcp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
-    close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>, //TODO: replace it with local_sync::broadcast channel
+    close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>,
     wg: Rc<RefCell<Option<WaitGroup>>>,
 }
 
