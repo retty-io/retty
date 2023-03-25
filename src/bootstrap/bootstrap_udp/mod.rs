@@ -54,7 +54,7 @@ impl<W: 'static> BootstrapUdp<W> {
 
     /// Binds local address and port, return local socket and `OutboundPipeline<W>`
     pub async fn bind<A: AsyncToSocketAddrs>(
-        &mut self,
+        &self,
         addr: A,
     ) -> Result<(SocketAddr, Rc<dyn OutboundPipeline<W>>), Error> {
         let socket = UdpSocket::bind(addr).await?;

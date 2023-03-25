@@ -120,7 +120,7 @@ impl<W: 'static> BootstrapTcp<W> {
     }
 
     async fn connect<A: AsyncToSocketAddrs>(
-        &mut self,
+        &self,
         addr: A,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
         let socket = TcpStream::connect(addr).await?;
