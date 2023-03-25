@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use local_sync::mpsc::{unbounded::channel, unbounded::Tx as LocalSender};
-    use smol::Task;
+    use log::trace;
     use std::cell::RefCell;
     use std::net::SocketAddr;
     use std::rc::Rc;
@@ -18,6 +18,7 @@ mod tests {
         },
         string_codec::{TaggedString, TaggedStringCodec},
     };
+    use retty::spawn_local;
     use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,9 +58,11 @@ mod tests {
         fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
             {
                 let mut count = self.count.borrow_mut();
-                println!(
+                trace!(
                     "is_server = {}, count = {} msg = {}",
-                    self.is_server, *count, msg.message
+                    self.is_server,
+                    *count,
+                    msg.message
                 );
                 *count += 1;
             }
@@ -119,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_echo_udp() {
-        smol::run(async {
+        retty::run_local(async {
             const ITER: usize = 1024;
 
             let (tx, mut rx) = channel();
@@ -153,9 +156,9 @@ mod tests {
                 },
             ));
 
-            let (server_addr, _) = server.bind("127.0.0.1:0").unwrap();
+            let (server_addr, _) = server.bind("127.0.0.1:0").await.unwrap();
 
-            Task::local(async move {
+            spawn_local(async move {
                 let client_count = Rc::new(RefCell::new(0));
                 let client_count_clone = client_count.clone();
                 let (client_done_tx, mut client_done_rx) = channel();
@@ -185,7 +188,7 @@ mod tests {
                     },
                 ));
 
-                let (client_addr, pipeline) = client.bind("127.0.0.1:0").unwrap();
+                let (client_addr, pipeline) = client.bind("127.0.0.1:0").await.unwrap();
 
                 for i in 0..ITER {
                     // write
@@ -230,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_echo_tcp() {
-        smol::run(async {
+        retty::run_local(async {
             const ITER: usize = 1024;
 
             let (tx, mut rx) = channel();
@@ -264,9 +267,9 @@ mod tests {
                 },
             ));
 
-            let server_addr = server.bind("127.0.0.1:0").unwrap();
+            let server_addr = server.bind("127.0.0.1:0").await.unwrap();
 
-            Task::local(async move {
+            spawn_local(async move {
                 let client_count = Rc::new(RefCell::new(0));
                 let client_count_clone = client_count.clone();
                 let (client_done_tx, mut client_done_rx) = channel();

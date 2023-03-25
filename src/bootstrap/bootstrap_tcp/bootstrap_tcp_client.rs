@@ -29,7 +29,7 @@ impl<W: 'static> BootstrapTcpClient<W> {
     }
 
     /// Connects to the remote peer
-    pub async fn connect<A: ToString>(
+    pub async fn connect<A: AsyncToSocketAddrs>(
         &mut self,
         addr: A,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {

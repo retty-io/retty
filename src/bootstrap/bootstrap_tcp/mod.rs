@@ -5,12 +5,14 @@ use bytes::BytesMut;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
 use local_sync::mpsc::{unbounded::channel, unbounded::Rx as LocalReceiver};
 use log::{trace, warn};
-use smol::{Async, Task, Timer};
+use smol::{
+    net::{AsyncToSocketAddrs, TcpListener, TcpStream},
+    Timer,
+};
 use std::net::SocketAddr;
 use std::{
     cell::RefCell,
     io::Error,
-    net::{TcpListener, TcpStream},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -18,6 +20,7 @@ use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
+use crate::spawn_local;
 use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 struct BootstrapTcp<W> {
@@ -46,9 +49,9 @@ impl<W: 'static> BootstrapTcp<W> {
         self
     }
 
-    fn bind<A: ToString>(&self, addr: A) -> Result<SocketAddr, Error> {
-        let listener = Async::<TcpListener>::bind(addr)?;
-        let local_addr = listener.get_ref().local_addr()?;
+    async fn bind<A: AsyncToSocketAddrs>(&self, addr: A) -> Result<SocketAddr, Error> {
+        let listener = TcpListener::bind(addr).await?;
+        let local_addr = listener.local_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, mut close_rx) = async_broadcast::broadcast(1);
@@ -67,7 +70,7 @@ impl<W: 'static> BootstrapTcp<W> {
             worker
         };
 
-        Task::local(async move {
+        spawn_local(async move {
             let _w = worker;
 
             let child_wg = WaitGroup::new();
@@ -93,7 +96,7 @@ impl<W: 'static> BootstrapTcp<W> {
                                 });
                                 let child_close_rx = close_rx.clone();
                                 let child_worker = child_wg.worker();
-                                Task::local(async move {
+                                spawn_local(async move {
                                     let _ = Self::process_pipeline(socket,
                                                                    pipeline_rd,
                                                                    receiver,
@@ -116,13 +119,13 @@ impl<W: 'static> BootstrapTcp<W> {
         Ok(local_addr)
     }
 
-    async fn connect<A: ToString>(
+    async fn connect<A: AsyncToSocketAddrs>(
         &mut self,
         addr: A,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
-        let socket = Async::<TcpStream>::connect(addr).await?;
-        let local_addr = socket.get_ref().local_addr()?;
-        let peer_addr = socket.get_ref().peer_addr()?;
+        let socket = TcpStream::connect(addr).await?;
+        let local_addr = socket.local_addr()?;
+        let peer_addr = socket.peer_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, close_rx) = async_broadcast::broadcast(1);
@@ -151,7 +154,7 @@ impl<W: 'static> BootstrapTcp<W> {
             },
         });
         let pipeline_wr = Rc::clone(&pipeline_rd);
-        Task::local(async move {
+        spawn_local(async move {
             let _ = Self::process_pipeline(socket, pipeline_rd, receiver, close_rx, worker).await;
         })
         .detach();
@@ -160,7 +163,7 @@ impl<W: 'static> BootstrapTcp<W> {
     }
 
     async fn process_pipeline(
-        mut socket: Async<TcpStream>,
+        mut socket: TcpStream,
         pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>>,
         mut receiver: LocalReceiver<TaggedBytesMut>,
         mut close_rx: async_broadcast::Receiver<()>,
@@ -168,7 +171,7 @@ impl<W: 'static> BootstrapTcp<W> {
     ) -> Result<(), Error> {
         let _w = worker;
 
-        let local_addr = socket.get_ref().local_addr()?;
+        let local_addr = socket.local_addr()?;
 
         let mut buf = vec![0u8; 2048];
 

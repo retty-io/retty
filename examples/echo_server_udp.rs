@@ -120,7 +120,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    smol::run(async move {
+    retty::run_local(async move {
         let mut bootstrap = BootstrapUdp::new();
         bootstrap.pipeline(Box::new(
             move |writer: AsyncTransportWrite<TaggedBytesMut>| {
@@ -141,7 +141,7 @@ fn main() -> anyhow::Result<()> {
             },
         ));
 
-        bootstrap.bind(format!("{}:{}", host, port)).unwrap();
+        bootstrap.bind(format!("{}:{}", host, port)).await.unwrap();
 
         println!("Press ctrl-c to stop");
         println!("try `nc -u {} {}` in another shell", host, port);

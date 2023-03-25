@@ -3,17 +3,21 @@ use local_sync::mpsc::{
     unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
 };
 use log::{trace, warn};
-use smol::{Async, Task, Timer};
+use smol::{
+    net::{AsyncToSocketAddrs, UdpSocket},
+    Timer,
+};
 use std::{
     cell::RefCell,
     io::Error,
-    net::{SocketAddr, UdpSocket},
+    net::SocketAddr,
     rc::Rc,
     time::{Duration, Instant},
 };
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
+use crate::spawn_local;
 use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients or servers.
@@ -49,12 +53,12 @@ impl<W: 'static> BootstrapUdp<W> {
     }
 
     /// Binds local address and port, return local socket and `OutboundPipeline<W>`
-    pub fn bind<A: ToString>(
+    pub async fn bind<A: AsyncToSocketAddrs>(
         &mut self,
         addr: A,
     ) -> Result<(SocketAddr, Rc<dyn OutboundPipeline<W>>), Error> {
-        let socket = Async::<UdpSocket>::bind(addr)?;
-        let local_addr = socket.get_ref().local_addr()?;
+        let socket = UdpSocket::bind(addr).await?;
+        let local_addr = socket.local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
         let (sender, mut receiver) = channel();
@@ -80,7 +84,7 @@ impl<W: 'static> BootstrapUdp<W> {
             *rx = Some(done_rx);
         }
 
-        Task::local(async move {
+        spawn_local(async move {
             let mut buf = vec![0u8; 2048];
 
             pipeline.transport_active();

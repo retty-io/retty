@@ -120,7 +120,7 @@ fn main() -> anyhow::Result<()> {
         ecn: None,
     };
 
-    smol::run(async move {
+    retty::run_local(async move {
         let mut bootstrap = BootstrapUdp::new();
         bootstrap.pipeline(Box::new(
             move |writer: AsyncTransportWrite<TaggedBytesMut>| {
@@ -141,7 +141,7 @@ fn main() -> anyhow::Result<()> {
             },
         ));
 
-        let (_, pipeline) = bootstrap.bind(transport.local_addr).unwrap();
+        let (_, pipeline) = bootstrap.bind(transport.local_addr).await.unwrap();
 
         println!("Enter bye to stop");
         let (mut tx, mut rx) = futures::channel::mpsc::channel(8);

@@ -29,8 +29,8 @@ impl<W: 'static> BootstrapTcpServer<W> {
     }
 
     /// Binds local address and port
-    pub fn bind<A: ToString>(&self, addr: A) -> Result<SocketAddr, Error> {
-        self.internal.bind(addr)
+    pub async fn bind<A: AsyncToSocketAddrs>(&self, addr: A) -> Result<SocketAddr, Error> {
+        self.internal.bind(addr).await
     }
 
     /// Gracefully stop the server

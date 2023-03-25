@@ -128,7 +128,7 @@ fn main() -> anyhow::Result<()> {
         ecn: None,
     };
 
-    smol::run(async move {
+    retty::run_local(async move {
         let mut bootstrap = BootstrapTcpClient::new();
         bootstrap.pipeline(Box::new(
             move |writer: AsyncTransportWrite<TaggedBytesMut>| {

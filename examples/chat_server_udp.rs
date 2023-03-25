@@ -183,7 +183,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    smol::run(async move {
+    retty::run_local(async move {
         // Create the shared state. This is how all the peers communicate.
         // The server task will hold a handle to this. For every new client, the
         // `state` handle is cloned and passed into the handler that processes the
@@ -211,7 +211,7 @@ fn main() -> anyhow::Result<()> {
             },
         ));
 
-        bootstrap.bind(format!("{}:{}", host, port)).unwrap();
+        bootstrap.bind(format!("{}:{}", host, port)).await.unwrap();
 
         println!("Press ctrl-c to stop");
         println!("try `nc {} {}` in another shell", host, port);
