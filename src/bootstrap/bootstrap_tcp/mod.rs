@@ -20,7 +20,7 @@ use waitgroup::{WaitGroup, Worker};
 
 use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
 use crate::channel::{InboundPipeline, OutboundPipeline};
-use crate::spawn_local;
+use crate::executor::spawn_local;
 use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 struct BootstrapTcp<W> {

@@ -296,7 +296,5 @@
 pub mod bootstrap;
 pub mod channel;
 pub mod codec;
-mod runtime;
+pub mod executor;
 pub mod transport;
-
-pub use runtime::{run_local, spawn_local};

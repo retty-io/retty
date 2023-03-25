@@ -13,6 +13,7 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
+use retty::executor::LocalExecutorBuilder;
 use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -183,7 +184,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    retty::run_local(async move {
+    LocalExecutorBuilder::default().run(async move {
         // Create the shared state. This is how all the peers communicate.
         // The server task will hold a handle to this. For every new client, the
         // `state` handle is cloned and passed into the handler that processes the

@@ -9,6 +9,7 @@ use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
+use retty::executor::LocalExecutorBuilder;
 use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +121,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("listening {}:{}...", host, port);
 
-    retty::run_local(async move {
+    LocalExecutorBuilder::default().run(async move {
         let mut bootstrap = BootstrapUdp::new();
         bootstrap.pipeline(Box::new(
             move |writer: AsyncTransportWrite<TaggedBytesMut>| {

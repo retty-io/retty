@@ -18,7 +18,7 @@ mod tests {
         },
         string_codec::{TaggedString, TaggedStringCodec},
     };
-    use retty::spawn_local;
+    use retty::executor::{spawn_local, LocalExecutorBuilder};
     use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_echo_udp() {
-        retty::run_local(async {
+        LocalExecutorBuilder::default().run(async {
             const ITER: usize = 1024;
 
             let (tx, mut rx) = channel();
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_echo_tcp() {
-        retty::run_local(async {
+        LocalExecutorBuilder::default().run(async {
             const ITER: usize = 1024;
 
             let (tx, mut rx) = channel();

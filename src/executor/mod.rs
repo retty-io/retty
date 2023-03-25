@@ -1,15 +1,28 @@
+//! Async executors.
+
 use scoped_tls::scoped_thread_local;
 use smol::{LocalExecutor, Task};
 use std::future::Future;
 
 scoped_thread_local!(static LOCAL_EX: LocalExecutor<'_>);
 
-/// Runs the local executor until the given future completes.
-pub fn run_local<T>(f: impl Future<Output = T>) -> T {
-    let local_ex = LocalExecutor::default();
-    LOCAL_EX.set(&local_ex, || {
-        futures_lite::future::block_on(local_ex.run(f))
-    })
+/// A factory that can be used to configure and create a [`LocalExecutor`].
+#[derive(Debug, Default)]
+pub struct LocalExecutorBuilder {}
+
+impl LocalExecutorBuilder {
+    /// Creates a new LocalExecutorBuilder
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Runs the local executor until the given future completes.
+    pub fn run<T>(self, f: impl Future<Output = T>) -> T {
+        let local_ex = LocalExecutor::new();
+        LOCAL_EX.set(&local_ex, || {
+            futures_lite::future::block_on(local_ex.run(f))
+        })
+    }
 }
 
 /// Spawns a task onto the current single-threaded executor.
