@@ -19,6 +19,18 @@ impl<W: 'static> BootstrapTcpServer<W> {
         }
     }
 
+    /// Set IOThreadPoolExecutor for accept_group
+    pub fn accept_group(
+        &mut self, /*TODO: accept_group: Option<IOThreadPoolExecutor>*/
+    ) -> &mut Self {
+        self
+    }
+
+    /// Set IOThreadPoolExecutor for io_group
+    pub fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+        self
+    }
+
     /// Creates pipeline instances from when calling [BootstrapTcpServer::bind].
     pub fn pipeline(
         &mut self,

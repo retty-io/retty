@@ -43,6 +43,11 @@ impl<W: 'static> BootstrapUdp<W> {
         }
     }
 
+    /// Set IOThreadPoolExecutor for io_group
+    pub fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+        self
+    }
+
     /// Creates pipeline instances from when calling [BootstrapUdp::bind].
     pub fn pipeline(
         &mut self,

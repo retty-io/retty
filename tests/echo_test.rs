@@ -8,7 +8,9 @@ mod tests {
     use std::str::FromStr;
     use std::time::Instant;
 
-    use retty::bootstrap::{BootstrapTcpClient, BootstrapTcpServer, BootstrapUdp};
+    #[cfg(not(target_os = "linux"))]
+    use retty::bootstrap::BootstrapUdp;
+    use retty::bootstrap::{BootstrapTcpClient, BootstrapTcpServer};
     use retty::channel::{
         Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
     };
