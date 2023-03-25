@@ -1,6 +1,6 @@
 [package]
 name = "retty"
-version = "0.19.0"
+version = "0.20.0"
 authors = ["Rusty Rain <y@liu.mx>"]
 edition = "2021"
 description = "Retty — an asynchronous Rust networking framework that makes it easy to build protocols, application clients/servers."
