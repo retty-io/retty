@@ -22,7 +22,7 @@ use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 struct BootstrapTcp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
-    close_tx: Rc<RefCell<Option<async_channel::Sender<()>>>>, //TODO: replace it with local_sync::broadcast channel
+    close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>, //TODO: replace it with local_sync::broadcast channel
     wg: Rc<RefCell<Option<WaitGroup>>>,
 }
 
@@ -51,7 +51,7 @@ impl<W: 'static> BootstrapTcp<W> {
         let local_addr = listener.get_ref().local_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        let (close_tx, close_rx) = async_channel::bounded(1);
+        let (close_tx, mut close_rx) = async_broadcast::broadcast(1);
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
@@ -125,7 +125,7 @@ impl<W: 'static> BootstrapTcp<W> {
         let peer_addr = socket.get_ref().peer_addr()?;
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
 
-        let (close_tx, close_rx) = async_channel::bounded(1);
+        let (close_tx, close_rx) = async_broadcast::broadcast(1);
         {
             let mut tx = self.close_tx.borrow_mut();
             *tx = Some(close_tx);
@@ -163,7 +163,7 @@ impl<W: 'static> BootstrapTcp<W> {
         mut socket: Async<TcpStream>,
         pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>>,
         mut receiver: LocalReceiver<TaggedBytesMut>,
-        close_rx: async_channel::Receiver<()>,
+        mut close_rx: async_broadcast::Receiver<()>,
         worker: Worker,
     ) -> Result<(), Error> {
         let _w = worker;
@@ -247,7 +247,7 @@ impl<W: 'static> BootstrapTcp<W> {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.try_send(());
+                let _ = close_tx.try_broadcast(());
             }
         }
         let wg = {

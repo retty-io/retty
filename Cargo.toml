@@ -17,7 +17,7 @@ log = "0.4.17"
 waitgroup = "0.1.2"
 smol = "0.1.18"
 local-sync = "0.1.0"
-async-channel = "1.8.0"
+async-broadcast = "0.5.1"
 futures-lite = "1.12.0"
 tokio = {version = "1.26.0", default-features = false, features = ["macros"] }
 
