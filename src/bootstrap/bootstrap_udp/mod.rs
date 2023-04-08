@@ -129,7 +129,17 @@ impl<W: 'static> BootstrapUdp<W> {
                     }
                     opt = receiver.recv() => {
                         if let Some(transmit) = opt {
-                            if let Some(peer_addr) = transmit.transport.peer_addr {
+                            if peer_addr.is_some() {
+                               match socket.send(&transmit.message).await {
+                                    Ok(n) => {
+                                        trace!("socket write {} bytes", n);
+                                    }
+                                    Err(err) => {
+                                        warn!("socket write error {}", err);
+                                        break;
+                                    }
+                                }
+                            } else if let Some(peer_addr) = transmit.transport.peer_addr {
                                 match socket.send_to(&transmit.message, peer_addr).await {
                                     Ok(n) => {
                                         trace!("socket write {} bytes", n);
