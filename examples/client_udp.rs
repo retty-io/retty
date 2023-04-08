@@ -2,7 +2,7 @@ use clap::Parser;
 use futures::StreamExt;
 use std::{io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
-use retty::bootstrap::BootstrapUdp;
+use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
 };
@@ -122,7 +122,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     LocalExecutorBuilder::default().run(async move {
-        let mut bootstrap = BootstrapUdp::new();
+        let mut bootstrap = BootstrapUdpClient::new();
         bootstrap.pipeline(Box::new(
             move |writer: AsyncTransportWrite<TaggedBytesMut>| {
                 let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
@@ -142,7 +142,12 @@ fn main() -> anyhow::Result<()> {
             },
         ));
 
-        let (_, pipeline) = bootstrap.bind(transport.local_addr).await.unwrap();
+        bootstrap.bind(transport.local_addr).await.unwrap();
+
+        let pipeline = bootstrap
+            .connect(transport.peer_addr.as_ref().unwrap())
+            .await
+            .unwrap();
 
         println!("Enter bye to stop");
         let (mut tx, mut rx) = futures::channel::mpsc::channel(8);

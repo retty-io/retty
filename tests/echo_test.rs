@@ -9,7 +9,8 @@ mod tests {
     use std::time::Instant;
 
     #[cfg(not(target_os = "linux"))]
-    use retty::bootstrap::BootstrapUdp;
+    use retty::bootstrap::{BootstrapUdpClient, BootstrapUdpServer};
+
     use retty::bootstrap::{BootstrapTcpClient, BootstrapTcpServer};
     use retty::channel::{
         Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
@@ -138,7 +139,7 @@ mod tests {
             let (server_done_tx, mut server_done_rx) = channel();
             let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
-            let mut server = BootstrapUdp::new();
+            let mut server = BootstrapUdpServer::new();
             server.pipeline(Box::new(
                 move |writer: AsyncTransportWrite<TaggedBytesMut>| {
                     let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
@@ -162,7 +163,7 @@ mod tests {
                 },
             ));
 
-            let (server_addr, _) = server.bind("127.0.0.1:0").await.unwrap();
+            let server_addr = server.bind("127.0.0.1:0").await.unwrap();
 
             spawn_local(async move {
                 let client_count = Rc::new(RefCell::new(0));
@@ -170,7 +171,7 @@ mod tests {
                 let (client_done_tx, mut client_done_rx) = channel();
                 let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
-                let mut client = BootstrapUdp::new();
+                let mut client = BootstrapUdpClient::new();
                 client.pipeline(Box::new(
                     move |writer: AsyncTransportWrite<TaggedBytesMut>| {
                         let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
@@ -194,7 +195,8 @@ mod tests {
                     },
                 ));
 
-                let (client_addr, pipeline) = client.bind("127.0.0.1:0").await.unwrap();
+                let client_addr = client.bind("127.0.0.1:0").await.unwrap();
+                let pipeline = client.connect(server_addr).await.unwrap();
 
                 for i in 0..ITER {
                     // write

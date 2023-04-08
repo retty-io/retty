@@ -1,3 +1,6 @@
+pub(crate) mod bootstrap_udp_client;
+pub(crate) mod bootstrap_udp_server;
+
 use bytes::BytesMut;
 use local_sync::mpsc::{
     unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
@@ -20,9 +23,9 @@ use crate::channel::{InboundPipeline, OutboundPipeline};
 use crate::executor::spawn_local;
 use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
-/// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients or servers.
-pub struct BootstrapUdp<W> {
+struct BootstrapUdp<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
+    socket: Option<UdpSocket>,
     close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
     done_rx: Rc<RefCell<Option<LocalReceiver<()>>>>,
 }
@@ -34,35 +37,43 @@ impl<W: 'static> Default for BootstrapUdp<W> {
 }
 
 impl<W: 'static> BootstrapUdp<W> {
-    /// Creates a new BootstrapUdp
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             pipeline_factory_fn: None,
+            socket: None,
             close_tx: Rc::new(RefCell::new(None)),
             done_rx: Rc::new(RefCell::new(None)),
         }
     }
 
-    /// Set IOThreadPoolExecutor for io_group
-    pub fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+    fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
         self
     }
 
-    /// Creates pipeline instances from when calling [BootstrapUdp::bind].
-    pub fn pipeline(
-        &mut self,
-        pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
-    ) -> &mut Self {
+    fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
         self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
         self
     }
 
-    /// Binds local address and port, return local socket and `OutboundPipeline<W>`
-    pub async fn bind<A: AsyncToSocketAddrs>(
-        &self,
-        addr: A,
-    ) -> Result<(SocketAddr, Rc<dyn OutboundPipeline<W>>), Error> {
+    async fn bind<A: AsyncToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
         let socket = UdpSocket::bind(addr).await?;
+        let local_addr = socket.local_addr()?;
+        self.socket = Some(socket);
+        Ok(local_addr)
+    }
+
+    async fn connect<A: AsyncToSocketAddrs>(
+        &mut self,
+        addr: Option<A>,
+    ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
+        let socket = self.socket.take().unwrap();
+
+        let peer_addr = if let Some(addr) = addr {
+            socket.connect(addr).await?;
+            Some(socket.peer_addr()?)
+        } else {
+            None
+        };
         let local_addr = socket.local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
@@ -71,7 +82,7 @@ impl<W: 'static> BootstrapUdp<W> {
             sender,
             transport: TransportContext {
                 local_addr,
-                peer_addr: None,
+                peer_addr,
                 ecn: None,
             },
         });
@@ -168,11 +179,10 @@ impl<W: 'static> BootstrapUdp<W> {
         })
         .detach();
 
-        Ok((local_addr, pipeline_wr))
+        Ok(pipeline_wr)
     }
 
-    /// Gracefully stop the BootstrapUdp
-    pub async fn stop(&self) {
+    async fn stop(&self) {
         {
             let mut close_tx = self.close_tx.borrow_mut();
             if let Some(close_tx) = close_tx.take() {

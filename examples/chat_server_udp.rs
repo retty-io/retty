@@ -4,7 +4,7 @@ use std::{
     str::FromStr, time::Instant,
 };
 
-use retty::bootstrap::BootstrapUdp;
+use retty::bootstrap::BootstrapUdpServer;
 use retty::channel::{
     Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, OutboundPipeline,
     Pipeline,
@@ -191,7 +191,7 @@ fn main() -> anyhow::Result<()> {
         // client connection.
         let state = Rc::new(RefCell::new(Shared::new()));
 
-        let mut bootstrap = BootstrapUdp::new();
+        let mut bootstrap = BootstrapUdpServer::new();
         bootstrap.pipeline(Box::new(
             move |writer: AsyncTransportWrite<TaggedBytesMut>| {
                 let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());

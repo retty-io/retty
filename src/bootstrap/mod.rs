@@ -10,7 +10,9 @@ use crate::transport::AsyncTransportWrite;
 pub use bootstrap_tcp::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
 };
-pub use bootstrap_udp::BootstrapUdp;
+pub use bootstrap_udp::{
+    bootstrap_udp_client::BootstrapUdpClient, bootstrap_udp_server::BootstrapUdpServer,
+};
 
 /// Creates a new [Pipeline]
 pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(AsyncTransportWrite<R>) -> Rc<Pipeline<R, W>>)>;
