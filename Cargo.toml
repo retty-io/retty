@@ -21,6 +21,7 @@ local-sync = "0.1.0"
 async-broadcast = "0.5.1"
 futures-lite = "1.13.0"
 tokio = {version = "1.27.0", default-features = false, features = ["macros"] }
+async-transport = {version = "0.4.2", default-features = false, features = ["runtime-smol"]}
 
 [dev-dependencies]
 chrono = "0.4.24"

@@ -1,18 +1,17 @@
 pub(crate) mod bootstrap_udp_client;
 pub(crate) mod bootstrap_udp_server;
 
+use async_transport::{AsyncUdpSocket, Capabilities, RecvMeta, Transmit, UdpSocket, BATCH_SIZE};
 use bytes::BytesMut;
 use local_sync::mpsc::{
     unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
 };
 use log::{trace, warn};
-use smol::{
-    net::{AsyncToSocketAddrs, UdpSocket},
-    Timer,
-};
+use smol::{net::AsyncToSocketAddrs, Timer};
 use std::{
     cell::RefCell,
     io::Error,
+    mem::MaybeUninit,
     net::SocketAddr,
     rc::Rc,
     time::{Duration, Instant},
@@ -94,7 +93,22 @@ impl<W: 'static> BootstrapUdp<W> {
         }
 
         spawn_local(async move {
-            let mut buf = vec![0u8; 2048];
+            let buf = vec![0u8; 8196];
+            let buf_len = buf.len();
+            let mut recv_buf: Box<[u8]> = buf.into();
+            let mut metas = [RecvMeta::default(); BATCH_SIZE];
+            let mut iovs = MaybeUninit::<[std::io::IoSliceMut<'_>; BATCH_SIZE]>::uninit();
+            recv_buf
+                .chunks_mut(buf_len / BATCH_SIZE)
+                .enumerate()
+                .for_each(|(i, buf)| unsafe {
+                    iovs.as_mut_ptr()
+                        .cast::<std::io::IoSliceMut<'_>>()
+                        .add(i)
+                        .write(std::io::IoSliceMut::<'_>::new(buf));
+                });
+            let mut iovs = unsafe { iovs.assume_init() };
+            let capabilities = Capabilities::new();
 
             pipeline.transport_active();
             loop {
@@ -121,11 +135,18 @@ impl<W: 'static> BootstrapUdp<W> {
                         pipeline.handle_timeout(Instant::now());
                     }
                     opt = receiver.recv() => {
-                        if let Some(transmit) = opt {
-                            if let Some(peer_addr) = transmit.transport.peer_addr {
-                                match socket.send_to(&transmit.message, peer_addr).await {
-                                    Ok(n) => {
-                                        trace!("socket write {} bytes", n);
+                        if let Some(msg) = opt {
+                            if let Some(peer_addr) = msg.transport.peer_addr {
+                                let transmit = Transmit {
+                                    destination: peer_addr,
+                                    ecn: msg.transport.ecn,
+                                    contents: msg.message.to_vec(),
+                                    segment_size: None,
+                                    src_ip: Some(msg.transport.local_addr.ip()),
+                                };
+                                match socket.send(&capabilities, &[transmit]).await {
+                                    Ok(_) => {
+                                        trace!("socket write {} bytes", msg.message.len());
                                     }
                                     Err(err) => {
                                         warn!("socket write error {}", err);
@@ -141,24 +162,30 @@ impl<W: 'static> BootstrapUdp<W> {
                             break;
                         }
                     }
-                    res = socket.recv_from(&mut buf) => {
+                    res = socket.recv(&mut iovs, &mut metas) => {
                         match res {
-                            Ok((n, peer_addr)) => {
+                            Ok(n) => {
                                 if n == 0 {
                                     pipeline.read_eof();
                                     break;
                                 }
 
-                                trace!("socket read {} bytes", n);
-                                pipeline.read(TaggedBytesMut {
-                                    now: Instant::now(),
-                                    transport: TransportContext {
-                                        local_addr,
-                                        peer_addr: Some(peer_addr),
-                                        ecn: None,
-                                    },
-                                    message: BytesMut::from(&buf[..n]),
-                                });
+                                for (meta, buf) in metas.iter().zip(iovs.iter()).take(n) {
+                                    let message: BytesMut = buf[0..meta.len].into();
+                                    if !message.is_empty() {
+                                        trace!("socket read {} bytes", message.len());
+                                        pipeline
+                                            .read(TaggedBytesMut {
+                                                now: Instant::now(),
+                                                transport: TransportContext {
+                                                    local_addr,
+                                                    peer_addr: Some(meta.addr),
+                                                    ecn: meta.ecn,
+                                                },
+                                                message,
+                                            });
+                                    }
+                                }
                             }
                             Err(err) => {
                                 warn!("socket read error {}", err);
