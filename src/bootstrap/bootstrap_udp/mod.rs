@@ -62,18 +62,11 @@ impl<W: 'static> BootstrapUdp<W> {
         Ok(local_addr)
     }
 
-    async fn connect<A: AsyncToSocketAddrs>(
+    async fn connect(
         &mut self,
-        addr: Option<A>,
+        peer_addr: Option<SocketAddr>,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
         let socket = self.socket.take().unwrap();
-
-        let peer_addr = if let Some(addr) = addr {
-            socket.connect(addr).await?;
-            Some(socket.peer_addr()?)
-        } else {
-            None
-        };
         let local_addr = socket.local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
@@ -129,17 +122,7 @@ impl<W: 'static> BootstrapUdp<W> {
                     }
                     opt = receiver.recv() => {
                         if let Some(transmit) = opt {
-                            if peer_addr.is_some() {
-                               match socket.send(&transmit.message).await {
-                                    Ok(n) => {
-                                        trace!("socket write {} bytes", n);
-                                    }
-                                    Err(err) => {
-                                        warn!("socket write error {}", err);
-                                        break;
-                                    }
-                                }
-                            } else if let Some(peer_addr) = transmit.transport.peer_addr {
+                            if let Some(peer_addr) = transmit.transport.peer_addr {
                                 match socket.send_to(&transmit.message, peer_addr).await {
                                     Ok(n) => {
                                         trace!("socket write {} bytes", n);

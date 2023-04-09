@@ -39,9 +39,9 @@ impl<W: 'static> BootstrapUdpClient<W> {
     }
 
     /// Connects to the remote peer
-    pub async fn connect<A: AsyncToSocketAddrs>(
+    pub async fn connect(
         &mut self,
-        addr: A,
+        addr: SocketAddr,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
         self.internal.connect(Some(addr)).await
     }
