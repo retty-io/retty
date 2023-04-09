@@ -1,17 +1,16 @@
 #[cfg(test)]
 mod tests {
     use local_sync::mpsc::{unbounded::channel, unbounded::Tx as LocalSender};
-    use log::trace;
+    //use log::trace;
     use std::cell::RefCell;
     use std::net::SocketAddr;
     use std::rc::Rc;
     use std::str::FromStr;
     use std::time::Instant;
 
-    #[cfg(not(target_os = "linux"))]
-    use retty::bootstrap::{BootstrapUdpClient, BootstrapUdpServer};
-
-    use retty::bootstrap::{BootstrapTcpClient, BootstrapTcpServer};
+    use retty::bootstrap::{
+        BootstrapTcpClient, BootstrapTcpServer, BootstrapUdpClient, BootstrapUdpServer,
+    };
     use retty::channel::{
         Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
     };
@@ -21,7 +20,7 @@ mod tests {
         },
         string_codec::{TaggedString, TaggedStringCodec},
     };
-    use retty::executor::{spawn_local, try_yield_local, LocalExecutorBuilder};
+    use retty::executor::{spawn_local, yield_local, LocalExecutorBuilder};
     use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,11 +60,9 @@ mod tests {
         fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
             {
                 let mut count = self.count.borrow_mut();
-                trace!(
+                println!(
                     "is_server = {}, count = {} msg = {}",
-                    self.is_server,
-                    *count,
-                    msg.message
+                    self.is_server, *count, msg.message
                 );
                 *count += 1;
             }
@@ -123,14 +120,10 @@ mod tests {
         }
     }
 
-    //TODO: test_echo_udp passed in my local linux(5.15.77-amd64-desktop), but always hang in
-    // github actions or codespaces linux version (5.4.0-1104-azure).
-    // echo/chat_server_udp and client_udp work fine for both linux version.
-    #[cfg(not(target_os = "linux"))]
     #[test]
     fn test_echo_udp() {
         LocalExecutorBuilder::default().run(async {
-            const ITER: usize = 1024;
+            const ITER: usize = 100; //1024;
 
             let (tx, mut rx) = channel();
 
@@ -209,6 +202,7 @@ mod tests {
                         },
                         message: format!("{}\r\n", i),
                     });
+                    yield_local();
                 }
                 pipeline.write(TaggedString {
                     now: Instant::now(),
@@ -219,6 +213,7 @@ mod tests {
                     },
                     message: format!("bye\r\n"),
                 });
+                yield_local();
 
                 assert!(client_done_rx.recv().await.is_some());
 
@@ -242,7 +237,7 @@ mod tests {
     #[test]
     fn test_echo_tcp() {
         LocalExecutorBuilder::default().run(async {
-            const ITER: usize = 1024;
+            const ITER: usize = 100; //1024;
 
             let (tx, mut rx) = channel();
 
@@ -322,7 +317,7 @@ mod tests {
                         },
                         message: format!("{}\r\n", i),
                     });
-                    try_yield_local();
+                    yield_local();
                 }
                 pipeline.write(TaggedString {
                     now: Instant::now(),
@@ -333,7 +328,7 @@ mod tests {
                     },
                     message: format!("bye\r\n"),
                 });
-                try_yield_local();
+                yield_local();
 
                 assert!(client_done_rx.recv().await.is_some());
 

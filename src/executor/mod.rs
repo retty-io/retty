@@ -46,3 +46,12 @@ pub fn try_yield_local() -> bool {
         panic!("`try_yield_local()` must be called from a `LocalExecutor`")
     }
 }
+
+/// Yield local to run other tasks until there is no other pending task.
+pub fn yield_local() {
+    if LOCAL_EX.is_set() {
+        LOCAL_EX.with(|local_ex| while local_ex.try_tick() {})
+    } else {
+        panic!("`try_yield_local()` must be called from a `LocalExecutor`")
+    }
+}
