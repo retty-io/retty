@@ -31,6 +31,7 @@ mod tests {
         is_server: bool,
         tx: Rc<RefCell<Option<LocalSender<()>>>>,
         count: Rc<RefCell<usize>>,
+        check_ecn: bool,
     }
     struct EchoEncoder;
     struct EchoHandler {
@@ -43,12 +44,14 @@ mod tests {
             is_server: bool,
             tx: Rc<RefCell<Option<LocalSender<()>>>>,
             count: Rc<RefCell<usize>>,
+            check_ecn: bool,
         ) -> Self {
             EchoHandler {
                 decoder: EchoDecoder {
                     is_server,
                     tx,
                     count,
+                    check_ecn,
                 },
                 encoder: EchoEncoder,
             }
@@ -67,6 +70,9 @@ mod tests {
                     self.is_server, *count, msg.message, msg.transport.ecn
                 );
                 *count += 1;
+                if self.check_ecn {
+                    assert_eq!(Some(EcnCodepoint::Ect1), msg.transport.ecn);
+                }
             }
 
             if self.is_server {
@@ -148,6 +154,7 @@ mod tests {
                         true,
                         Rc::clone(&server_done_tx),
                         Rc::clone(&server_count_clone),
+                        true,
                     );
 
                     pipeline.add_back(async_transport_handler);
@@ -180,6 +187,7 @@ mod tests {
                             false,
                             Rc::clone(&client_done_tx),
                             Rc::clone(&client_count_clone),
+                            true,
                         );
 
                         pipeline.add_back(async_transport_handler);
@@ -262,6 +270,7 @@ mod tests {
                         true,
                         Rc::clone(&server_done_tx),
                         Rc::clone(&server_count_clone),
+                        false,
                     );
 
                     pipeline.add_back(async_transport_handler);
@@ -294,6 +303,7 @@ mod tests {
                             false,
                             Rc::clone(&client_done_tx),
                             Rc::clone(&client_count_clone),
+                            false,
                         );
 
                         pipeline.add_back(async_transport_handler);
