@@ -36,3 +36,13 @@ pub fn spawn_local<T: 'static>(future: impl Future<Output = T> + 'static) -> Tas
         panic!("`spawn_local()` must be called from a `LocalExecutor`")
     }
 }
+
+/// Attempts to yield local to run a task if at least one is scheduled.
+/// Running a scheduled task means simply polling its future once.
+pub fn try_yield_local() -> bool {
+    if LOCAL_EX.is_set() {
+        LOCAL_EX.with(|local_ex| local_ex.try_tick())
+    } else {
+        panic!("`try_yield_local()` must be called from a `LocalExecutor`")
+    }
+}

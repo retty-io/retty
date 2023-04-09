@@ -21,7 +21,7 @@ mod tests {
         },
         string_codec::{TaggedString, TaggedStringCodec},
     };
-    use retty::executor::{spawn_local, LocalExecutorBuilder};
+    use retty::executor::{spawn_local, try_yield_local, LocalExecutorBuilder};
     use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,6 +322,7 @@ mod tests {
                         },
                         message: format!("{}\r\n", i),
                     });
+                    try_yield_local();
                 }
                 pipeline.write(TaggedString {
                     now: Instant::now(),
@@ -332,6 +333,7 @@ mod tests {
                     },
                     message: format!("bye\r\n"),
                 });
+                try_yield_local();
 
                 assert!(client_done_rx.recv().await.is_some());
 
