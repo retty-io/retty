@@ -3,7 +3,11 @@
 use core_affinity::{set_for_current, CoreId};
 use scoped_tls::scoped_thread_local;
 use smol::{LocalExecutor, Task};
-use std::future::Future;
+use std::{
+    future::Future,
+    io::Result,
+    thread::{self, JoinHandle},
+};
 
 scoped_thread_local!(static LOCAL_EX: LocalExecutor<'_>);
 
@@ -11,6 +15,7 @@ scoped_thread_local!(static LOCAL_EX: LocalExecutor<'_>);
 #[derive(Debug, Default)]
 pub struct LocalExecutorBuilder {
     core_id: Option<CoreId>,
+    name: String,
 }
 
 impl LocalExecutorBuilder {
@@ -19,13 +24,19 @@ impl LocalExecutorBuilder {
         Self::default()
     }
 
-    /// Pins the current thread to the specified CPU core
-    pub fn with_core_id(&mut self, core_id: CoreId) -> &mut Self {
+    /// Names the thread-to-be. Currently, the name is used for identification only in panic messages.
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = String::from(name);
+        self
+    }
+
+    /// Pins the thread to the specified CPU core
+    pub fn core_id(mut self, core_id: CoreId) -> Self {
         self.core_id = Some(core_id);
         self
     }
 
-    /// Runs the local executor until the given future completes.
+    /// Runs the local executor on the current thread until the given future completes.
     pub fn run<T>(mut self, f: impl Future<Output = T>) -> T {
         if let Some(core_id) = self.core_id.take() {
             set_for_current(core_id);
@@ -34,6 +45,27 @@ impl LocalExecutorBuilder {
         let local_ex = LocalExecutor::new();
         LOCAL_EX.set(&local_ex, || {
             futures_lite::future::block_on(local_ex.run(f))
+        })
+    }
+
+    /// Spawns a thread to run the local executor until the given future completes.
+    pub fn spawn<G, F, T>(mut self, fut_gen: G) -> Result<JoinHandle<T>>
+    where
+        G: FnOnce() -> F + Send + 'static,
+        F: Future<Output = T> + 'static,
+        T: Send + 'static,
+    {
+        let mut core_id = self.core_id.take();
+
+        thread::Builder::new().name(self.name).spawn(move || {
+            if let Some(core_id) = core_id.take() {
+                set_for_current(core_id);
+            }
+
+            let local_ex = LocalExecutor::new();
+            LOCAL_EX.set(&local_ex, || {
+                futures_lite::future::block_on(local_ex.run(fut_gen()))
+            })
         })
     }
 }

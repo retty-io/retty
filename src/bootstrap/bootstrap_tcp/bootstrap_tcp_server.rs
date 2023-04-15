@@ -19,18 +19,6 @@ impl<W: 'static> BootstrapTcpServer<W> {
         }
     }
 
-    /// Set ThreadPool for accept_group
-    pub fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
-        self.bootstrap_tcp.accept_group(accept_group);
-        self
-    }
-
-    /// Set ThreadPool for io_group
-    pub fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
-        self.bootstrap_tcp.io_group(io_group);
-        self
-    }
-
     /// Creates pipeline instances from when calling [BootstrapTcpServer::bind].
     pub fn pipeline(
         &mut self,

@@ -19,12 +19,6 @@ impl<W: 'static> BootstrapTcpClient<W> {
         }
     }
 
-    /// Set ThreadPool for io_group
-    pub fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
-        self.bootstrap_tcp.io_group(io_group);
-        self
-    }
-
     /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
     pub fn pipeline(
         &mut self,

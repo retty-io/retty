@@ -26,16 +26,6 @@ impl<W: 'static> BootstrapUdp<W> {
         }
     }
 
-    fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
-        self.boostrap.accept_group(accept_group);
-        self
-    }
-
-    fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
-        self.boostrap.io_group(io_group);
-        self
-    }
-
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
         self.boostrap.pipeline(pipeline_factory_fn);
         self

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use core_affinity::CoreId;
     use local_sync::mpsc::{unbounded::channel, unbounded::Tx as LocalSender};
-    //use log::trace;
     use std::cell::RefCell;
     use std::net::SocketAddr;
     use std::rc::Rc;
@@ -130,54 +130,21 @@ mod tests {
 
     #[test]
     fn test_echo_udp() {
-        LocalExecutorBuilder::default().run(async {
-            const ITER: usize = 100; //1024;
+        let handler = LocalExecutorBuilder::new()
+            .name("ech_udp_thread")
+            .core_id(CoreId { id: 0 })
+            .spawn(|| async move {
+                const ITER: usize = 100; //1024;
 
-            let (tx, mut rx) = channel();
+                let (tx, mut rx) = channel();
 
-            let server_count = Rc::new(RefCell::new(0));
-            let server_count_clone = server_count.clone();
-            let (server_done_tx, mut server_done_rx) = channel();
-            let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
+                let server_count = Rc::new(RefCell::new(0));
+                let server_count_clone = server_count.clone();
+                let (server_done_tx, mut server_done_rx) = channel();
+                let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
-            let mut server = BootstrapUdpServer::new();
-            server.pipeline(Box::new(
-                move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
-
-                    let async_transport_handler = AsyncTransport::new(writer);
-                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                    ));
-                    let string_codec_handler = TaggedStringCodec::new();
-                    let echo_handler = EchoHandler::new(
-                        true,
-                        Rc::clone(&server_done_tx),
-                        Rc::clone(&server_count_clone),
-                        #[cfg(not(target_os = "windows"))]
-                        true,
-                        #[cfg(target_os = "windows")]
-                        false,
-                    );
-
-                    pipeline.add_back(async_transport_handler);
-                    pipeline.add_back(line_based_frame_decoder_handler);
-                    pipeline.add_back(string_codec_handler);
-                    pipeline.add_back(echo_handler);
-                    pipeline.finalize()
-                },
-            ));
-
-            let server_addr = server.bind("127.0.0.1:0").await.unwrap();
-
-            spawn_local(async move {
-                let client_count = Rc::new(RefCell::new(0));
-                let client_count_clone = client_count.clone();
-                let (client_done_tx, mut client_done_rx) = channel();
-                let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
-
-                let mut client = BootstrapUdpClient::new();
-                client.pipeline(Box::new(
+                let mut server = BootstrapUdpServer::new();
+                server.pipeline(Box::new(
                     move |writer: AsyncTransportWrite<TaggedBytesMut>| {
                         let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
@@ -187,9 +154,9 @@ mod tests {
                         );
                         let string_codec_handler = TaggedStringCodec::new();
                         let echo_handler = EchoHandler::new(
-                            false,
-                            Rc::clone(&client_done_tx),
-                            Rc::clone(&client_count_clone),
+                            true,
+                            Rc::clone(&server_done_tx),
+                            Rc::clone(&server_count_clone),
                             #[cfg(not(target_os = "windows"))]
                             true,
                             #[cfg(target_os = "windows")]
@@ -204,11 +171,59 @@ mod tests {
                     },
                 ));
 
-                let client_addr = client.bind("127.0.0.1:0").await.unwrap();
-                let pipeline = client.connect(server_addr).await.unwrap();
+                let server_addr = server.bind("127.0.0.1:0").await.unwrap();
 
-                for i in 0..ITER {
-                    // write
+                spawn_local(async move {
+                    let client_count = Rc::new(RefCell::new(0));
+                    let client_count_clone = client_count.clone();
+                    let (client_done_tx, mut client_done_rx) = channel();
+                    let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
+
+                    let mut client = BootstrapUdpClient::new();
+                    client.pipeline(Box::new(
+                        move |writer: AsyncTransportWrite<TaggedBytesMut>| {
+                            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+
+                            let async_transport_handler = AsyncTransport::new(writer);
+                            let line_based_frame_decoder_handler =
+                                TaggedByteToMessageCodec::new(Box::new(
+                                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                                ));
+                            let string_codec_handler = TaggedStringCodec::new();
+                            let echo_handler = EchoHandler::new(
+                                false,
+                                Rc::clone(&client_done_tx),
+                                Rc::clone(&client_count_clone),
+                                #[cfg(not(target_os = "windows"))]
+                                true,
+                                #[cfg(target_os = "windows")]
+                                false,
+                            );
+
+                            pipeline.add_back(async_transport_handler);
+                            pipeline.add_back(line_based_frame_decoder_handler);
+                            pipeline.add_back(string_codec_handler);
+                            pipeline.add_back(echo_handler);
+                            pipeline.finalize()
+                        },
+                    ));
+
+                    let client_addr = client.bind("127.0.0.1:0").await.unwrap();
+                    let pipeline = client.connect(server_addr).await.unwrap();
+
+                    for i in 0..ITER {
+                        // write
+                        pipeline.write(TaggedString {
+                            now: Instant::now(),
+                            transport: TransportContext {
+                                local_addr: client_addr,
+                                peer_addr: Some(server_addr),
+                                ecn: EcnCodepoint::from_bits(1),
+                            },
+                            message: format!("{}\r\n", i),
+                        });
+                        yield_local();
+                    }
                     pipeline.write(TaggedString {
                         now: Instant::now(),
                         transport: TransportContext {
@@ -216,38 +231,30 @@ mod tests {
                             peer_addr: Some(server_addr),
                             ecn: EcnCodepoint::from_bits(1),
                         },
-                        message: format!("{}\r\n", i),
+                        message: format!("bye\r\n"),
                     });
                     yield_local();
-                }
-                pipeline.write(TaggedString {
-                    now: Instant::now(),
-                    transport: TransportContext {
-                        local_addr: client_addr,
-                        peer_addr: Some(server_addr),
-                        ecn: EcnCodepoint::from_bits(1),
-                    },
-                    message: format!("bye\r\n"),
-                });
-                yield_local();
 
-                assert!(client_done_rx.recv().await.is_some());
+                    assert!(client_done_rx.recv().await.is_some());
 
-                assert!(tx.send(client_count).is_ok());
+                    assert!(tx.send(client_count).is_ok());
 
-                client.stop().await;
+                    client.stop().await;
+                })
+                .detach();
+
+                let client_count = rx.recv().await.unwrap();
+                assert!(server_done_rx.recv().await.is_some());
+
+                let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
+                assert_eq!(*client_count, *server_count);
+                assert_eq!(ITER + 1, *client_count);
+
+                server.stop().await;
             })
-            .detach();
+            .unwrap();
 
-            let client_count = rx.recv().await.unwrap();
-            assert!(server_done_rx.recv().await.is_some());
-
-            let (client_count, server_count) = (client_count.borrow(), server_count.borrow());
-            assert_eq!(*client_count, *server_count);
-            assert_eq!(ITER + 1, *client_count);
-
-            server.stop().await;
-        });
+        handler.join().unwrap();
     }
 
     #[test]

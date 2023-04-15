@@ -19,12 +19,6 @@ impl<W: 'static> BootstrapUdpClient<W> {
         }
     }
 
-    /// Set ThreadPool for io_group
-    pub fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
-        self.bootstrap_udp.io_group(io_group);
-        self
-    }
-
     /// Creates pipeline instances from when calling [BootstrapUdpClient::bind].
     pub fn pipeline(
         &mut self,

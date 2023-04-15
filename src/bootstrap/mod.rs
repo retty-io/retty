@@ -12,7 +12,6 @@ use std::{
     rc::Rc,
     time::{Duration, Instant},
 };
-use threadpool::ThreadPool;
 use waitgroup::{WaitGroup, Worker};
 
 use crate::channel::{InboundPipeline, OutboundPipeline, Pipeline};
@@ -38,9 +37,6 @@ struct Bootstrap<W> {
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>,
     wg: Rc<RefCell<Option<WaitGroup>>>,
-
-    accept_group: Option<ThreadPool>,
-    io_group: Option<ThreadPool>,
 }
 
 impl<W: 'static> Default for Bootstrap<W> {
@@ -55,20 +51,7 @@ impl<W: 'static> Bootstrap<W> {
             pipeline_factory_fn: None,
             close_tx: Rc::new(RefCell::new(None)),
             wg: Rc::new(RefCell::new(None)),
-
-            accept_group: None,
-            io_group: None,
         }
-    }
-
-    fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
-        self.accept_group = Some(accept_group);
-        self
-    }
-
-    fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
-        self.io_group = Some(io_group);
-        self
     }
 
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
