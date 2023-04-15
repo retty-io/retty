@@ -154,7 +154,10 @@ mod tests {
                         true,
                         Rc::clone(&server_done_tx),
                         Rc::clone(&server_count_clone),
+                        #[cfg(not(target_os = "windows"))]
                         true,
+                        #[cfg(target_os = "windows")]
+                        false,
                     );
 
                     pipeline.add_back(async_transport_handler);
@@ -187,7 +190,10 @@ mod tests {
                             false,
                             Rc::clone(&client_done_tx),
                             Rc::clone(&client_count_clone),
+                            #[cfg(not(target_os = "windows"))]
                             true,
+                            #[cfg(target_os = "windows")]
+                            false,
                         );
 
                         pipeline.add_back(async_transport_handler);
