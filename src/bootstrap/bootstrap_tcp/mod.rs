@@ -1,32 +1,14 @@
-pub(crate) mod bootstrap_tcp_client;
-pub(crate) mod bootstrap_tcp_server;
-
-use bytes::BytesMut;
-use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use local_sync::mpsc::{unbounded::channel, unbounded::Rx as LocalReceiver};
-use log::{trace, warn};
+use super::*;
 use smol::{
     net::{AsyncToSocketAddrs, TcpListener, TcpStream},
     Timer,
 };
-use std::net::SocketAddr;
-use std::{
-    cell::RefCell,
-    io::Error,
-    rc::Rc,
-    time::{Duration, Instant},
-};
-use waitgroup::{WaitGroup, Worker};
 
-use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
-use crate::channel::{InboundPipeline, OutboundPipeline};
-use crate::executor::spawn_local;
-use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
+pub(crate) mod bootstrap_tcp_client;
+pub(crate) mod bootstrap_tcp_server;
 
 struct BootstrapTcp<W> {
-    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
-    close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>,
-    wg: Rc<RefCell<Option<WaitGroup>>>,
+    boostrap: Bootstrap<W>,
 }
 
 impl<W: 'static> Default for BootstrapTcp<W> {
@@ -38,25 +20,33 @@ impl<W: 'static> Default for BootstrapTcp<W> {
 impl<W: 'static> BootstrapTcp<W> {
     fn new() -> Self {
         Self {
-            pipeline_factory_fn: None,
-            close_tx: Rc::new(RefCell::new(None)),
-            wg: Rc::new(RefCell::new(None)),
+            boostrap: Bootstrap::new(),
         }
     }
 
+    fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
+        self.boostrap.accept_group(accept_group);
+        self
+    }
+
+    fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
+        self.boostrap.io_group(io_group);
+        self
+    }
+
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
-        self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
+        self.boostrap.pipeline(pipeline_factory_fn);
         self
     }
 
     async fn bind<A: AsyncToSocketAddrs>(&self, addr: A) -> Result<SocketAddr, Error> {
         let listener = TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
-        let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+        let pipeline_factory_fn = Rc::clone(self.boostrap.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, mut close_rx) = async_broadcast::broadcast(1);
         {
-            let mut tx = self.close_tx.borrow_mut();
+            let mut tx = self.boostrap.close_tx.borrow_mut();
             *tx = Some(close_tx);
         }
 
@@ -64,7 +54,7 @@ impl<W: 'static> BootstrapTcp<W> {
             let workgroup = WaitGroup::new();
             let worker = workgroup.worker();
             {
-                let mut wg = self.wg.borrow_mut();
+                let mut wg = self.boostrap.wg.borrow_mut();
                 *wg = Some(workgroup);
             }
             worker
@@ -126,11 +116,11 @@ impl<W: 'static> BootstrapTcp<W> {
         let socket = TcpStream::connect(addr).await?;
         let local_addr = socket.local_addr()?;
         let peer_addr = socket.peer_addr()?;
-        let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+        let pipeline_factory_fn = Rc::clone(self.boostrap.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, close_rx) = async_broadcast::broadcast(1);
         {
-            let mut tx = self.close_tx.borrow_mut();
+            let mut tx = self.boostrap.close_tx.borrow_mut();
             *tx = Some(close_tx);
         }
 
@@ -138,7 +128,7 @@ impl<W: 'static> BootstrapTcp<W> {
             let workgroup = WaitGroup::new();
             let worker = workgroup.worker();
             {
-                let mut wg = self.wg.borrow_mut();
+                let mut wg = self.boostrap.wg.borrow_mut();
                 *wg = Some(workgroup);
             }
             worker
@@ -247,18 +237,6 @@ impl<W: 'static> BootstrapTcp<W> {
     }
 
     async fn stop(&self) {
-        {
-            let mut close_tx = self.close_tx.borrow_mut();
-            if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.try_broadcast(());
-            }
-        }
-        let wg = {
-            let mut wg = self.wg.borrow_mut();
-            wg.take()
-        };
-        if let Some(wg) = wg {
-            wg.wait().await;
-        }
+        self.boostrap.stop().await
     }
 }

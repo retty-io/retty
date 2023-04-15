@@ -2,7 +2,7 @@ use super::*;
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP servers.
 pub struct BootstrapTcpServer<W> {
-    internal: BootstrapTcp<W>,
+    bootstrap_tcp: BootstrapTcp<W>,
 }
 
 impl<W: 'static> Default for BootstrapTcpServer<W> {
@@ -15,19 +15,19 @@ impl<W: 'static> BootstrapTcpServer<W> {
     /// Creates a new BootstrapTcpServer
     pub fn new() -> Self {
         Self {
-            internal: BootstrapTcp::new(),
+            bootstrap_tcp: BootstrapTcp::new(),
         }
     }
 
-    /// Set IOThreadPoolExecutor for accept_group
-    pub fn accept_group(
-        &mut self, /*TODO: accept_group: Option<IOThreadPoolExecutor>*/
-    ) -> &mut Self {
+    /// Set ThreadPool for accept_group
+    pub fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
+        self.bootstrap_tcp.accept_group(accept_group);
         self
     }
 
-    /// Set IOThreadPoolExecutor for io_group
-    pub fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+    /// Set ThreadPool for io_group
+    pub fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
+        self.bootstrap_tcp.io_group(io_group);
         self
     }
 
@@ -36,17 +36,17 @@ impl<W: 'static> BootstrapTcpServer<W> {
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
     ) -> &mut Self {
-        self.internal.pipeline(pipeline_factory_fn);
+        self.bootstrap_tcp.pipeline(pipeline_factory_fn);
         self
     }
 
     /// Binds local address and port
     pub async fn bind<A: AsyncToSocketAddrs>(&self, addr: A) -> Result<SocketAddr, Error> {
-        self.internal.bind(addr).await
+        self.bootstrap_tcp.bind(addr).await
     }
 
     /// Gracefully stop the server
     pub async fn stop(&self) {
-        self.internal.stop().await
+        self.bootstrap_tcp.stop().await
     }
 }

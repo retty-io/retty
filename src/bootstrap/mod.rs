@@ -1,12 +1,27 @@
 //! The helpful bootstrap APIs which enable an easy implementation of typical client side and server side pipeline initialization.
 
-use crate::channel::Pipeline;
-use std::rc::Rc;
+use bytes::BytesMut;
+use futures_lite::{AsyncReadExt, AsyncWriteExt};
+use local_sync::mpsc::{unbounded::channel, unbounded::Rx as LocalReceiver};
+use log::{trace, warn};
+use smol::{net::AsyncToSocketAddrs, Timer};
+use std::{
+    cell::RefCell,
+    io::Error,
+    net::SocketAddr,
+    rc::Rc,
+    time::{Duration, Instant},
+};
+use threadpool::ThreadPool;
+use waitgroup::{WaitGroup, Worker};
+
+use crate::channel::{InboundPipeline, OutboundPipeline, Pipeline};
+use crate::executor::spawn_local;
+use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 
 mod bootstrap_tcp;
 mod bootstrap_udp;
 
-use crate::transport::AsyncTransportWrite;
 pub use bootstrap_tcp::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
 };
@@ -18,3 +33,62 @@ pub use bootstrap_udp::{
 pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(AsyncTransportWrite<R>) -> Rc<Pipeline<R, W>>)>;
 
 const MAX_DURATION_IN_SECS: u64 = 86400; // 1 day
+
+struct Bootstrap<W> {
+    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
+    close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>,
+    wg: Rc<RefCell<Option<WaitGroup>>>,
+
+    accept_group: Option<ThreadPool>,
+    io_group: Option<ThreadPool>,
+}
+
+impl<W: 'static> Default for Bootstrap<W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<W: 'static> Bootstrap<W> {
+    fn new() -> Self {
+        Self {
+            pipeline_factory_fn: None,
+            close_tx: Rc::new(RefCell::new(None)),
+            wg: Rc::new(RefCell::new(None)),
+
+            accept_group: None,
+            io_group: None,
+        }
+    }
+
+    fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
+        self.accept_group = Some(accept_group);
+        self
+    }
+
+    fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
+        self.io_group = Some(io_group);
+        self
+    }
+
+    fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
+        self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
+        self
+    }
+
+    async fn stop(&self) {
+        {
+            let mut close_tx = self.close_tx.borrow_mut();
+            if let Some(close_tx) = close_tx.take() {
+                let _ = close_tx.try_broadcast(());
+            }
+        }
+        let wg = {
+            let mut wg = self.wg.borrow_mut();
+            wg.take()
+        };
+        if let Some(wg) = wg {
+            wg.wait().await;
+        }
+    }
+}

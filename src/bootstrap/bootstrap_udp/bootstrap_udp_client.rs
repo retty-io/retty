@@ -2,7 +2,7 @@ use super::*;
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for UDP clients.
 pub struct BootstrapUdpClient<W> {
-    internal: BootstrapUdp<W>,
+    bootstrap_udp: BootstrapUdp<W>,
 }
 
 impl<W: 'static> Default for BootstrapUdpClient<W> {
@@ -15,12 +15,13 @@ impl<W: 'static> BootstrapUdpClient<W> {
     /// Creates a new BootstrapUdpClient
     pub fn new() -> Self {
         Self {
-            internal: BootstrapUdp::new(),
+            bootstrap_udp: BootstrapUdp::new(),
         }
     }
 
-    /// Set IOThreadPoolExecutor for io_group
-    pub fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+    /// Set ThreadPool for io_group
+    pub fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
+        self.bootstrap_udp.io_group(io_group);
         self
     }
 
@@ -29,13 +30,13 @@ impl<W: 'static> BootstrapUdpClient<W> {
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
     ) -> &mut Self {
-        self.internal.pipeline(pipeline_factory_fn);
+        self.bootstrap_udp.pipeline(pipeline_factory_fn);
         self
     }
 
     /// Binds local address and port
     pub async fn bind<A: AsyncToSocketAddrs>(&mut self, addr: A) -> Result<SocketAddr, Error> {
-        self.internal.bind(addr).await
+        self.bootstrap_udp.bind(addr).await
     }
 
     /// Connects to the remote peer
@@ -43,11 +44,11 @@ impl<W: 'static> BootstrapUdpClient<W> {
         &mut self,
         addr: SocketAddr,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
-        self.internal.connect(Some(addr)).await
+        self.bootstrap_udp.connect(Some(addr)).await
     }
 
     /// Gracefully stop the BootstrapUdpClient
     pub async fn stop(&self) {
-        self.internal.stop().await
+        self.bootstrap_udp.stop().await
     }
 }

@@ -1,5 +1,6 @@
 //! Async executors.
 
+use core_affinity::{set_for_current, CoreId};
 use scoped_tls::scoped_thread_local;
 use smol::{LocalExecutor, Task};
 use std::future::Future;
@@ -8,7 +9,9 @@ scoped_thread_local!(static LOCAL_EX: LocalExecutor<'_>);
 
 /// A factory that can be used to configure and create a [`LocalExecutor`].
 #[derive(Debug, Default)]
-pub struct LocalExecutorBuilder {}
+pub struct LocalExecutorBuilder {
+    core_id: Option<CoreId>,
+}
 
 impl LocalExecutorBuilder {
     /// Creates a new LocalExecutorBuilder
@@ -16,8 +19,18 @@ impl LocalExecutorBuilder {
         Self::default()
     }
 
+    /// Pins the current thread to the specified CPU core
+    pub fn with_core_id(&mut self, core_id: CoreId) -> &mut Self {
+        self.core_id = Some(core_id);
+        self
+    }
+
     /// Runs the local executor until the given future completes.
-    pub fn run<T>(self, f: impl Future<Output = T>) -> T {
+    pub fn run<T>(mut self, f: impl Future<Output = T>) -> T {
+        if let Some(core_id) = self.core_id.take() {
+            set_for_current(core_id);
+        }
+
         let local_ex = LocalExecutor::new();
         LOCAL_EX.set(&local_ex, || {
             futures_lite::future::block_on(local_ex.run(f))

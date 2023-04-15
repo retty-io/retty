@@ -2,7 +2,7 @@ use super::*;
 
 /// A Bootstrap that makes it easy to bootstrap a pipeline to use for TCP clients.
 pub struct BootstrapTcpClient<W> {
-    internal: BootstrapTcp<W>,
+    bootstrap_tcp: BootstrapTcp<W>,
 }
 
 impl<W: 'static> Default for BootstrapTcpClient<W> {
@@ -15,12 +15,13 @@ impl<W: 'static> BootstrapTcpClient<W> {
     /// Creates a new BootstrapTcpClient
     pub fn new() -> Self {
         Self {
-            internal: BootstrapTcp::new(),
+            bootstrap_tcp: BootstrapTcp::new(),
         }
     }
 
-    /// Set IOThreadPoolExecutor for io_group
-    pub fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+    /// Set ThreadPool for io_group
+    pub fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
+        self.bootstrap_tcp.io_group(io_group);
         self
     }
 
@@ -29,7 +30,7 @@ impl<W: 'static> BootstrapTcpClient<W> {
         &mut self,
         pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>,
     ) -> &mut Self {
-        self.internal.pipeline(pipeline_factory_fn);
+        self.bootstrap_tcp.pipeline(pipeline_factory_fn);
         self
     }
 
@@ -38,11 +39,11 @@ impl<W: 'static> BootstrapTcpClient<W> {
         &mut self,
         addr: A,
     ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
-        self.internal.connect(addr).await
+        self.bootstrap_tcp.connect(addr).await
     }
 
     /// Gracefully stop the client
     pub async fn stop(&self) {
-        self.internal.stop().await
+        self.bootstrap_tcp.stop().await
     }
 }

@@ -1,32 +1,14 @@
+use super::*;
+use async_transport::{AsyncUdpSocket, Capabilities, RecvMeta, Transmit, UdpSocket, BATCH_SIZE};
+use std::mem::MaybeUninit;
+
 pub(crate) mod bootstrap_udp_client;
 pub(crate) mod bootstrap_udp_server;
 
-use async_transport::{AsyncUdpSocket, Capabilities, RecvMeta, Transmit, UdpSocket, BATCH_SIZE};
-use bytes::BytesMut;
-use local_sync::mpsc::{
-    unbounded::channel, unbounded::Rx as LocalReceiver, unbounded::Tx as LocalSender,
-};
-use log::{trace, warn};
-use smol::{net::AsyncToSocketAddrs, Timer};
-use std::{
-    cell::RefCell,
-    io::Error,
-    mem::MaybeUninit,
-    net::SocketAddr,
-    rc::Rc,
-    time::{Duration, Instant},
-};
-
-use crate::bootstrap::{PipelineFactoryFn, MAX_DURATION_IN_SECS};
-use crate::channel::{InboundPipeline, OutboundPipeline};
-use crate::executor::spawn_local;
-use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
-
 struct BootstrapUdp<W> {
-    pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
+    boostrap: Bootstrap<W>,
+
     socket: Option<UdpSocket>,
-    close_tx: Rc<RefCell<Option<LocalSender<()>>>>,
-    done_rx: Rc<RefCell<Option<LocalReceiver<()>>>>,
 }
 
 impl<W: 'static> Default for BootstrapUdp<W> {
@@ -38,19 +20,24 @@ impl<W: 'static> Default for BootstrapUdp<W> {
 impl<W: 'static> BootstrapUdp<W> {
     fn new() -> Self {
         Self {
-            pipeline_factory_fn: None,
+            boostrap: Bootstrap::new(),
+
             socket: None,
-            close_tx: Rc::new(RefCell::new(None)),
-            done_rx: Rc::new(RefCell::new(None)),
         }
     }
 
-    fn io_group(&mut self /*TODO: io_group: IOThreadPoolExecutor*/) -> &mut Self {
+    fn accept_group(&mut self, accept_group: ThreadPool) -> &mut Self {
+        self.boostrap.accept_group(accept_group);
+        self
+    }
+
+    fn io_group(&mut self, io_group: ThreadPool) -> &mut Self {
+        self.boostrap.io_group(io_group);
         self
     }
 
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
-        self.pipeline_factory_fn = Some(Rc::new(Box::new(pipeline_factory_fn)));
+        self.boostrap.pipeline(pipeline_factory_fn);
         self
     }
 
@@ -68,7 +55,7 @@ impl<W: 'static> BootstrapUdp<W> {
         let socket = self.socket.take().unwrap();
         let local_addr = socket.local_addr()?;
 
-        let pipeline_factory_fn = Rc::clone(self.pipeline_factory_fn.as_ref().unwrap());
+        let pipeline_factory_fn = Rc::clone(self.boostrap.pipeline_factory_fn.as_ref().unwrap());
         let (sender, mut receiver) = channel();
         let pipeline = (pipeline_factory_fn)(AsyncTransportWrite {
             sender,
@@ -80,19 +67,25 @@ impl<W: 'static> BootstrapUdp<W> {
         });
         let pipeline_wr = Rc::clone(&pipeline);
 
-        let (close_tx, mut close_rx) = channel();
+        let (close_tx, mut close_rx) = async_broadcast::broadcast(1);
         {
-            let mut tx = self.close_tx.borrow_mut();
+            let mut tx = self.boostrap.close_tx.borrow_mut();
             *tx = Some(close_tx);
         }
 
-        let (done_tx, done_rx) = channel();
-        {
-            let mut rx = self.done_rx.borrow_mut();
-            *rx = Some(done_rx);
-        }
+        let worker = {
+            let workgroup = WaitGroup::new();
+            let worker = workgroup.worker();
+            {
+                let mut wg = self.boostrap.wg.borrow_mut();
+                *wg = Some(workgroup);
+            }
+            worker
+        };
 
         spawn_local(async move {
+            let _w = worker;
+
             let buf = vec![0u8; 8196];
             let buf_len = buf.len();
             let mut recv_buf: Box<[u8]> = buf.into();
@@ -128,7 +121,6 @@ impl<W: 'static> BootstrapUdp<W> {
                 tokio::select! {
                     _ = close_rx.recv() => {
                         trace!("pipeline socket exit loop");
-                        let _ = done_tx.send(());
                         break;
                     }
                     _ = timeout => {
@@ -203,18 +195,6 @@ impl<W: 'static> BootstrapUdp<W> {
     }
 
     async fn stop(&self) {
-        {
-            let mut close_tx = self.close_tx.borrow_mut();
-            if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.send(());
-            }
-        }
-        let done_rx = {
-            let mut done_rx = self.done_rx.borrow_mut();
-            done_rx.take()
-        };
-        if let Some(mut done_rx) = done_rx {
-            let _ = done_rx.recv().await;
-        }
+        self.boostrap.stop().await
     }
 }
