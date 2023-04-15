@@ -180,7 +180,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        bootstrap.stop().await;
+        bootstrap.graceful_stop().await;
     });
 
     Ok(())

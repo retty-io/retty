@@ -60,12 +60,13 @@ impl<W: 'static> Bootstrap<W> {
     }
 
     async fn stop(&self) {
-        {
-            let mut close_tx = self.close_tx.borrow_mut();
-            if let Some(close_tx) = close_tx.take() {
-                let _ = close_tx.try_broadcast(());
-            }
+        let mut close_tx = self.close_tx.borrow_mut();
+        if let Some(close_tx) = close_tx.take() {
+            let _ = close_tx.try_broadcast(());
         }
+    }
+
+    async fn wait_for_stop(&self) {
         let wg = {
             let mut wg = self.wg.borrow_mut();
             wg.take()
@@ -73,5 +74,10 @@ impl<W: 'static> Bootstrap<W> {
         if let Some(wg) = wg {
             wg.wait().await;
         }
+    }
+
+    async fn graceful_stop(&self) {
+        self.stop().await;
+        self.wait_for_stop().await;
     }
 }

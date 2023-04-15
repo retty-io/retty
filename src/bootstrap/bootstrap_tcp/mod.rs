@@ -229,4 +229,12 @@ impl<W: 'static> BootstrapTcp<W> {
     async fn stop(&self) {
         self.boostrap.stop().await
     }
+
+    async fn wait_for_stop(&self) {
+        self.boostrap.wait_for_stop().await
+    }
+
+    async fn graceful_stop(&self) {
+        self.boostrap.graceful_stop().await
+    }
 }

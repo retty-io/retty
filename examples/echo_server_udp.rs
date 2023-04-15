@@ -158,7 +158,7 @@ fn main() -> anyhow::Result<()> {
         });
         let _ = rx.await;
 
-        bootstrap.stop().await;
+        bootstrap.graceful_stop().await;
     });
 
     Ok(())

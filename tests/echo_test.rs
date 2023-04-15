@@ -239,7 +239,7 @@ mod tests {
 
                     assert!(tx.send(client_count).is_ok());
 
-                    client.stop().await;
+                    client.graceful_stop().await;
                 })
                 .detach();
 
@@ -250,7 +250,7 @@ mod tests {
                 assert_eq!(*client_count, *server_count);
                 assert_eq!(ITER + 1, *client_count);
 
-                server.stop().await;
+                server.graceful_stop().await;
             })
             .unwrap();
 
@@ -359,7 +359,7 @@ mod tests {
 
                 assert!(tx.send(client_count).is_ok());
 
-                client.stop().await;
+                client.graceful_stop().await;
             })
             .detach();
 
@@ -370,7 +370,7 @@ mod tests {
             assert_eq!(*client_count, *server_count);
             assert_eq!(ITER + 1, *client_count);
 
-            server.stop().await;
+            server.graceful_stop().await;
         });
     }
 }

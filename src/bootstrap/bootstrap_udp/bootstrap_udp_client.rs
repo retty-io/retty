@@ -41,8 +41,18 @@ impl<W: 'static> BootstrapUdpClient<W> {
         self.bootstrap_udp.connect(Some(addr)).await
     }
 
-    /// Gracefully stop the BootstrapUdpClient
+    /// Stops the client
     pub async fn stop(&self) {
         self.bootstrap_udp.stop().await
+    }
+
+    /// Waits for stop of the client
+    pub async fn wait_for_stop(&self) {
+        self.bootstrap_udp.wait_for_stop().await
+    }
+
+    /// Gracefully stop the client
+    pub async fn graceful_stop(&self) {
+        self.bootstrap_udp.graceful_stop().await
     }
 }

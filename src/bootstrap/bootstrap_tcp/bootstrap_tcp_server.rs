@@ -33,8 +33,18 @@ impl<W: 'static> BootstrapTcpServer<W> {
         self.bootstrap_tcp.bind(addr).await
     }
 
-    /// Gracefully stop the server
+    /// Stops the server
     pub async fn stop(&self) {
         self.bootstrap_tcp.stop().await
+    }
+
+    /// Waits for stop of the server
+    pub async fn wait_for_stop(&self) {
+        self.bootstrap_tcp.wait_for_stop().await
+    }
+
+    /// Gracefully stop the server
+    pub async fn graceful_stop(&self) {
+        self.bootstrap_tcp.graceful_stop().await
     }
 }

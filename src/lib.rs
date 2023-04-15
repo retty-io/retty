@@ -172,7 +172,7 @@
 //! println!("Press ctrl-c to stop");
 //! tokio::select! {
 //!     _ = tokio::signal::ctrl_c() => {
-//!         bootstrap.stop().await;
+//!         bootstrap.graceful_stop().await;
 //!     }
 //! };
 //! ```
@@ -286,7 +286,7 @@
 //!     buffer.clear();
 //! }
 //!
-//! bootstrap.stop().await;
+//! bootstrap.graceful_stop().await;
 //! ```
 #![doc(html_logo_url = "https://raw.githubusercontent.com/retty-io/retty/master/docs/retty.io.jpg")]
 #![warn(rust_2018_idioms)]
