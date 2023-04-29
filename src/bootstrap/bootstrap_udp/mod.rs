@@ -26,6 +26,11 @@ impl<W: 'static> BootstrapUdp<W> {
         }
     }
 
+    fn max_payload_size(&mut self, max_payload_size: usize) -> &mut Self {
+        self.boostrap.max_payload_size(max_payload_size);
+        self
+    }
+
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
         self.boostrap.pipeline(pipeline_factory_fn);
         self
@@ -73,10 +78,13 @@ impl<W: 'static> BootstrapUdp<W> {
             worker
         };
 
+        let max_payload_size = self.boostrap.max_payload_size;
+
         spawn_local(async move {
             let _w = worker;
 
-            let buf = vec![0u8; 2048 * 64 * BATCH_SIZE];
+            let capabilities = Capabilities::new();
+            let buf = vec![0u8; max_payload_size * capabilities.gro_segments() * BATCH_SIZE];
             let buf_len = buf.len();
             let mut recv_buf: Box<[u8]> = buf.into();
             let mut metas = [RecvMeta::default(); BATCH_SIZE];
@@ -91,7 +99,6 @@ impl<W: 'static> BootstrapUdp<W> {
                         .write(std::io::IoSliceMut::<'_>::new(buf));
                 });
             let mut iovs = unsafe { iovs.assume_init() };
-            let capabilities = Capabilities::new();
 
             pipeline.transport_active();
             loop {

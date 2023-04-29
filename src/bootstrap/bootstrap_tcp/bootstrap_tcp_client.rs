@@ -19,6 +19,12 @@ impl<W: 'static> BootstrapTcpClient<W> {
         }
     }
 
+    /// Sets max payload size, default is 2048 bytes
+    pub fn max_payload_size(&mut self, max_payload_size: usize) -> &mut Self {
+        self.bootstrap_tcp.max_payload_size(max_payload_size);
+        self
+    }
+
     /// Creates pipeline instances from when calling [BootstrapTcpClient::connect].
     pub fn pipeline(
         &mut self,

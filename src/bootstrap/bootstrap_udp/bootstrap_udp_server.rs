@@ -19,6 +19,12 @@ impl<W: 'static> BootstrapUdpServer<W> {
         }
     }
 
+    /// Sets max payload size, default is 2048 bytes
+    pub fn max_payload_size(&mut self, max_payload_size: usize) -> &mut Self {
+        self.bootstrap_udp.max_payload_size(max_payload_size);
+        self
+    }
+
     /// Creates pipeline instances from when calling [BootstrapUdpServer::bind].
     pub fn pipeline(
         &mut self,

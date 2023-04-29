@@ -24,6 +24,11 @@ impl<W: 'static> BootstrapTcp<W> {
         }
     }
 
+    fn max_payload_size(&mut self, max_payload_size: usize) -> &mut Self {
+        self.boostrap.max_payload_size(max_payload_size);
+        self
+    }
+
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
         self.boostrap.pipeline(pipeline_factory_fn);
         self
@@ -49,6 +54,8 @@ impl<W: 'static> BootstrapTcp<W> {
             }
             worker
         };
+
+        let max_payload_size = self.boostrap.max_payload_size;
 
         spawn_local(async move {
             let _w = worker;
@@ -78,6 +85,7 @@ impl<W: 'static> BootstrapTcp<W> {
                                 let child_worker = child_wg.worker();
                                 spawn_local(async move {
                                     let _ = Self::process_pipeline(socket,
+                                                                   max_payload_size,
                                                                    pipeline_rd,
                                                                    receiver,
                                                                    child_close_rx,
@@ -134,8 +142,18 @@ impl<W: 'static> BootstrapTcp<W> {
             },
         });
         let pipeline_wr = Rc::clone(&pipeline_rd);
+        let max_payload_size = self.boostrap.max_payload_size;
+
         spawn_local(async move {
-            let _ = Self::process_pipeline(socket, pipeline_rd, receiver, close_rx, worker).await;
+            let _ = Self::process_pipeline(
+                socket,
+                max_payload_size,
+                pipeline_rd,
+                receiver,
+                close_rx,
+                worker,
+            )
+            .await;
         })
         .detach();
 
@@ -144,6 +162,7 @@ impl<W: 'static> BootstrapTcp<W> {
 
     async fn process_pipeline(
         mut socket: TcpStream,
+        max_payload_size: usize,
         pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>>,
         mut receiver: LocalReceiver<TaggedBytesMut>,
         mut close_rx: async_broadcast::Receiver<()>,
@@ -153,7 +172,7 @@ impl<W: 'static> BootstrapTcp<W> {
 
         let local_addr = socket.local_addr()?;
 
-        let mut buf = vec![0u8; 2048];
+        let mut buf = vec![0u8; max_payload_size];
 
         pipeline.transport_active();
         loop {

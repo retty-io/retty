@@ -34,6 +34,7 @@ pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(AsyncTransportWrite<R>) -> Rc<Pip
 const MAX_DURATION_IN_SECS: u64 = 86400; // 1 day
 
 struct Bootstrap<W> {
+    max_payload_size: usize,
     pipeline_factory_fn: Option<Rc<PipelineFactoryFn<TaggedBytesMut, W>>>,
     close_tx: Rc<RefCell<Option<async_broadcast::Sender<()>>>>,
     wg: Rc<RefCell<Option<WaitGroup>>>,
@@ -48,10 +49,16 @@ impl<W: 'static> Default for Bootstrap<W> {
 impl<W: 'static> Bootstrap<W> {
     fn new() -> Self {
         Self {
+            max_payload_size: 2048, // Typical internet MTU = 1500, rounded up to a power of 2
             pipeline_factory_fn: None,
             close_tx: Rc::new(RefCell::new(None)),
             wg: Rc::new(RefCell::new(None)),
         }
+    }
+
+    fn max_payload_size(&mut self, max_payload_size: usize) -> &mut Self {
+        self.max_payload_size = max_payload_size;
+        self
     }
 
     fn pipeline(&mut self, pipeline_factory_fn: PipelineFactoryFn<TaggedBytesMut, W>) -> &mut Self {
