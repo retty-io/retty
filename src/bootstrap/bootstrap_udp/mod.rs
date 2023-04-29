@@ -76,7 +76,7 @@ impl<W: 'static> BootstrapUdp<W> {
         spawn_local(async move {
             let _w = worker;
 
-            let buf = vec![0u8; 2048 * BATCH_SIZE];
+            let buf = vec![0u8; 2048 * 64 * BATCH_SIZE];
             let buf_len = buf.len();
             let mut recv_buf: Box<[u8]> = buf.into();
             let mut metas = [RecvMeta::default(); BATCH_SIZE];
