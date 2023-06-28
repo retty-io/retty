@@ -75,11 +75,8 @@ impl<W: 'static> BootstrapTcp<W> {
                                 let (sender, receiver) = channel();
                                 let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite {
                                     sender,
-                                    transport: TransportContext {
                                         local_addr,
                                         peer_addr: Some(peer_addr),
-                                        ecn: None,
-                                    },
                                 });
                                 let child_close_rx = close_rx.clone();
                                 let child_worker = child_wg.worker();
@@ -135,11 +132,8 @@ impl<W: 'static> BootstrapTcp<W> {
         let (sender, receiver) = channel();
         let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite {
             sender,
-            transport: TransportContext {
-                local_addr,
-                peer_addr: Some(peer_addr),
-                ecn: None,
-            },
+            local_addr,
+            peer_addr: Some(peer_addr),
         });
         let pipeline_wr = Rc::clone(&pipeline_rd);
         let max_payload_size = self.boostrap.max_payload_size;
@@ -171,6 +165,7 @@ impl<W: 'static> BootstrapTcp<W> {
         let _w = worker;
 
         let local_addr = socket.local_addr()?;
+        let peer_addr = socket.peer_addr()?;
 
         let mut buf = vec![0u8; max_payload_size];
 
@@ -226,7 +221,7 @@ impl<W: 'static> BootstrapTcp<W> {
                                     now: Instant::now(),
                                     transport: TransportContext {
                                         local_addr,
-                                        peer_addr: None,
+                                        peer_addr,
                                         ecn: None,
                                     },
                                     message: BytesMut::from(&buf[..n]),

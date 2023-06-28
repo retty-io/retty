@@ -54,11 +54,8 @@ impl<W: 'static> BootstrapUdp<W> {
         let (sender, mut receiver) = channel();
         let pipeline = (pipeline_factory_fn)(AsyncTransportWrite {
             sender,
-            transport: TransportContext {
-                local_addr,
-                peer_addr,
-                ecn: None,
-            },
+            local_addr,
+            peer_addr,
         });
         let pipeline_wr = Rc::clone(&pipeline);
 
@@ -125,26 +122,21 @@ impl<W: 'static> BootstrapUdp<W> {
                     }
                     opt = receiver.recv() => {
                         if let Some(msg) = opt {
-                            if let Some(peer_addr) = msg.transport.peer_addr {
-                                let transmit = Transmit {
-                                    destination: peer_addr,
-                                    ecn: msg.transport.ecn,
-                                    contents: msg.message.to_vec(),
-                                    segment_size: None,
-                                    src_ip: Some(msg.transport.local_addr.ip()),
-                                };
-                                match socket.send(&capabilities, &[transmit]).await {
-                                    Ok(_) => {
-                                        trace!("socket write {} bytes", msg.message.len());
-                                    }
-                                    Err(err) => {
-                                        warn!("socket write error {}", err);
-                                        break;
-                                    }
+                            let transmit = Transmit {
+                                destination: msg.transport.peer_addr,
+                                ecn: msg.transport.ecn,
+                                contents: msg.message.to_vec(),
+                                segment_size: None,
+                                src_ip: Some(msg.transport.local_addr.ip()),
+                            };
+                            match socket.send(&capabilities, &[transmit]).await {
+                                Ok(_) => {
+                                    trace!("socket write {} bytes", msg.message.len());
                                 }
-                            } else {
-                                warn!("socket write error due to peer_addr is missing");
-                                break;
+                                Err(err) => {
+                                    warn!("socket write error {}", err);
+                                    break;
+                                }
                             }
                         } else {
                             warn!("pipeline recv error");
@@ -168,7 +160,7 @@ impl<W: 'static> BootstrapUdp<W> {
                                                 now: Instant::now(),
                                                 transport: TransportContext {
                                                     local_addr,
-                                                    peer_addr: Some(meta.addr),
+                                                    peer_addr: meta.addr,
                                                     ecn: meta.ecn,
                                                 },
                                                 message,

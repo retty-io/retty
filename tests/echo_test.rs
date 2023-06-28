@@ -217,7 +217,7 @@ mod tests {
                             now: Instant::now(),
                             transport: TransportContext {
                                 local_addr: client_addr,
-                                peer_addr: Some(server_addr),
+                                peer_addr: server_addr,
                                 ecn: EcnCodepoint::from_bits(1),
                             },
                             message: format!("{}\r\n", i),
@@ -228,7 +228,7 @@ mod tests {
                         now: Instant::now(),
                         transport: TransportContext {
                             local_addr: client_addr,
-                            peer_addr: Some(server_addr),
+                            peer_addr: server_addr,
                             ecn: EcnCodepoint::from_bits(1),
                         },
                         message: format!("bye\r\n"),
@@ -337,7 +337,7 @@ mod tests {
                         now: Instant::now(),
                         transport: TransportContext {
                             local_addr: client_addr,
-                            peer_addr: None,
+                            peer_addr: server_addr,
                             ecn: None,
                         },
                         message: format!("{}\r\n", i),
@@ -348,7 +348,7 @@ mod tests {
                     now: Instant::now(),
                     transport: TransportContext {
                         local_addr: client_addr,
-                        peer_addr: None,
+                        peer_addr: server_addr,
                         ecn: None,
                     },
                     message: format!("bye\r\n"),

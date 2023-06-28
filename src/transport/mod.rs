@@ -16,7 +16,7 @@ pub struct TransportContext {
     /// Local socket address, either IPv4 or IPv6
     pub local_addr: SocketAddr,
     /// Peer socket address, either IPv4 or IPv6
-    pub peer_addr: Option<SocketAddr>,
+    pub peer_addr: SocketAddr,
     /// Explicit congestion notification bits to set on the packet
     pub ecn: Option<EcnCodepoint>,
 }
@@ -25,7 +25,7 @@ impl Default for TransportContext {
     fn default() -> Self {
         Self {
             local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
-            peer_addr: None,
+            peer_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
             ecn: None,
         }
     }
@@ -55,12 +55,18 @@ impl Default for TaggedBytesMut {
 /// Write half of an asynchronous transport
 pub struct AsyncTransportWrite<R> {
     pub(crate) sender: LocalSender<R>,
-    pub(crate) transport: TransportContext,
+    pub(crate) local_addr: SocketAddr,
+    pub(crate) peer_addr: Option<SocketAddr>,
 }
 
 impl<R> AsyncTransportWrite<R> {
-    /// Returns transport context
-    pub fn get_transport(&self) -> TransportContext {
-        self.transport
+    /// Returns local address
+    pub fn get_local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+
+    /// Returns peer address
+    pub fn get_peer_addr(&self) -> Option<SocketAddr> {
+        self.peer_addr
     }
 }

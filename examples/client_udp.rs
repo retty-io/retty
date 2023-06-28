@@ -117,7 +117,7 @@ fn main() -> anyhow::Result<()> {
 
     let transport = TransportContext {
         local_addr: SocketAddr::from_str("0.0.0.0:0")?,
-        peer_addr: Some(SocketAddr::from_str(&format!("{}:{}", host, port))?),
+        peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
         ecn: None,
     };
 
@@ -144,10 +144,7 @@ fn main() -> anyhow::Result<()> {
 
         bootstrap.bind(transport.local_addr).await.unwrap();
 
-        let pipeline = bootstrap
-            .connect(*transport.peer_addr.as_ref().unwrap())
-            .await
-            .unwrap();
+        let pipeline = bootstrap.connect(transport.peer_addr).await.unwrap();
 
         println!("Enter bye to stop");
         let (mut tx, mut rx) = futures::channel::mpsc::channel(8);
