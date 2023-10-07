@@ -38,7 +38,7 @@ pub trait OutboundPipeline<W> {
     /// Writes a close event.
     fn close(&self);
 
-    /// Writes a message and yield to run other tasks.
+    /// Writes a message and yield local to run other tasks.
     /// Usually call it in client pipeline
     fn write_and_yield(&self, msg: W) {
         self.write(msg);
@@ -46,7 +46,7 @@ pub trait OutboundPipeline<W> {
     }
 
     /// Writes an Error exception from one of its outbound operations
-    /// and yield to run other tasks.
+    /// and yield local to run other tasks.
     /// Usually call it in client pipeline
     fn write_exception_and_yield(&self, err: Box<dyn Error>) {
         self.write_exception(err);
