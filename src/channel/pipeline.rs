@@ -1,6 +1,7 @@
 use std::{cell::RefCell, error::Error, rc::Rc, time::Instant};
 
 use crate::channel::{handler::Handler, pipeline_internal::PipelineInternal};
+use crate::executor::yield_local;
 
 /// InboundPipeline
 pub trait InboundPipeline<R> {
@@ -36,6 +37,28 @@ pub trait OutboundPipeline<W> {
 
     /// Writes a close event.
     fn close(&self);
+
+    /// Writes a message and yield to run other tasks.
+    /// Usually call it in client pipeline
+    fn write_and_yield(&self, msg: W) {
+        self.write(msg);
+        yield_local();
+    }
+
+    /// Writes an Error exception from one of its outbound operations
+    /// and yield to run other tasks.
+    /// Usually call it in client pipeline
+    fn write_exception_and_yield(&self, err: Box<dyn Error>) {
+        self.write_exception(err);
+        yield_local();
+    }
+
+    /// Writes a close event and yield local to run other tasks.
+    /// Usually call it in client pipeline
+    fn close_and_yield(&self) {
+        self.close();
+        yield_local();
+    }
 }
 
 /// Pipeline implements an advanced form of the Intercepting Filter pattern to give a user full control

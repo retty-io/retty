@@ -20,7 +20,7 @@ mod tests {
         },
         string_codec::{TaggedString, TaggedStringCodec},
     };
-    use retty::executor::{spawn_local, yield_local, LocalExecutorBuilder};
+    use retty::executor::{spawn_local, LocalExecutorBuilder};
     use retty::transport::{
         AsyncTransport, AsyncTransportWrite, EcnCodepoint, TaggedBytesMut, TransportContext,
     };
@@ -213,7 +213,7 @@ mod tests {
 
                     for i in 0..ITER {
                         // write
-                        pipeline.write(TaggedString {
+                        pipeline.write_and_yield(TaggedString {
                             now: Instant::now(),
                             transport: TransportContext {
                                 local_addr: client_addr,
@@ -222,9 +222,8 @@ mod tests {
                             },
                             message: format!("{}\r\n", i),
                         });
-                        yield_local();
                     }
-                    pipeline.write(TaggedString {
+                    pipeline.write_and_yield(TaggedString {
                         now: Instant::now(),
                         transport: TransportContext {
                             local_addr: client_addr,
@@ -233,7 +232,6 @@ mod tests {
                         },
                         message: format!("bye\r\n"),
                     });
-                    yield_local();
 
                     assert!(client_done_rx.recv().await.is_some());
 
@@ -333,7 +331,7 @@ mod tests {
 
                 for i in 0..ITER {
                     // write
-                    pipeline.write(TaggedString {
+                    pipeline.write_and_yield(TaggedString {
                         now: Instant::now(),
                         transport: TransportContext {
                             local_addr: client_addr,
@@ -342,9 +340,8 @@ mod tests {
                         },
                         message: format!("{}\r\n", i),
                     });
-                    yield_local();
                 }
-                pipeline.write(TaggedString {
+                pipeline.write_and_yield(TaggedString {
                     now: Instant::now(),
                     transport: TransportContext {
                         local_addr: client_addr,
@@ -353,7 +350,6 @@ mod tests {
                     },
                     message: format!("bye\r\n"),
                 });
-                yield_local();
 
                 assert!(client_done_rx.recv().await.is_some());
 
