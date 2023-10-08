@@ -96,6 +96,26 @@ impl<W: 'static> BootstrapUdp<W> {
 
             pipeline.transport_active();
             loop {
+                // prioritize socket.write than socket.read
+                while let Ok(msg) = receiver.try_recv() {
+                    let transmit = Transmit {
+                        destination: msg.transport.peer_addr,
+                        ecn: msg.transport.ecn,
+                        contents: msg.message.to_vec(),
+                        segment_size: None,
+                        src_ip: Some(msg.transport.local_addr.ip()),
+                    };
+                    match socket.send(&capabilities, &[transmit]).await {
+                        Ok(_) => {
+                            trace!("socket write {} bytes", msg.message.len());
+                        }
+                        Err(err) => {
+                            warn!("socket write error {}", err);
+                            break;
+                        }
+                    }
+                }
+
                 let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
                 pipeline.poll_timeout(&mut eto);
 
@@ -118,9 +138,6 @@ impl<W: 'static> BootstrapUdp<W> {
                         pipeline.handle_timeout(Instant::now());
                     }
                     opt = receiver.recv() => {
-                        //TODO: prioritize socket.write than socket.read by
-                        // executing receiver.recv before pipeline.poll_timeout
-                        // (https://github.com/retty-io/retty/issues/14)
                         if let Some(msg) = opt {
                             let transmit = Transmit {
                                 destination: msg.transport.peer_addr,

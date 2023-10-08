@@ -119,7 +119,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
         internal.len()
     }
 
-    /// Updates the Arc version's pipeline.
+    /// Updates the Rc version's pipeline.
     pub fn update(self: Rc<Self>) -> Rc<Self> {
         {
             let internal = self.internal.borrow();

@@ -171,6 +171,19 @@ impl<W: 'static> BootstrapTcp<W> {
 
         pipeline.transport_active();
         loop {
+            // prioritize socket.write than socket.read
+            while let Ok(transmit) = receiver.try_recv() {
+                match socket.write(&transmit.message).await {
+                    Ok(n) => {
+                        trace!("socket write {} bytes", n);
+                    }
+                    Err(err) => {
+                        warn!("socket write error {}", err);
+                        break;
+                    }
+                }
+            }
+
             let mut eto = Instant::now() + Duration::from_secs(MAX_DURATION_IN_SECS);
             pipeline.poll_timeout(&mut eto);
 
@@ -193,9 +206,6 @@ impl<W: 'static> BootstrapTcp<W> {
                     pipeline.handle_timeout(Instant::now());
                 }
                 opt = receiver.recv() => {
-                    //TODO: prioritize socket.write than socket.read by
-                    // executing receiver.recv before pipeline.poll_timeout
-                    // (https://github.com/retty-io/retty/issues/14)
                     if let Some(transmit) = opt {
                         match socket.write(&transmit.message).await {
                             Ok(n) => {
