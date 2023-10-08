@@ -118,6 +118,9 @@ impl<W: 'static> BootstrapUdp<W> {
                         pipeline.handle_timeout(Instant::now());
                     }
                     opt = receiver.recv() => {
+                        //TODO: prioritize socket.write than socket.read by
+                        // executing receiver.recv before pipeline.poll_timeout
+                        // (https://github.com/retty-io/retty/issues/14)
                         if let Some(msg) = opt {
                             let transmit = Transmit {
                                 destination: msg.transport.peer_addr,

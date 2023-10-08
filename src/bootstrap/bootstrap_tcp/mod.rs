@@ -193,6 +193,9 @@ impl<W: 'static> BootstrapTcp<W> {
                     pipeline.handle_timeout(Instant::now());
                 }
                 opt = receiver.recv() => {
+                    //TODO: prioritize socket.write than socket.read by
+                    // executing receiver.recv before pipeline.poll_timeout
+                    // (https://github.com/retty-io/retty/issues/14)
                     if let Some(transmit) = opt {
                         match socket.write(&transmit.message).await {
                             Ok(n) => {
