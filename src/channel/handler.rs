@@ -187,6 +187,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
             );
         }
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Handles an outbound I/O event or intercepts an I/O operation, and forwards it to its next outbound handler in its Pipeline.
@@ -248,6 +252,10 @@ impl<Win: 'static, Wout: 'static> OutboundHandlerInternal
                 ctx.name()
             );
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

@@ -1,6 +1,13 @@
 use std::{cell::RefCell, error::Error, rc::Rc, time::Instant};
 
-use crate::channel::{handler::Handler, pipeline_internal::PipelineInternal};
+use crate::channel::{
+    handler::Handler,
+    handler_internal::{
+        InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
+        OutboundHandlerInternal,
+    },
+    pipeline_internal::PipelineInternal,
+};
 
 /// InboundPipeline
 pub trait InboundPipeline<R> {
@@ -110,6 +117,42 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
             Ok(()) => Ok(self),
             Err(err) => Err(err),
         }
+    }
+
+    /// Gets an InboundHandler from this pipeline based on handler_name.
+    pub fn get_inbound_handler(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn InboundHandlerInternal>>> {
+        let internal = self.internal.borrow();
+        internal.get_inbound_handler(handler_name)
+    }
+
+    /// Gets an OutboundHandler from this pipeline based on handler_name.
+    pub fn get_outbound_handler(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn OutboundHandlerInternal>>> {
+        let internal = self.internal.borrow();
+        internal.get_outbound_handler(handler_name)
+    }
+
+    /// Gets an InboundContext from this pipeline based on handler_name.
+    pub fn get_inbound_context(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn InboundContextInternal>>> {
+        let internal = self.internal.borrow();
+        internal.get_inbound_context(handler_name)
+    }
+
+    /// Gets an OutboundContext from this pipeline based on handler_name.
+    pub fn get_outbound_context(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn OutboundContextInternal>>> {
+        let internal = self.internal.borrow();
+        internal.get_outbound_context(handler_name)
     }
 
     #[allow(clippy::len_without_is_empty)]

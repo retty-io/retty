@@ -38,6 +38,10 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     pub(crate) fn add_back(&mut self, handler: impl Handler) {
         let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
+        if self.handler_names.iter().any(|name| name == &handler_name) {
+            panic!("can't add_back exist handler with name {}", handler_name);
+        }
+
         self.handler_names.push(handler_name);
 
         self.inbound_handlers.push(inbound_handler);
@@ -50,6 +54,10 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     pub(crate) fn add_front(&mut self, handler: impl Handler) {
         let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
+        if self.handler_names.iter().any(|name| name == &handler_name) {
+            panic!("can't add_back exist handler with name {}", handler_name);
+        }
+
         self.handler_names.insert(0, handler_name);
 
         self.inbound_handlers.insert(0, inbound_handler);
@@ -99,15 +107,8 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     }
 
     pub(crate) fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
-        let mut to_be_removed = vec![];
         for (index, name) in self.handler_names.iter().enumerate() {
             if name == handler_name {
-                to_be_removed.push(index);
-            }
-        }
-
-        if !to_be_removed.is_empty() {
-            for index in to_be_removed.into_iter().rev() {
                 self.handler_names.remove(index);
 
                 self.inbound_handlers.remove(index);
@@ -115,15 +116,62 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
 
                 self.outbound_handlers.remove(index);
                 self.outbound_contexts.remove(index);
-            }
 
-            Ok(())
-        } else {
-            Err(std::io::Error::new(
-                ErrorKind::NotFound,
-                format!("No such handler \"{}\" in pipeline", handler_name),
-            ))
+                return Ok(());
+            }
         }
+        Err(std::io::Error::new(
+            ErrorKind::NotFound,
+            format!("No such handler \"{}\" in pipeline", handler_name),
+        ))
+    }
+
+    pub(crate) fn get_inbound_handler(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn InboundHandlerInternal>>> {
+        for (index, name) in self.handler_names.iter().enumerate() {
+            if name == handler_name {
+                return Some(self.inbound_handlers[index].clone());
+            }
+        }
+        None
+    }
+
+    pub(crate) fn get_outbound_handler(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn OutboundHandlerInternal>>> {
+        for (index, name) in self.handler_names.iter().enumerate() {
+            if name == handler_name {
+                return Some(self.outbound_handlers[index].clone());
+            }
+        }
+        None
+    }
+
+    pub(crate) fn get_inbound_context(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn InboundContextInternal>>> {
+        for (index, name) in self.handler_names.iter().enumerate() {
+            if name == handler_name {
+                return Some(self.inbound_contexts[index].clone());
+            }
+        }
+        None
+    }
+
+    pub(crate) fn get_outbound_context(
+        &self,
+        handler_name: &str,
+    ) -> Option<Rc<RefCell<dyn OutboundContextInternal>>> {
+        for (index, name) in self.handler_names.iter().enumerate() {
+            if name == handler_name {
+                return Some(self.outbound_contexts[index].clone());
+            }
+        }
+        None
     }
 
     pub(crate) fn len(&self) -> usize {

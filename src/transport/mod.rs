@@ -33,14 +33,14 @@ impl Default for TransportContext {
     }
 }
 
-/// A tagged [BytesMut](bytes::BytesMut) with [TransportContext]
+/// A tagged [BytesMut] with [TransportContext]
 #[derive(Clone)]
 pub struct TaggedBytesMut {
     /// Received/Sent time
     pub now: Instant,
     /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
     pub transport: TransportContext,
-    /// Message body with [BytesMut](bytes::BytesMut) type
+    /// Message body with [BytesMut] type
     pub message: BytesMut,
 }
 
