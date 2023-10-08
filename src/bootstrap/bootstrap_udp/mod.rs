@@ -52,11 +52,8 @@ impl<W: 'static> BootstrapUdp<W> {
 
         let pipeline_factory_fn = Rc::clone(self.boostrap.pipeline_factory_fn.as_ref().unwrap());
         let (sender, mut receiver) = channel();
-        let pipeline = (pipeline_factory_fn)(AsyncTransportWrite {
-            sender,
-            local_addr,
-            peer_addr,
-        });
+        let pipeline =
+            (pipeline_factory_fn)(AsyncTransportWrite::new(sender, local_addr, peer_addr));
         let pipeline_wr = Rc::clone(&pipeline);
 
         let (close_tx, mut close_rx) = async_broadcast::broadcast(1);

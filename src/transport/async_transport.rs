@@ -1,5 +1,4 @@
 use log::{trace, warn};
-use std::io::ErrorKind;
 use std::marker::PhantomData;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
@@ -47,12 +46,9 @@ impl<R: 'static> OutboundHandler for AsyncTransportEncoder<R> {
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         if let Some(writer) = &self.writer {
-            if let Err(err) = writer.sender.send(msg) {
+            if let Err(err) = writer.write(msg) {
                 warn!("AsyncTransport write error: {:?}", err);
-                ctx.fire_write_exception(Box::new(std::io::Error::new(
-                    ErrorKind::BrokenPipe,
-                    format!("{:?}", err),
-                )));
+                ctx.fire_write_exception(Box::new(err));
             };
         }
     }

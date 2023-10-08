@@ -193,7 +193,7 @@ fn main() -> anyhow::Result<()> {
                 let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
                 let pipeline_wr = Rc::downgrade(&pipeline);
-                let peer = writer.get_peer_addr().unwrap();
+                let peer = writer.peer_addr().unwrap();
                 {
                     let mut s = state.borrow_mut();
                     s.join(peer, pipeline_wr);
