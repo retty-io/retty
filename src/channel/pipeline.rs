@@ -66,21 +66,27 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Appends a [Handler] at the last position of this pipeline.
-    pub fn add_back(&self, handler: impl Handler) -> &Self {
-        {
+    pub fn add_back(&self, handler: impl Handler) -> Result<&Self, std::io::Error> {
+        let result = {
             let mut internal = self.internal.borrow_mut();
-            internal.add_back(handler);
+            internal.add_back(handler)
+        };
+        match result {
+            Ok(()) => Ok(self),
+            Err(err) => Err(err),
         }
-        self
     }
 
     /// Inserts a [Handler] at the first position of this pipeline.
-    pub fn add_front(&self, handler: impl Handler) -> &Self {
-        {
+    pub fn add_front(&self, handler: impl Handler) -> Result<&Self, std::io::Error> {
+        let result = {
             let mut internal = self.internal.borrow_mut();
-            internal.add_front(handler);
+            internal.add_front(handler)
+        };
+        match result {
+            Ok(()) => Ok(self),
+            Err(err) => Err(err),
         }
-        self
     }
 
     /// Removes a [Handler] at the last position of this pipeline.
@@ -163,16 +169,16 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Updates the Rc version's pipeline.
-    pub fn update(self: Rc<Self>) -> Rc<Self> {
+    pub fn update(self: Rc<Self>) -> Result<Rc<Self>, std::io::Error> {
         {
             let internal = self.internal.borrow();
             internal.finalize();
         }
-        self
+        Ok(self)
     }
 
     /// Finalizes the pipeline.
-    pub fn finalize(self) -> Rc<Self> {
+    pub fn finalize(self) -> Result<Rc<Self>, std::io::Error> {
         let pipeline = Rc::new(self);
         pipeline.update()
     }

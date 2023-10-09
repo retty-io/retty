@@ -35,36 +35,46 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
         }
     }
 
-    pub(crate) fn add_back(&mut self, handler: impl Handler) {
+    pub(crate) fn add_back(&mut self, handler: impl Handler) -> Result<(), std::io::Error> {
         let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         if self.handler_names.iter().any(|name| name == &handler_name) {
-            panic!("can't add_back exist handler with name {}", handler_name);
+            Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("can't add_back exist handler with name {}", handler_name),
+            ))
+        } else {
+            self.handler_names.push(handler_name);
+
+            self.inbound_handlers.push(inbound_handler);
+            self.inbound_contexts.push(inbound_context);
+
+            self.outbound_handlers.push(outbound_handler);
+            self.outbound_contexts.push(outbound_context);
+
+            Ok(())
         }
-
-        self.handler_names.push(handler_name);
-
-        self.inbound_handlers.push(inbound_handler);
-        self.inbound_contexts.push(inbound_context);
-
-        self.outbound_handlers.push(outbound_handler);
-        self.outbound_contexts.push(outbound_context);
     }
 
-    pub(crate) fn add_front(&mut self, handler: impl Handler) {
+    pub(crate) fn add_front(&mut self, handler: impl Handler) -> Result<(), std::io::Error> {
         let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
             handler.generate();
         if self.handler_names.iter().any(|name| name == &handler_name) {
-            panic!("can't add_back exist handler with name {}", handler_name);
+            Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("can't add_front exist handler with name {}", handler_name),
+            ))
+        } else {
+            self.handler_names.insert(0, handler_name);
+
+            self.inbound_handlers.insert(0, inbound_handler);
+            self.inbound_contexts.insert(0, inbound_context);
+
+            self.outbound_handlers.insert(0, outbound_handler);
+            self.outbound_contexts.insert(0, outbound_context);
+
+            Ok(())
         }
-
-        self.handler_names.insert(0, handler_name);
-
-        self.inbound_handlers.insert(0, inbound_handler);
-        self.inbound_contexts.insert(0, inbound_context);
-
-        self.outbound_handlers.insert(0, outbound_handler);
-        self.outbound_contexts.insert(0, outbound_context);
     }
 
     pub(crate) fn remove_back(&mut self) -> Result<(), std::io::Error> {

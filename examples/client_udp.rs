@@ -134,10 +134,10 @@ fn main() -> anyhow::Result<()> {
                 let string_codec_handler = TaggedStringCodec::new();
                 let echo_handler = EchoHandler::new();
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(echo_handler);
+                pipeline.add_back(async_transport_handler)?;
+                pipeline.add_back(line_based_frame_decoder_handler)?;
+                pipeline.add_back(string_codec_handler)?;
+                pipeline.add_back(echo_handler)?;
                 pipeline.finalize()
             },
         ));

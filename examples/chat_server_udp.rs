@@ -204,10 +204,10 @@ fn main() -> anyhow::Result<()> {
                 let pipeline_wr = Rc::downgrade(&pipeline);
                 let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(chat_handler);
+                pipeline.add_back(async_transport_handler)?;
+                pipeline.add_back(line_based_frame_decoder_handler)?;
+                pipeline.add_back(string_codec_handler)?;
+                pipeline.add_back(chat_handler)?;
                 pipeline.update()
             },
         ));

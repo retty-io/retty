@@ -29,7 +29,8 @@ pub use bootstrap_udp::{
 };
 
 /// Creates a new [Pipeline]
-pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(AsyncTransportWrite<R>) -> Rc<Pipeline<R, W>>)>;
+pub type PipelineFactoryFn<R, W> =
+    Box<dyn (Fn(AsyncTransportWrite<R>) -> Result<Rc<Pipeline<R, W>>, Error>)>;
 
 const MAX_DURATION_IN_SECS: u64 = 86400; // 1 day
 

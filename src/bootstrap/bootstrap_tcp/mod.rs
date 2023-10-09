@@ -73,11 +73,17 @@ impl<W: 'static> BootstrapTcp<W> {
                                 // A new task is spawned for each inbound socket. The socket is
                                 // moved to the new task and processed there.
                                 let (sender, receiver) = channel();
-                                let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite::new(
+                                let pipeline_rd = match (pipeline_factory_fn)(AsyncTransportWrite::new(
                                     sender,
                                         local_addr,
                                         Some(peer_addr),
-                                ));
+                                )) {
+                                    Ok(pipeline_rd) => pipeline_rd,
+                                    Err(err) => {
+                                        warn!("pipeline_factory_fn error {}", err);
+                                        break;
+                                    }
+                                };
                                 let child_close_rx = close_rx.clone();
                                 let child_worker = child_wg.worker();
                                 spawn_local(async move {
@@ -134,7 +140,7 @@ impl<W: 'static> BootstrapTcp<W> {
             sender,
             local_addr,
             Some(peer_addr),
-        ));
+        ))?;
         let pipeline_wr = Rc::clone(&pipeline_rd);
         let max_payload_size = self.boostrap.max_payload_size;
 

@@ -163,10 +163,10 @@ mod tests {
                             false,
                         );
 
-                        pipeline.add_back(async_transport_handler);
-                        pipeline.add_back(line_based_frame_decoder_handler);
-                        pipeline.add_back(string_codec_handler);
-                        pipeline.add_back(echo_handler);
+                        pipeline.add_back(async_transport_handler)?;
+                        pipeline.add_back(line_based_frame_decoder_handler)?;
+                        pipeline.add_back(string_codec_handler)?;
+                        pipeline.add_back(echo_handler)?;
                         pipeline.finalize()
                     },
                 ));
@@ -200,10 +200,10 @@ mod tests {
                                 false,
                             );
 
-                            pipeline.add_back(async_transport_handler);
-                            pipeline.add_back(line_based_frame_decoder_handler);
-                            pipeline.add_back(string_codec_handler);
-                            pipeline.add_back(echo_handler);
+                            pipeline.add_back(async_transport_handler)?;
+                            pipeline.add_back(line_based_frame_decoder_handler)?;
+                            pipeline.add_back(string_codec_handler)?;
+                            pipeline.add_back(echo_handler)?;
                             pipeline.finalize()
                         },
                     ));
@@ -286,10 +286,10 @@ mod tests {
                         false,
                     );
 
-                    pipeline.add_back(async_transport_handler);
-                    pipeline.add_back(line_based_frame_decoder_handler);
-                    pipeline.add_back(string_codec_handler);
-                    pipeline.add_back(echo_handler);
+                    pipeline.add_back(async_transport_handler)?;
+                    pipeline.add_back(line_based_frame_decoder_handler)?;
+                    pipeline.add_back(string_codec_handler)?;
+                    pipeline.add_back(echo_handler)?;
                     pipeline.finalize()
                 },
             ));
@@ -319,10 +319,10 @@ mod tests {
                             false,
                         );
 
-                        pipeline.add_back(async_transport_handler);
-                        pipeline.add_back(line_based_frame_decoder_handler);
-                        pipeline.add_back(string_codec_handler);
-                        pipeline.add_back(echo_handler);
+                        pipeline.add_back(async_transport_handler)?;
+                        pipeline.add_back(line_based_frame_decoder_handler)?;
+                        pipeline.add_back(string_codec_handler)?;
+                        pipeline.add_back(echo_handler)?;
                         pipeline.finalize()
                     },
                 ));
