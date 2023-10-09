@@ -21,6 +21,9 @@ use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
 mod bootstrap_tcp;
 mod bootstrap_udp;
 
+#[cfg(test)]
+mod bootstrap_test;
+
 pub use bootstrap_tcp::{
     bootstrap_tcp_client::BootstrapTcpClient, bootstrap_tcp_server::BootstrapTcpServer,
 };

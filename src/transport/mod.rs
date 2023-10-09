@@ -6,6 +6,9 @@ use std::time::Instant;
 
 mod async_transport;
 
+#[cfg(test)]
+mod transport_test;
+
 pub use self::async_transport::AsyncTransport;
 pub use ::async_transport::EcnCodepoint;
 

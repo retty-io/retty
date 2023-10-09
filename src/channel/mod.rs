@@ -4,8 +4,14 @@ pub(crate) mod handler_internal;
 pub(crate) mod pipeline;
 pub(crate) mod pipeline_internal;
 
+#[cfg(test)]
+pub(crate) mod channel_test;
+
 pub use self::{
     handler::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler},
-    handler_internal::{InboundHandlerInternal, OutboundHandlerInternal},
+    handler_internal::{
+        InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
+        OutboundHandlerInternal,
+    },
     pipeline::{InboundPipeline, OutboundPipeline, Pipeline},
 };
