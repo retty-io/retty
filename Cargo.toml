@@ -11,6 +11,10 @@ homepage = "https://retty.io"
 keywords = ["networking", "protocols"]
 categories = [ "network-programming", "asynchronous" ]
 
+[features]
+default = []
+immutable = []
+
 [dependencies]
 bytes = "1.4.0"
 log = "0.4.17"

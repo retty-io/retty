@@ -3,21 +3,46 @@ use std::{any::Any, cell::RefCell, error::Error, rc::Rc, time::Instant};
 /// Internal Inbound Handler trait
 pub trait InboundHandlerInternal {
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn transport_active_internal(&mut self, ctx: &dyn InboundContextInternal);
+    #[cfg(feature = "immutable")]
+    fn transport_active_internal(&self, ctx: &dyn InboundContextInternal);
+
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn transport_inactive_internal(&mut self, ctx: &dyn InboundContextInternal);
+    #[cfg(feature = "immutable")]
+    fn transport_inactive_internal(&self, ctx: &dyn InboundContextInternal);
 
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn read_internal(&mut self, ctx: &dyn InboundContextInternal, msg: Box<dyn Any>);
-    #[doc(hidden)]
-    fn read_exception_internal(&mut self, ctx: &dyn InboundContextInternal, err: Box<dyn Error>);
-    #[doc(hidden)]
-    fn read_eof_internal(&mut self, ctx: &dyn InboundContextInternal);
+    #[cfg(feature = "immutable")]
+    fn read_internal(&self, ctx: &dyn InboundContextInternal, msg: Box<dyn Any>);
 
     #[doc(hidden)]
-    fn handle_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant);
+    #[cfg(not(feature = "immutable"))]
+    fn read_exception_internal(&mut self, ctx: &dyn InboundContextInternal, err: Box<dyn Error>);
+    #[cfg(feature = "immutable")]
+    fn read_exception_internal(&self, ctx: &dyn InboundContextInternal, err: Box<dyn Error>);
+
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
+    fn read_eof_internal(&mut self, ctx: &dyn InboundContextInternal);
+    #[cfg(feature = "immutable")]
+    fn read_eof_internal(&self, ctx: &dyn InboundContextInternal);
+
+    #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
+    fn handle_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant);
+    #[cfg(feature = "immutable")]
+    fn handle_timeout_internal(&self, ctx: &dyn InboundContextInternal, now: Instant);
+
+    #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn poll_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, eto: &mut Instant);
+    #[cfg(feature = "immutable")]
+    fn poll_timeout_internal(&self, ctx: &dyn InboundContextInternal, eto: &mut Instant);
 
     /// Casts it to Any dyn trait
     fn as_any_internal(&self) -> &dyn Any;
@@ -69,11 +94,23 @@ pub trait InboundContextInternal {
 /// Internal Outbound Handler trait
 pub trait OutboundHandlerInternal {
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn write_internal(&mut self, ctx: &dyn OutboundContextInternal, msg: Box<dyn Any>);
+    #[cfg(feature = "immutable")]
+    fn write_internal(&self, ctx: &dyn OutboundContextInternal, msg: Box<dyn Any>);
+
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn write_exception_internal(&mut self, ctx: &dyn OutboundContextInternal, err: Box<dyn Error>);
+    #[cfg(feature = "immutable")]
+    fn write_exception_internal(&self, ctx: &dyn OutboundContextInternal, err: Box<dyn Error>);
+
     #[doc(hidden)]
+    #[cfg(not(feature = "immutable"))]
     fn close_internal(&mut self, ctx: &dyn OutboundContextInternal);
+    #[cfg(feature = "immutable")]
+    fn close_internal(&self, ctx: &dyn OutboundContextInternal);
+
     /// Casts it to Any dyn trait
     fn as_any_internal(&self) -> &dyn Any;
 }

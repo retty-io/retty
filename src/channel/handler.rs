@@ -79,9 +79,15 @@ pub trait InboundHandler {
     type Rout: 'static;
 
     /// Transport is active now, which means it is connected.
+    #[cfg(not(feature = "immutable"))]
     fn transport_active(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         ctx.fire_transport_active();
     }
+    #[cfg(feature = "immutable")]
+    fn transport_active(&self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
+        ctx.fire_transport_active();
+    }
+
     /// Transport is inactive now, which means it is disconnected.
     fn transport_inactive(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
         ctx.fire_transport_inactive();
