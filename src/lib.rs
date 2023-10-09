@@ -91,6 +91,9 @@
 //!         println!("handling {}", msg);
 //!         ctx.fire_write(format!("{}\r\n", msg));
 //!     }
+//!     fn as_any(&self) -> &dyn Any {
+//!         self
+//!     }
 //! }
 //!
 //! impl OutboundHandler for EchoEncoder {
@@ -103,6 +106,9 @@
 //!         msg: Self::Win,
 //!     ) {
 //!         ctx.fire_write(msg);
+//!     }
+//!     fn as_any(&self) -> &dyn Any {
+//!         self
 //!     }
 //! }
 //!
@@ -203,6 +209,9 @@
 //!         println!("EOF received :(");
 //!         ctx.fire_close();
 //!     }
+//!     fn as_any(&self) -> &dyn Any {
+//!         self
+//!     }
 //! }
 //!
 //! impl OutboundHandler for EchoEncoder {
@@ -215,6 +224,9 @@
 //!         msg: Self::Win,
 //!     ) {
 //!         ctx.fire_write(msg);
+//!     }
+//!     fn as_any(&self) -> &dyn Any {
+//!         self
 //!     }
 //! }
 //!

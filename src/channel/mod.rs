@@ -13,5 +13,5 @@ pub use self::{
         InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
         OutboundHandlerInternal,
     },
-    pipeline::{InboundPipeline, OutboundPipeline, Pipeline},
+    pipeline::{AnyPipeline, InboundPipeline, OutboundPipeline, Pipeline},
 };

@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::{cell::RefCell, error::Error, rc::Rc, time::Instant};
 
 use crate::channel::{
@@ -9,8 +10,14 @@ use crate::channel::{
     pipeline_internal::PipelineInternal,
 };
 
+/// AnyPipeline
+pub trait AnyPipeline {
+    /// Casts it to Any dyn trait
+    fn as_any(&self) -> &dyn Any;
+}
+
 /// InboundPipeline
-pub trait InboundPipeline<R> {
+pub trait InboundPipeline<R>: AnyPipeline {
     /// Transport is active now, which means it is connected.
     fn transport_active(&self);
 
@@ -34,7 +41,7 @@ pub trait InboundPipeline<R> {
 }
 
 /// OutboundPipeline
-pub trait OutboundPipeline<W> {
+pub trait OutboundPipeline<W>: AnyPipeline {
     /// Writes a message.
     fn write(&self, msg: W);
 
@@ -181,6 +188,13 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     pub fn finalize(self) -> Result<Rc<Self>, std::io::Error> {
         let pipeline = Rc::new(self);
         pipeline.update()
+    }
+}
+
+impl<R: 'static, W: 'static> AnyPipeline for Pipeline<R, W> {
+    /// Casts it to Any dyn trait
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
