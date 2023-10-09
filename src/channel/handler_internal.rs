@@ -20,7 +20,7 @@ pub trait InboundHandlerInternal {
     fn poll_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, eto: &mut Instant);
 
     /// Casts it to Any dyn trait
-    fn as_any(&self) -> &dyn Any;
+    fn as_any_internal(&self) -> &dyn Any;
 }
 
 /// Internal Inbound Context trait
@@ -43,7 +43,7 @@ pub trait InboundContextInternal {
     #[doc(hidden)]
     fn name(&self) -> &str;
     /// Casts it to Any dyn trait
-    fn as_any(&self) -> &dyn Any;
+    fn as_any_internal(&self) -> &dyn Any;
     #[doc(hidden)]
     fn set_next_in_context(
         &mut self,
@@ -75,7 +75,7 @@ pub trait OutboundHandlerInternal {
     #[doc(hidden)]
     fn close_internal(&mut self, ctx: &dyn OutboundContextInternal);
     /// Casts it to Any dyn trait
-    fn as_any(&self) -> &dyn Any;
+    fn as_any_internal(&self) -> &dyn Any;
 }
 
 /// Internal Outbound Context trait
@@ -90,7 +90,7 @@ pub trait OutboundContextInternal {
     #[doc(hidden)]
     fn name(&self) -> &str;
     /// Casts it to Any dyn trait
-    fn as_any(&self) -> &dyn Any;
+    fn as_any_internal(&self) -> &dyn Any;
     #[doc(hidden)]
     fn set_next_out_context(
         &mut self,

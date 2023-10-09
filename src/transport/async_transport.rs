@@ -1,4 +1,5 @@
 use log::{trace, warn};
+use std::any::Any;
 use std::marker::PhantomData;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
@@ -37,6 +38,10 @@ impl<R: 'static> InboundHandler for AsyncTransportDecoder<R> {
 
     fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
         ctx.fire_read(msg);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

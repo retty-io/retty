@@ -106,13 +106,18 @@ pub trait InboundHandler {
     fn poll_timeout(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, eto: &mut Instant) {
         ctx.fire_poll_timeout(eto);
     }
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
     for Box<dyn InboundHandler<Rin = Rin, Rout = Rout>>
 {
     fn transport_active_internal(&mut self, ctx: &dyn InboundContextInternal) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             self.transport_active(ctx);
         } else {
             panic!(
@@ -122,7 +127,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
         }
     }
     fn transport_inactive_internal(&mut self, ctx: &dyn InboundContextInternal) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             self.transport_inactive(ctx);
         } else {
             panic!(
@@ -133,7 +141,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
     }
 
     fn read_internal(&mut self, ctx: &dyn InboundContextInternal, msg: Box<dyn Any>) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             if let Ok(msg) = msg.downcast::<Rin>() {
                 self.read(ctx, *msg);
             } else {
@@ -147,7 +158,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
         }
     }
     fn read_exception_internal(&mut self, ctx: &dyn InboundContextInternal, err: Box<dyn Error>) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             self.read_exception(ctx, err);
         } else {
             panic!(
@@ -157,7 +171,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
         }
     }
     fn read_eof_internal(&mut self, ctx: &dyn InboundContextInternal) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             self.read_eof(ctx);
         } else {
             panic!(
@@ -168,7 +185,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
     }
 
     fn handle_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, now: Instant) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             self.handle_timeout(ctx, now);
         } else {
             panic!(
@@ -178,7 +198,10 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
         }
     }
     fn poll_timeout_internal(&mut self, ctx: &dyn InboundContextInternal, eto: &mut Instant) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<InboundContext<Rin, Rout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<InboundContext<Rin, Rout>>()
+        {
             self.poll_timeout(ctx, eto);
         } else {
             panic!(
@@ -188,7 +211,7 @@ impl<Rin: 'static, Rout: 'static> InboundHandlerInternal
         }
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any_internal(&self) -> &dyn Any {
         self
     }
 }
@@ -220,7 +243,10 @@ impl<Win: 'static, Wout: 'static> OutboundHandlerInternal
     for Box<dyn OutboundHandler<Win = Win, Wout = Wout>>
 {
     fn write_internal(&mut self, ctx: &dyn OutboundContextInternal, msg: Box<dyn Any>) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<OutboundContext<Win, Wout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<OutboundContext<Win, Wout>>()
+        {
             if let Ok(msg) = msg.downcast::<Win>() {
                 self.write(ctx, *msg);
             } else {
@@ -234,7 +260,10 @@ impl<Win: 'static, Wout: 'static> OutboundHandlerInternal
         }
     }
     fn write_exception_internal(&mut self, ctx: &dyn OutboundContextInternal, err: Box<dyn Error>) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<OutboundContext<Win, Wout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<OutboundContext<Win, Wout>>()
+        {
             self.write_exception(ctx, err);
         } else {
             panic!(
@@ -244,7 +273,10 @@ impl<Win: 'static, Wout: 'static> OutboundHandlerInternal
         }
     }
     fn close_internal(&mut self, ctx: &dyn OutboundContextInternal) {
-        if let Some(ctx) = ctx.as_any().downcast_ref::<OutboundContext<Win, Wout>>() {
+        if let Some(ctx) = ctx
+            .as_any_internal()
+            .downcast_ref::<OutboundContext<Win, Wout>>()
+        {
             self.close(ctx);
         } else {
             panic!(
@@ -254,7 +286,7 @@ impl<Win: 'static, Wout: 'static> OutboundHandlerInternal
         }
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any_internal(&self) -> &dyn Any {
         self
     }
 }
@@ -404,7 +436,7 @@ impl<Rin: 'static, Rout: 'static> InboundContextInternal for InboundContext<Rin,
     fn name(&self) -> &str {
         self.name.as_str()
     }
-    fn as_any(&self) -> &dyn Any {
+    fn as_any_internal(&self) -> &dyn Any {
         self
     }
     fn set_next_in_context(
@@ -527,7 +559,7 @@ impl<Win: 'static, Wout: 'static> OutboundContextInternal for OutboundContext<Wi
     fn name(&self) -> &str {
         self.name.as_str()
     }
-    fn as_any(&self) -> &dyn Any {
+    fn as_any_internal(&self) -> &dyn Any {
         self
     }
     fn set_next_out_context(

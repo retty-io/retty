@@ -1,6 +1,7 @@
 //! Handlers for converting between TaggedBytesMut and TaggedString
 
 use bytes::{BufMut, BytesMut};
+use std::any::Any;
 use std::time::Instant;
 
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
@@ -68,6 +69,10 @@ impl InboundHandler for TaggedStringDecoder {
             }
             Err(err) => ctx.fire_read_exception(err.into()),
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

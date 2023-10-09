@@ -4,6 +4,7 @@ use crate::codec::byte_to_message_decoder::{
 };
 use crate::codec::string_codec::{TaggedString, TaggedStringCodec};
 use crate::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut};
+use std::any::Any;
 
 use anyhow::Result;
 use local_sync::mpsc::unbounded::channel;
@@ -114,6 +115,10 @@ impl<Rin: Default + 'static, Rout: Default + 'static> InboundHandler for MockDec
             poll_timeout.fetch_add(1, Ordering::SeqCst);
         }
         ctx.fire_poll_timeout(eto);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -539,6 +544,41 @@ fn pipeline_test_num_handlers() -> Result<()> {
 
     pipeline.remove("handler2")?;
     assert_eq!(0, pipeline.len());
+
+    Ok(())
+}
+
+#[test]
+fn pipeline_test_get_handler() -> Result<()> {
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1",
+            Stats::default(),
+        ))?
+        .add_back(MockHandler::<String, usize>::new(
+            "handler2",
+            Stats::default(),
+        ))?;
+    let pipeline = pipeline.finalize()?;
+    assert_eq!(2, pipeline.len());
+
+    let handler1 = pipeline.get_inbound_handler("handler1");
+    if let Some(handler1) = handler1 {
+        let handler = handler1.borrow();
+        let handler_any = handler.as_any_internal();
+        let inbound_handler =
+            handler_any.downcast_ref::<Box<dyn InboundHandler<Rin = String, Rout = String>>>();
+        if let Some(inbound_handler) = inbound_handler {
+            let inbound_handler_any = inbound_handler.as_any();
+            let mock_decoder = inbound_handler_any.downcast_ref::<MockDecoder<String, String>>();
+            assert!(mock_decoder.is_some());
+        } else {
+            assert!(false);
+        }
+    } else {
+        assert!(false);
+    }
 
     Ok(())
 }

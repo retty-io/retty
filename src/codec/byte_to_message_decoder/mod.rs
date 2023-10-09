@@ -2,6 +2,7 @@
 use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
 use crate::transport::TaggedBytesMut;
 use bytes::BytesMut;
+use std::any::Any;
 use std::time::Instant;
 
 mod line_based_frame_decoder;
@@ -73,6 +74,10 @@ impl InboundHandler for TaggedByteToMessageDecoder {
                 }
             }
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
