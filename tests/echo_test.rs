@@ -2,6 +2,7 @@
 mod tests {
     use core_affinity::CoreId;
     use local_sync::mpsc::{unbounded::channel, unbounded::Tx as LocalSender};
+    use std::any::Any;
     use std::cell::RefCell;
     use std::net::SocketAddr;
     use std::rc::Rc;
@@ -97,6 +98,10 @@ mod tests {
         ) {
             //last handler, no need to fire_poll_timeout
         }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
     }
 
     impl OutboundHandler for EchoEncoder {
@@ -105,6 +110,10 @@ mod tests {
 
         fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
             ctx.fire_write(msg);
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
         }
     }
 

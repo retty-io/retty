@@ -39,12 +39,14 @@ struct MockDecoder<Rin, Rout> {
     phantom_out: PhantomData<Rout>,
 }
 struct MockEncoder<Win, Wout> {
+    name: String,
     stats: Stats,
 
     phantom_in: PhantomData<Win>,
     phantom_out: PhantomData<Wout>,
 }
 pub(crate) struct MockHandler<R, W> {
+    name: String,
     decoder: MockDecoder<R, W>,
     encoder: MockEncoder<W, R>,
 }
@@ -52,15 +54,18 @@ pub(crate) struct MockHandler<R, W> {
 impl<R, W> MockHandler<R, W> {
     pub fn new(name: &str, stats: Stats) -> Self {
         MockHandler {
+            name: name.to_string(),
             decoder: MockDecoder {
-                name: name.to_string(),
+                name: format!("{} decoder", name),
                 stats: stats.clone(),
 
                 phantom_in: PhantomData,
                 phantom_out: PhantomData,
             },
             encoder: MockEncoder {
+                name: format!("{} encoder", name),
                 stats,
+
                 phantom_in: PhantomData,
                 phantom_out: PhantomData,
             },
@@ -148,6 +153,10 @@ impl<Win: Default + 'static, Wout: Default + 'static> OutboundHandler for MockEn
         }
         ctx.fire_close();
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl<R: Default + 'static, W: Default + 'static> Handler for MockHandler<R, W> {
@@ -157,7 +166,7 @@ impl<R: Default + 'static, W: Default + 'static> Handler for MockHandler<R, W> {
     type Wout = R;
 
     fn name(&self) -> &str {
-        self.decoder.name.as_str()
+        self.name.as_str()
     }
 
     fn split(
@@ -549,7 +558,7 @@ fn pipeline_test_num_handlers() -> Result<()> {
 }
 
 #[test]
-fn pipeline_test_get_handler() -> Result<()> {
+fn pipeline_test_get_inbound_handler() -> Result<()> {
     let pipeline: Pipeline<String, String> = Pipeline::new();
     pipeline
         .add_back(MockHandler::<String, String>::new(
@@ -563,9 +572,9 @@ fn pipeline_test_get_handler() -> Result<()> {
     let pipeline = pipeline.finalize()?;
     assert_eq!(2, pipeline.len());
 
-    let handler1 = pipeline.get_inbound_handler("handler1");
-    if let Some(handler1) = handler1 {
-        let handler = handler1.borrow();
+    let handler = pipeline.get_inbound_handler("handler1");
+    if let Some(handler) = handler {
+        let handler = handler.borrow();
         let handler_any = handler.as_any_internal();
         let inbound_handler =
             handler_any.downcast_ref::<Box<dyn InboundHandler<Rin = String, Rout = String>>>();
@@ -573,6 +582,107 @@ fn pipeline_test_get_handler() -> Result<()> {
             let inbound_handler_any = inbound_handler.as_any();
             let mock_decoder = inbound_handler_any.downcast_ref::<MockDecoder<String, String>>();
             assert!(mock_decoder.is_some());
+            assert_eq!(mock_decoder.unwrap().name, "handler1 decoder");
+        } else {
+            assert!(false);
+        }
+    } else {
+        assert!(false);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pipeline_test_get_outbound_handler() -> Result<()> {
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1",
+            Stats::default(),
+        ))?
+        .add_back(MockHandler::<String, usize>::new(
+            "handler2",
+            Stats::default(),
+        ))?;
+    let pipeline = pipeline.finalize()?;
+    assert_eq!(2, pipeline.len());
+
+    let handler = pipeline.get_outbound_handler("handler2");
+    if let Some(handler) = handler {
+        let handler = handler.borrow();
+        let handler_any = handler.as_any_internal();
+        let outbound_handler =
+            handler_any.downcast_ref::<Box<dyn OutboundHandler<Win = usize, Wout = String>>>();
+        if let Some(outbound_handler) = outbound_handler {
+            let outbound_handler_any = outbound_handler.as_any();
+            let mock_encoder = outbound_handler_any.downcast_ref::<MockEncoder<usize, String>>();
+            assert!(mock_encoder.is_some());
+            assert_eq!(mock_encoder.unwrap().name, "handler2 encoder");
+        } else {
+            assert!(false);
+        }
+    } else {
+        assert!(false);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pipeline_test_get_inbound_context() -> Result<()> {
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1",
+            Stats::default(),
+        ))?
+        .add_back(MockHandler::<String, usize>::new(
+            "handler2",
+            Stats::default(),
+        ))?;
+    let pipeline = pipeline.finalize()?;
+    assert_eq!(2, pipeline.len());
+
+    let context = pipeline.get_inbound_context("handler1");
+    if let Some(context) = context {
+        let context = context.borrow();
+        let context_any = context.as_any_internal();
+        let inbound_context = context_any.downcast_ref::<InboundContext<String, String>>();
+        if let Some(inbound_context) = inbound_context {
+            assert_eq!(inbound_context.name(), "handler1");
+        } else {
+            assert!(false);
+        }
+    } else {
+        assert!(false);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pipeline_test_get_outbound_context() -> Result<()> {
+    let pipeline: Pipeline<String, String> = Pipeline::new();
+    pipeline
+        .add_back(MockHandler::<String, String>::new(
+            "handler1",
+            Stats::default(),
+        ))?
+        .add_back(MockHandler::<String, usize>::new(
+            "handler2",
+            Stats::default(),
+        ))?;
+    let pipeline = pipeline.finalize()?;
+    assert_eq!(2, pipeline.len());
+
+    let context = pipeline.get_outbound_context("handler2");
+    if let Some(context) = context {
+        let context = context.borrow();
+        let context_any = context.as_any_internal();
+        let outbound_context = context_any.downcast_ref::<OutboundContext<usize, String>>();
+        if let Some(outbound_context) = outbound_context {
+            assert_eq!(outbound_context.name(), "handler2");
         } else {
             assert!(false);
         }

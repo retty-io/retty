@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::any::Any;
 use std::{
     cell::RefCell, collections::HashMap, io::Write, net::SocketAddr, rc::Rc, rc::Weak,
     str::FromStr, time::Instant,
@@ -113,6 +114,10 @@ impl InboundHandler for ChatDecoder {
     fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
         //last handler, no need to fire_poll_timeout
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl OutboundHandler for ChatEncoder {
@@ -121,6 +126,10 @@ impl OutboundHandler for ChatEncoder {
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

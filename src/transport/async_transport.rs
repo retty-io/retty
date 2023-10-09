@@ -61,6 +61,10 @@ impl<R: 'static> OutboundHandler for AsyncTransportEncoder<R> {
         trace!("close AsyncTransport");
         self.writer.take();
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl<R: 'static> Handler for AsyncTransport<R> {

@@ -88,6 +88,10 @@ impl OutboundHandler for TaggedByteToMessageEncoder {
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg);
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Handler for TaggedByteToMessageCodec {

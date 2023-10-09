@@ -89,6 +89,10 @@ impl OutboundHandler for TaggedStringEncoder {
             message: buf,
         });
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Handler for TaggedStringCodec {

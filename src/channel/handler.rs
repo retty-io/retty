@@ -107,6 +107,7 @@ pub trait InboundHandler {
         ctx.fire_poll_timeout(eto);
     }
 
+    /// Casts it to Any dyn trait
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -237,6 +238,9 @@ pub trait OutboundHandler {
     fn close(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>) {
         ctx.fire_close();
     }
+
+    /// Casts it to Any dyn trait
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<Win: 'static, Wout: 'static> OutboundHandlerInternal

@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::any::Any;
 use std::{io::Write, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapUdpServer;
@@ -50,6 +51,10 @@ impl InboundHandler for EchoDecoder {
     fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
         //last handler, no need to fire_poll_timeout
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl OutboundHandler for EchoEncoder {
@@ -58,6 +63,10 @@ impl OutboundHandler for EchoEncoder {
 
     fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
         ctx.fire_write(msg);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
