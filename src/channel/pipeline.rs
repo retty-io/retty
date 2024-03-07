@@ -13,26 +13,26 @@ pub trait InboundPipeline<R> {
     /// Reads a message.
     fn read(&self, msg: R);
 
-    /// Reads an Error exception in one of its inbound operations.
-    fn read_exception(&self, err: Box<dyn Error>);
-
     /// Reads an EOF event.
-    fn read_eof(&self);
+    fn handle_read_eof(&self);
+
+    /// Reads an Error exception in one of its inbound operations.
+    fn handle_exception(&self, err: Box<dyn Error>);
 
     /// Handles a timeout event.
     fn handle_timeout(&self, now: Instant);
 
     /// Polls an event.
     fn poll_timeout(&self, eto: &mut Instant);
+
+    /// Polls an outgoing message
+    fn poll_transmit(&self) -> Option<R>;
 }
 
 /// OutboundPipeline
-pub trait OutboundPipeline<W> {
+pub trait OutboundPipeline<R, W> {
     /// Writes a message.
     fn write(&self, msg: W);
-
-    /// Writes an Error exception from one of its outbound operations.
-    fn write_exception(&self, err: Box<dyn Error>);
 
     /// Writes a close event.
     fn close(&self);
@@ -59,7 +59,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Appends a [Handler] at the last position of this pipeline.
-    pub fn add_back(&self, handler: impl Handler) -> &Self {
+    pub fn add_back(&self, handler: impl Handler + 'static) -> &Self {
         {
             let mut internal = self.internal.borrow_mut();
             internal.add_back(handler);
@@ -68,7 +68,7 @@ impl<R: 'static, W: 'static> Pipeline<R, W> {
     }
 
     /// Inserts a [Handler] at the first position of this pipeline.
-    pub fn add_front(&self, handler: impl Handler) -> &Self {
+    pub fn add_front(&self, handler: impl Handler + 'static) -> &Self {
         {
             let mut internal = self.internal.borrow_mut();
             internal.add_front(handler);
@@ -151,19 +151,19 @@ impl<R: 'static, W: 'static> InboundPipeline<R> for Pipeline<R, W> {
     /// Reads a message.
     fn read(&self, msg: R) {
         let internal = self.internal.borrow();
-        internal.read(msg);
-    }
-
-    /// Reads an Error exception in one of its inbound operations.
-    fn read_exception(&self, err: Box<dyn Error>) {
-        let internal = self.internal.borrow();
-        internal.read_exception(err);
+        internal.handle_read(msg);
     }
 
     /// Reads an EOF event.
-    fn read_eof(&self) {
+    fn handle_read_eof(&self) {
         let internal = self.internal.borrow();
-        internal.read_eof();
+        internal.handle_read_eof();
+    }
+
+    /// Reads an Error exception in one of its inbound operations.
+    fn handle_exception(&self, err: Box<dyn Error>) {
+        let internal = self.internal.borrow();
+        internal.handle_exception(err);
     }
 
     /// Handles a timeout event.
@@ -177,24 +177,24 @@ impl<R: 'static, W: 'static> InboundPipeline<R> for Pipeline<R, W> {
         let internal = self.internal.borrow();
         internal.poll_timeout(eto);
     }
+
+    /// Polls an outgoing message
+    fn poll_transmit(&self) -> Option<R> {
+        let internal = self.internal.borrow();
+        internal.poll_write()
+    }
 }
 
-impl<R: 'static, W: 'static> OutboundPipeline<W> for Pipeline<R, W> {
-    /// Writes a message.
+impl<R: 'static, W: 'static> OutboundPipeline<R, W> for Pipeline<R, W> {
+    /// Writes a message to pipeline
     fn write(&self, msg: W) {
         let internal = self.internal.borrow();
         internal.write(msg);
     }
 
-    /// Writes an Error exception from one of its outbound operations.
-    fn write_exception(&self, err: Box<dyn Error>) {
-        let internal = self.internal.borrow();
-        internal.write_exception(err);
-    }
-
     /// Writes a close event.
     fn close(&self) {
         let internal = self.internal.borrow();
-        internal.close();
+        internal.handle_close();
     }
 }

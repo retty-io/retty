@@ -3,6 +3,7 @@ mod tests {
     use core_affinity::CoreId;
     use local_sync::mpsc::{unbounded::channel, unbounded::Tx as LocalSender};
     use std::cell::RefCell;
+    use std::collections::VecDeque;
     use std::net::SocketAddr;
     use std::rc::Rc;
     use std::str::FromStr;
@@ -11,9 +12,7 @@ mod tests {
     use retty::bootstrap::{
         BootstrapTcpClient, BootstrapTcpServer, BootstrapUdpClient, BootstrapUdpServer,
     };
-    use retty::channel::{
-        Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
-    };
+    use retty::channel::{Context, Handler, Pipeline};
     use retty::codec::{
         byte_to_message_decoder::{
             LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType,
@@ -21,22 +20,15 @@ mod tests {
         string_codec::{TaggedString, TaggedStringCodec},
     };
     use retty::executor::{spawn_local, yield_local, LocalExecutorBuilder};
-    use retty::transport::{
-        AsyncTransport, AsyncTransportWrite, EcnCodepoint, TaggedBytesMut, TransportContext,
-    };
+    use retty::transport::{EcnCodepoint, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    struct EchoDecoder {
+    struct EchoHandler {
         is_server: bool,
         tx: Rc<RefCell<Option<LocalSender<()>>>>,
         count: Rc<RefCell<usize>>,
         check_ecn: bool,
-    }
-    struct EchoEncoder;
-    struct EchoHandler {
-        decoder: EchoDecoder,
-        encoder: EchoEncoder,
+        transmits: VecDeque<TaggedString>,
     }
 
     impl EchoHandler {
@@ -47,22 +39,30 @@ mod tests {
             check_ecn: bool,
         ) -> Self {
             EchoHandler {
-                decoder: EchoDecoder {
-                    is_server,
-                    tx,
-                    count,
-                    check_ecn,
-                },
-                encoder: EchoEncoder,
+                is_server,
+                tx,
+                count,
+                check_ecn,
+                transmits: VecDeque::new(),
             }
         }
     }
 
-    impl InboundHandler for EchoDecoder {
+    impl Handler for EchoHandler {
         type Rin = TaggedString;
         type Rout = Self::Rin;
+        type Win = TaggedString;
+        type Wout = Self::Win;
 
-        fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+        fn name(&self) -> &str {
+            "EchoHandler"
+        }
+
+        fn handle_read(
+            &mut self,
+            _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+            msg: Self::Rin,
+        ) {
             {
                 let mut count = self.count.borrow_mut();
                 println!(
@@ -76,7 +76,7 @@ mod tests {
             }
 
             if self.is_server {
-                ctx.fire_write(TaggedString {
+                self.transmits.push_back(TaggedString {
                     now: Instant::now(),
                     transport: msg.transport,
                     message: format!("{}\r\n", msg.message),
@@ -92,39 +92,20 @@ mod tests {
         }
         fn poll_timeout(
             &mut self,
-            _ctx: &InboundContext<Self::Rin, Self::Rout>,
+            _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
             _eto: &mut Instant,
         ) {
             //last handler, no need to fire_poll_timeout
         }
-    }
 
-    impl OutboundHandler for EchoEncoder {
-        type Win = TaggedString;
-        type Wout = Self::Win;
-
-        fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-            ctx.fire_write(msg);
-        }
-    }
-
-    impl Handler for EchoHandler {
-        type Rin = TaggedString;
-        type Rout = Self::Rin;
-        type Win = TaggedString;
-        type Wout = Self::Win;
-
-        fn name(&self) -> &str {
-            "EchoHandler"
-        }
-
-        fn split(
-            self,
-        ) -> (
-            Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
-            Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
-        ) {
-            (Box::new(self.decoder), Box::new(self.encoder))
+        fn poll_write(
+            &mut self,
+            ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        ) -> Option<Self::Wout> {
+            if let Some(msg) = ctx.fire_poll_write() {
+                self.transmits.push_back(msg);
+            }
+            self.transmits.pop_front()
         }
     }
 
@@ -144,32 +125,28 @@ mod tests {
                 let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
                 let mut server = BootstrapUdpServer::new();
-                server.pipeline(Box::new(
-                    move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                server.pipeline(Box::new(move || {
+                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                        let async_transport_handler = AsyncTransport::new(writer);
-                        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(
-                            Box::new(LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH)),
-                        );
-                        let string_codec_handler = TaggedStringCodec::new();
-                        let echo_handler = EchoHandler::new(
-                            true,
-                            Rc::clone(&server_done_tx),
-                            Rc::clone(&server_count_clone),
-                            #[cfg(not(target_os = "windows"))]
-                            true,
-                            #[cfg(target_os = "windows")]
-                            false,
-                        );
+                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                    ));
+                    let string_codec_handler = TaggedStringCodec::new();
+                    let echo_handler = EchoHandler::new(
+                        true,
+                        Rc::clone(&server_done_tx),
+                        Rc::clone(&server_count_clone),
+                        #[cfg(not(target_os = "windows"))]
+                        true,
+                        #[cfg(target_os = "windows")]
+                        false,
+                    );
 
-                        pipeline.add_back(async_transport_handler);
-                        pipeline.add_back(line_based_frame_decoder_handler);
-                        pipeline.add_back(string_codec_handler);
-                        pipeline.add_back(echo_handler);
-                        pipeline.finalize()
-                    },
-                ));
+                    pipeline.add_back(line_based_frame_decoder_handler);
+                    pipeline.add_back(string_codec_handler);
+                    pipeline.add_back(echo_handler);
+                    pipeline.finalize()
+                }));
 
                 let server_addr = server.bind("127.0.0.1:0").await.unwrap();
 
@@ -180,33 +157,28 @@ mod tests {
                     let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
                     let mut client = BootstrapUdpClient::new();
-                    client.pipeline(Box::new(
-                        move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                    client.pipeline(Box::new(move || {
+                        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                            let async_transport_handler = AsyncTransport::new(writer);
-                            let line_based_frame_decoder_handler =
-                                TaggedByteToMessageCodec::new(Box::new(
-                                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                                ));
-                            let string_codec_handler = TaggedStringCodec::new();
-                            let echo_handler = EchoHandler::new(
-                                false,
-                                Rc::clone(&client_done_tx),
-                                Rc::clone(&client_count_clone),
-                                #[cfg(not(target_os = "windows"))]
-                                true,
-                                #[cfg(target_os = "windows")]
-                                false,
-                            );
+                        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(
+                            Box::new(LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH)),
+                        );
+                        let string_codec_handler = TaggedStringCodec::new();
+                        let echo_handler = EchoHandler::new(
+                            false,
+                            Rc::clone(&client_done_tx),
+                            Rc::clone(&client_count_clone),
+                            #[cfg(not(target_os = "windows"))]
+                            true,
+                            #[cfg(target_os = "windows")]
+                            false,
+                        );
 
-                            pipeline.add_back(async_transport_handler);
-                            pipeline.add_back(line_based_frame_decoder_handler);
-                            pipeline.add_back(string_codec_handler);
-                            pipeline.add_back(echo_handler);
-                            pipeline.finalize()
-                        },
-                    ));
+                        pipeline.add_back(line_based_frame_decoder_handler);
+                        pipeline.add_back(string_codec_handler);
+                        pipeline.add_back(echo_handler);
+                        pipeline.finalize()
+                    }));
 
                     let client_addr = client.bind("127.0.0.1:0").await.unwrap();
                     let pipeline = client.connect(server_addr).await.unwrap();
@@ -270,29 +242,25 @@ mod tests {
             let server_done_tx = Rc::new(RefCell::new(Some(server_done_tx)));
 
             let mut server = BootstrapTcpServer::new();
-            server.pipeline(Box::new(
-                move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+            server.pipeline(Box::new(move || {
+                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                    let async_transport_handler = AsyncTransport::new(writer);
-                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                    ));
-                    let string_codec_handler = TaggedStringCodec::new();
-                    let echo_handler = EchoHandler::new(
-                        true,
-                        Rc::clone(&server_done_tx),
-                        Rc::clone(&server_count_clone),
-                        false,
-                    );
+                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                ));
+                let string_codec_handler = TaggedStringCodec::new();
+                let echo_handler = EchoHandler::new(
+                    true,
+                    Rc::clone(&server_done_tx),
+                    Rc::clone(&server_count_clone),
+                    false,
+                );
 
-                    pipeline.add_back(async_transport_handler);
-                    pipeline.add_back(line_based_frame_decoder_handler);
-                    pipeline.add_back(string_codec_handler);
-                    pipeline.add_back(echo_handler);
-                    pipeline.finalize()
-                },
-            ));
+                pipeline.add_back(line_based_frame_decoder_handler);
+                pipeline.add_back(string_codec_handler);
+                pipeline.add_back(echo_handler);
+                pipeline.finalize()
+            }));
 
             let server_addr = server.bind("127.0.0.1:0").await.unwrap();
 
@@ -303,29 +271,25 @@ mod tests {
                 let client_done_tx = Rc::new(RefCell::new(Some(client_done_tx)));
 
                 let mut client = BootstrapTcpClient::new();
-                client.pipeline(Box::new(
-                    move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                        let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+                client.pipeline(Box::new(move || {
+                    let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                        let async_transport_handler = AsyncTransport::new(writer);
-                        let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(
-                            Box::new(LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH)),
-                        );
-                        let string_codec_handler = TaggedStringCodec::new();
-                        let echo_handler = EchoHandler::new(
-                            false,
-                            Rc::clone(&client_done_tx),
-                            Rc::clone(&client_count_clone),
-                            false,
-                        );
+                    let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                        LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+                    ));
+                    let string_codec_handler = TaggedStringCodec::new();
+                    let echo_handler = EchoHandler::new(
+                        false,
+                        Rc::clone(&client_done_tx),
+                        Rc::clone(&client_count_clone),
+                        false,
+                    );
 
-                        pipeline.add_back(async_transport_handler);
-                        pipeline.add_back(line_based_frame_decoder_handler);
-                        pipeline.add_back(string_codec_handler);
-                        pipeline.add_back(echo_handler);
-                        pipeline.finalize()
-                    },
-                ));
+                    pipeline.add_back(line_based_frame_decoder_handler);
+                    pipeline.add_back(string_codec_handler);
+                    pipeline.add_back(echo_handler);
+                    pipeline.finalize()
+                }));
 
                 let client_addr = SocketAddr::from_str("127.0.0.1:0").unwrap();
 

@@ -3,18 +3,12 @@
 use bytes::{BufMut, BytesMut};
 use std::time::Instant;
 
-use crate::channel::{Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler};
+use crate::channel::{Context, Handler};
 use crate::transport::{TaggedBytesMut, TransportContext};
-
-struct TaggedStringDecoder;
-struct TaggedStringEncoder;
 
 /// A tagged StringCodec handler that reads with input of TaggedBytesMut and output of TaggedString,
 /// or writes with input of TaggedString and output of TaggedBytesMut
-pub struct TaggedStringCodec {
-    decoder: TaggedStringDecoder,
-    encoder: TaggedStringEncoder,
-}
+pub struct TaggedStringCodec;
 
 impl Default for TaggedStringCodec {
     fn default() -> Self {
@@ -25,10 +19,7 @@ impl Default for TaggedStringCodec {
 impl TaggedStringCodec {
     /// Creates a new TaggedStringCodec handler
     pub fn new() -> Self {
-        TaggedStringCodec {
-            decoder: TaggedStringDecoder {},
-            encoder: TaggedStringEncoder {},
-        }
+        Self {}
     }
 }
 
@@ -53,39 +44,6 @@ impl Default for TaggedString {
     }
 }
 
-impl InboundHandler for TaggedStringDecoder {
-    type Rin = TaggedBytesMut;
-    type Rout = TaggedString;
-
-    fn read(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        match String::from_utf8(msg.message.to_vec()) {
-            Ok(message) => {
-                ctx.fire_read(TaggedString {
-                    now: msg.now,
-                    transport: msg.transport,
-                    message,
-                });
-            }
-            Err(err) => ctx.fire_read_exception(err.into()),
-        }
-    }
-}
-
-impl OutboundHandler for TaggedStringEncoder {
-    type Win = TaggedString;
-    type Wout = TaggedBytesMut;
-
-    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-        let mut buf = BytesMut::new();
-        buf.put(msg.message.as_bytes());
-        ctx.fire_write(TaggedBytesMut {
-            now: Instant::now(),
-            transport: msg.transport,
-            message: buf,
-        });
-    }
-}
-
 impl Handler for TaggedStringCodec {
     type Rin = TaggedBytesMut;
     type Rout = TaggedString;
@@ -96,12 +54,37 @@ impl Handler for TaggedStringCodec {
         "TaggedStringCodec"
     }
 
-    fn split(
-        self,
-    ) -> (
-        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
-        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
+    fn handle_read(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        msg: Self::Rin,
     ) {
-        (Box::new(self.decoder), Box::new(self.encoder))
+        match String::from_utf8(msg.message.to_vec()) {
+            Ok(message) => {
+                ctx.fire_read(TaggedString {
+                    now: msg.now,
+                    transport: msg.transport,
+                    message,
+                });
+            }
+            Err(err) => ctx.fire_exception(err.into()),
+        }
+    }
+
+    fn poll_write(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+    ) -> Option<Self::Wout> {
+        if let Some(msg) = ctx.fire_poll_write() {
+            let mut buf = BytesMut::new();
+            buf.put(msg.message.as_bytes());
+            Some(TaggedBytesMut {
+                now: Instant::now(),
+                transport: msg.transport,
+                message: buf,
+            })
+        } else {
+            None
+        }
     }
 }

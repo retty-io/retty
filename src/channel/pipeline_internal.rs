@@ -1,106 +1,104 @@
+use std::collections::VecDeque;
 use std::{cell::RefCell, error::Error, io::ErrorKind, marker::PhantomData, rc::Rc, time::Instant};
 
 use crate::channel::{
     handler::Handler,
-    handler_internal::{
-        InboundContextInternal, InboundHandlerInternal, OutboundContextInternal,
-        OutboundHandlerInternal,
-    },
+    handler_internal::{ContextInternal, HandlerInternal},
+    Context,
 };
 
+const RESERVED_RETTY_PIPELINE_HANDLE_NAME: &'static str = "ReservedRettyPipelineHandlerName";
+
 pub(crate) struct PipelineInternal<R, W> {
-    handler_names: Vec<String>,
+    names: Vec<String>,
+    handlers: Vec<Rc<RefCell<dyn HandlerInternal>>>,
+    contexts: Vec<Rc<RefCell<dyn ContextInternal>>>,
 
-    inbound_handlers: Vec<Rc<RefCell<dyn InboundHandlerInternal>>>,
-    inbound_contexts: Vec<Rc<RefCell<dyn InboundContextInternal>>>,
-
-    outbound_handlers: Vec<Rc<RefCell<dyn OutboundHandlerInternal>>>,
-    outbound_contexts: Vec<Rc<RefCell<dyn OutboundContextInternal>>>,
-
-    phantom: PhantomData<(R, W)>,
+    transmits: Rc<RefCell<VecDeque<W>>>,
+    phantom: PhantomData<R>,
 }
 
 impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     pub(crate) fn new() -> Self {
+        let transmits = Rc::new(RefCell::new(VecDeque::new()));
+        let last_handler = LastHandler::new(transmits.clone());
+        let (name, handler, context) = last_handler.generate();
         Self {
-            handler_names: Vec::new(),
+            names: vec![name],
+            handlers: vec![handler],
+            contexts: vec![context],
 
-            inbound_handlers: Vec::new(),
-            inbound_contexts: Vec::new(),
-
-            outbound_handlers: Vec::new(),
-            outbound_contexts: Vec::new(),
-
+            transmits,
             phantom: PhantomData,
         }
     }
 
-    pub(crate) fn add_back(&mut self, handler: impl Handler) {
-        let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
-            handler.generate();
-        self.handler_names.push(handler_name);
+    pub(crate) fn add_back(&mut self, handler: impl Handler + 'static) {
+        let (name, handler, context) = handler.generate();
+        if name == RESERVED_RETTY_PIPELINE_HANDLE_NAME {
+            panic!("handle name {} is reserved", name);
+        }
 
-        self.inbound_handlers.push(inbound_handler);
-        self.inbound_contexts.push(inbound_context);
+        let len = self.names.len();
 
-        self.outbound_handlers.push(outbound_handler);
-        self.outbound_contexts.push(outbound_context);
+        self.names.insert(len - 1, name);
+        self.handlers.insert(len - 1, handler);
+        self.contexts.insert(len - 1, context);
     }
 
-    pub(crate) fn add_front(&mut self, handler: impl Handler) {
-        let (handler_name, inbound_handler, inbound_context, outbound_handler, outbound_context) =
-            handler.generate();
-        self.handler_names.insert(0, handler_name);
+    pub(crate) fn add_front(&mut self, handler: impl Handler + 'static) {
+        let (name, handler, context) = handler.generate();
+        if name == RESERVED_RETTY_PIPELINE_HANDLE_NAME {
+            panic!("handle name {} is reserved", name);
+        }
 
-        self.inbound_handlers.insert(0, inbound_handler);
-        self.inbound_contexts.insert(0, inbound_context);
-
-        self.outbound_handlers.insert(0, outbound_handler);
-        self.outbound_contexts.insert(0, outbound_context);
+        self.names.insert(0, name);
+        self.handlers.insert(0, handler);
+        self.contexts.insert(0, context);
     }
 
     pub(crate) fn remove_back(&mut self) -> Result<(), std::io::Error> {
-        let len = self.handler_names.len();
-        if len == 0 {
+        let len = self.names.len();
+        if len == 1 {
             Err(std::io::Error::new(
                 ErrorKind::NotFound,
                 "No handlers in pipeline",
             ))
         } else {
-            self.handler_names.remove(len - 1);
-
-            self.inbound_handlers.remove(len - 1);
-            self.inbound_contexts.remove(len - 1);
-
-            self.outbound_handlers.remove(len - 1);
-            self.outbound_contexts.remove(len - 1);
+            self.names.remove(len - 2);
+            self.handlers.remove(len - 2);
+            self.contexts.remove(len - 2);
 
             Ok(())
         }
     }
 
     pub(crate) fn remove_front(&mut self) -> Result<(), std::io::Error> {
-        if self.handler_names.is_empty() {
+        let len = self.names.len();
+        if len == 1 {
             Err(std::io::Error::new(
                 ErrorKind::NotFound,
                 "No handlers in pipeline",
             ))
         } else {
-            self.handler_names.remove(0);
-
-            self.inbound_handlers.remove(0);
-            self.inbound_contexts.remove(0);
-
-            self.outbound_handlers.remove(0);
-            self.outbound_contexts.remove(0);
+            self.names.remove(0);
+            self.handlers.remove(0);
+            self.contexts.remove(0);
 
             Ok(())
         }
     }
 
     pub(crate) fn remove(&mut self, handler_name: &str) -> Result<(), std::io::Error> {
+        if handler_name == RESERVED_RETTY_PIPELINE_HANDLE_NAME {
+            return Err(std::io::Error::new(
+                ErrorKind::PermissionDenied,
+                format!("handle name {} is reserved", handler_name),
+            ));
+        }
+
         let mut to_be_removed = vec![];
-        for (index, name) in self.handler_names.iter().enumerate() {
+        for (index, name) in self.names.iter().enumerate() {
             if name == handler_name {
                 to_be_removed.push(index);
             }
@@ -108,13 +106,9 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
 
         if !to_be_removed.is_empty() {
             for index in to_be_removed.into_iter().rev() {
-                self.handler_names.remove(index);
-
-                self.inbound_handlers.remove(index);
-                self.inbound_contexts.remove(index);
-
-                self.outbound_handlers.remove(index);
-                self.outbound_contexts.remove(index);
+                self.names.remove(index);
+                self.handlers.remove(index);
+                self.contexts.remove(index);
             }
 
             Ok(())
@@ -127,161 +121,149 @@ impl<R: 'static, W: 'static> PipelineInternal<R, W> {
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.handler_names.len()
+        self.names.len() - 1
     }
 
     pub(crate) fn finalize(&self) {
-        let mut enumerate = self.inbound_contexts.iter().enumerate();
-        let ctx_pipe_len = self.inbound_contexts.len();
+        let mut enumerate = self.contexts.iter().enumerate();
+        let ctx_pipe_len = self.contexts.len();
         for _ in 0..ctx_pipe_len {
             let (j, ctx) = enumerate.next().unwrap();
             let mut curr = ctx.borrow_mut();
 
-            {
-                let (next_context, next_handler) = (
-                    self.inbound_contexts.get(j + 1),
-                    self.inbound_handlers.get(j + 1),
-                );
-                match (next_context, next_handler) {
-                    (Some(next_ctx), Some(next_hdlr)) => {
-                        curr.set_next_in_context(Some(next_ctx.clone()));
-                        curr.set_next_in_handler(Some(next_hdlr.clone()));
-                    }
-                    _ => {
-                        curr.set_next_in_context(None);
-                        curr.set_next_in_handler(None);
-                    }
+            let (next_context, next_handler) = (self.contexts.get(j + 1), self.handlers.get(j + 1));
+            match (next_context, next_handler) {
+                (Some(next_ctx), Some(next_hdr)) => {
+                    curr.set_next_context(Some(next_ctx.clone()));
+                    curr.set_next_handler(Some(next_hdr.clone()));
                 }
-            }
-
-            {
-                let (prev_context, prev_handler) = if j > 0 {
-                    (
-                        self.outbound_contexts.get(j - 1),
-                        self.outbound_handlers.get(j - 1),
-                    )
-                } else {
-                    (None, None)
-                };
-                match (prev_context, prev_handler) {
-                    (Some(prev_ctx), Some(prev_hdlr)) => {
-                        curr.set_next_out_context(Some(prev_ctx.clone()));
-                        curr.set_next_out_handler(Some(prev_hdlr.clone()));
-                    }
-                    _ => {
-                        curr.set_next_out_context(None);
-                        curr.set_next_out_handler(None);
-                    }
+                _ => {
+                    curr.set_next_context(None);
+                    curr.set_next_handler(None);
                 }
             }
         }
+    }
 
-        let mut enumerate = self.outbound_contexts.iter().enumerate();
-        let ctx_pipe_len = self.outbound_contexts.len();
-        for _ in 0..ctx_pipe_len {
-            let (j, ctx) = enumerate.next().unwrap();
-            let mut curr = ctx.borrow_mut();
-
-            {
-                let (prev_context, prev_handler) = if j > 0 {
-                    (
-                        self.outbound_contexts.get(j - 1),
-                        self.outbound_handlers.get(j - 1),
-                    )
-                } else {
-                    (None, None)
-                };
-                match (prev_context, prev_handler) {
-                    (Some(prev_ctx), Some(prev_hdlr)) => {
-                        curr.set_next_out_context(Some(prev_ctx.clone()));
-                        curr.set_next_out_handler(Some(prev_hdlr.clone()));
-                    }
-                    _ => {
-                        curr.set_next_out_context(None);
-                        curr.set_next_out_handler(None);
-                    }
-                }
-            }
-        }
+    pub(crate) fn write(&self, msg: W) {
+        let mut transmits = self.transmits.borrow_mut();
+        transmits.push_back(msg);
     }
 
     pub(crate) fn transport_active(&self) {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
         handler.transport_active_internal(&*context);
     }
 
     pub(crate) fn transport_inactive(&self) {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
         handler.transport_inactive_internal(&*context);
     }
 
-    pub(crate) fn read(&self, msg: R) {
+    pub(crate) fn handle_read(&self, msg: R) {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
-        handler.read_internal(&*context, Box::new(msg));
+        handler.handle_read_internal(&*context, Box::new(msg));
     }
 
-    pub(crate) fn read_exception(&self, err: Box<dyn Error>) {
+    pub(crate) fn poll_write(&self) -> Option<R> {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
-        handler.read_exception_internal(&*context, err);
+        if let Some(msg) = handler.poll_write_internal(&*context) {
+            if let Ok(msg) = msg.downcast::<R>() {
+                Some(*msg)
+            } else {
+                panic!("msg can't downcast::<R> in {} handler", context.name());
+            }
+        } else {
+            None
+        }
     }
 
-    pub(crate) fn read_eof(&self) {
+    pub(crate) fn handle_close(&self) {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
-        handler.read_eof_internal(&*context);
+        handler.handle_close_internal(&*context);
     }
 
     pub(crate) fn handle_timeout(&self, now: Instant) {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
         handler.handle_timeout_internal(&*context, now);
     }
 
     pub(crate) fn poll_timeout(&self, eto: &mut Instant) {
         let (mut handler, context) = (
-            self.inbound_handlers.first().unwrap().borrow_mut(),
-            self.inbound_contexts.first().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
         handler.poll_timeout_internal(&*context, eto);
     }
 
-    pub(crate) fn write(&self, msg: W) {
+    pub(crate) fn handle_read_eof(&self) {
         let (mut handler, context) = (
-            self.outbound_handlers.last().unwrap().borrow_mut(),
-            self.outbound_contexts.last().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
-        handler.write_internal(&*context, Box::new(msg));
+        handler.handle_read_eof_internal(&*context);
     }
 
-    pub(crate) fn write_exception(&self, err: Box<dyn Error>) {
+    pub(crate) fn handle_exception(&self, err: Box<dyn Error>) {
         let (mut handler, context) = (
-            self.outbound_handlers.last().unwrap().borrow_mut(),
-            self.outbound_contexts.last().unwrap().borrow(),
+            self.handlers.first().unwrap().borrow_mut(),
+            self.contexts.first().unwrap().borrow(),
         );
-        handler.write_exception_internal(&*context, err);
+        handler.handle_exception_internal(&*context, err);
+    }
+}
+
+pub(crate) struct LastHandler<W> {
+    transmits: Rc<RefCell<VecDeque<W>>>,
+}
+
+impl<W> LastHandler<W> {
+    pub(crate) fn new(transmits: Rc<RefCell<VecDeque<W>>>) -> Self {
+        Self { transmits }
+    }
+}
+
+impl<W: 'static> Handler for LastHandler<W> {
+    type Rin = W;
+    type Rout = Self::Rin;
+    type Win = Self::Rin;
+    type Wout = Self::Rin;
+
+    fn name(&self) -> &str {
+        RESERVED_RETTY_PIPELINE_HANDLE_NAME
     }
 
-    pub(crate) fn close(&self) {
-        let (mut handler, context) = (
-            self.outbound_handlers.last().unwrap().borrow_mut(),
-            self.outbound_contexts.last().unwrap().borrow(),
-        );
-        handler.close_internal(&*context);
+    fn handle_read(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        msg: Self::Rin,
+    ) {
+        ctx.fire_read(msg);
+    }
+
+    fn poll_write(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+    ) -> Option<Self::Wout> {
+        let mut transmits = self.transmits.borrow_mut();
+        transmits.pop_front()
     }
 }

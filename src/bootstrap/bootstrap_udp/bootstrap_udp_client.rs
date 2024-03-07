@@ -43,7 +43,7 @@ impl<W: 'static> BootstrapUdpClient<W> {
     pub async fn connect(
         &mut self,
         addr: SocketAddr,
-    ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
+    ) -> Result<Rc<dyn OutboundPipeline<TaggedBytesMut, W>>, Error> {
         self.bootstrap_udp.connect(Some(addr)).await
     }
 

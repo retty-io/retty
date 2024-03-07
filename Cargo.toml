@@ -9,7 +9,7 @@ documentation = "https://docs.rs/retty"
 repository = "https://github.com/retty-io/retty"
 homepage = "https://retty.io"
 keywords = ["networking", "protocols"]
-categories = [ "network-programming", "asynchronous" ]
+categories = ["network-programming", "asynchronous"]
 
 [dependencies]
 bytes = "1.4.0"
@@ -17,11 +17,10 @@ log = "0.4.17"
 waitgroup = "0.1.2"
 smol = "1.3.0"
 scoped-tls = "1.0.1"
-local-sync = "0.1.0"
 async-broadcast = "0.5.1"
 futures-lite = "1.13.0"
-tokio = {version = "1.27.0", default-features = false, features = ["macros"] }
-async-transport = {version = "0.4.2", default-features = false, features = ["runtime-smol"]}
+tokio = { version = "1.27.0", default-features = false, features = ["macros"] }
+async-transport = { version = "0.4.2", default-features = false, features = ["runtime-smol"] }
 core_affinity = "0.8.0"
 
 [dev-dependencies]
@@ -31,6 +30,7 @@ clap = { version = "4.2.2", features = ["derive"] }
 anyhow = "1.0.70"
 ctrlc = "3.2.5"
 futures = "0.3.28"
+local-sync = "0.1.0"
 
 [[example]]
 name = "chat_server_tcp"
@@ -41,18 +41,17 @@ name = "chat_server_udp"
 path = "examples/chat_server_udp.rs"
 
 [[example]]
-name = "client_udp"
-path = "examples/client_udp.rs"
-
-[[example]]
-name = "echo_server_udp"
-path = "examples/echo_server_udp.rs"
-
-[[example]]
 name = "client_tcp"
 path = "examples/client_tcp.rs"
+
+[[example]]
+name = "client_udp"
+path = "examples/client_udp.rs"
 
 [[example]]
 name = "echo_server_tcp"
 path = "examples/echo_server_tcp.rs"
 
+[[example]]
+name = "echo_server_udp"
+path = "examples/echo_server_udp.rs"

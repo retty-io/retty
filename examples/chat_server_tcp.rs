@@ -5,20 +5,17 @@ use std::{
 };
 
 use retty::bootstrap::BootstrapTcpServer;
-use retty::channel::{
-    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, OutboundPipeline,
-    Pipeline,
-};
+use retty::channel::{Context, Handler, OutboundPipeline, Pipeline};
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
+use retty::transport::{TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
-    peers: HashMap<SocketAddr, Weak<dyn OutboundPipeline<TaggedString>>>,
+    peers: HashMap<SocketAddr, Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>>,
 }
 
 impl Shared {
@@ -29,7 +26,15 @@ impl Shared {
         }
     }
 
-    fn join(&mut self, peer: SocketAddr, pipeline: Weak<dyn OutboundPipeline<TaggedString>>) {
+    fn contains(&self, peer: &SocketAddr) -> bool {
+        self.peers.contains_key(peer)
+    }
+
+    fn join(
+        &mut self,
+        peer: SocketAddr,
+        pipeline: Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>,
+    ) {
         println!("{} joined", peer);
         self.peers.insert(peer, pipeline);
     }
@@ -44,7 +49,8 @@ impl Shared {
         print!("broadcast message: {}", msg.message);
         for (peer, pipeline) in self.peers.iter() {
             if *peer != sender {
-                let msg = msg.clone();
+                let mut msg = msg.clone();
+                msg.transport.peer_addr = *peer;
                 if let Some(pipeline) = pipeline.upgrade() {
                     let _ = pipeline.write(msg);
                 }
@@ -54,69 +60,22 @@ impl Shared {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ChatDecoder {
-    peer: SocketAddr,
-    state: Rc<RefCell<Shared>>,
-}
-struct ChatEncoder;
 struct ChatHandler {
-    decoder: ChatDecoder,
-    encoder: ChatEncoder,
+    state: Rc<RefCell<Shared>>,
+    pipeline: Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>,
+    peer_addr: Option<SocketAddr>,
 }
 
 impl ChatHandler {
-    fn new(peer: SocketAddr, state: Rc<RefCell<Shared>>) -> Self {
+    fn new(
+        state: Rc<RefCell<Shared>>,
+        pipeline: Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>,
+    ) -> Self {
         ChatHandler {
-            decoder: ChatDecoder { peer, state },
-            encoder: ChatEncoder,
+            state,
+            pipeline,
+            peer_addr: None,
         }
-    }
-}
-
-impl InboundHandler for ChatDecoder {
-    type Rin = TaggedString;
-    type Rout = Self::Rin;
-
-    fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!(
-            "received: {} from {:?} to {}",
-            msg.message, msg.transport.peer_addr, msg.transport.local_addr
-        );
-
-        let s = self.state.borrow();
-        s.broadcast(
-            self.peer,
-            TaggedString {
-                now: Instant::now(),
-                transport: TransportContext {
-                    local_addr: msg.transport.local_addr,
-                    ecn: msg.transport.ecn,
-                    ..Default::default()
-                },
-                message: format!("{}\r\n", msg.message),
-            },
-        );
-    }
-    fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
-        // first leave itself from state, otherwise, it may still receive message from broadcast,
-        // which may cause data racing.
-        {
-            let mut s = self.state.borrow_mut();
-            s.leave(&self.peer);
-        }
-        ctx.fire_close();
-    }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
-        //last handler, no need to fire_poll_timeout
-    }
-}
-
-impl OutboundHandler for ChatEncoder {
-    type Win = TaggedString;
-    type Wout = Self::Win;
-
-    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-        ctx.fire_write(msg);
     }
 }
 
@@ -130,13 +89,57 @@ impl Handler for ChatHandler {
         "ChatHandler"
     }
 
-    fn split(
-        self,
-    ) -> (
-        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
-        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
+    fn handle_read(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        msg: Self::Rin,
     ) {
-        (Box::new(self.decoder), Box::new(self.encoder))
+        let peer_addr = msg.transport.peer_addr;
+        println!(
+            "received: {} from {:?} to {}",
+            msg.message, peer_addr, msg.transport.local_addr
+        );
+
+        let mut s = self.state.borrow_mut();
+        if !s.contains(&peer_addr) {
+            s.join(peer_addr, self.pipeline.clone());
+            self.peer_addr = Some(peer_addr);
+        }
+        s.broadcast(
+            peer_addr,
+            TaggedString {
+                now: Instant::now(),
+                transport: TransportContext {
+                    local_addr: msg.transport.local_addr,
+                    ecn: msg.transport.ecn,
+                    ..Default::default()
+                },
+                message: format!("{}\r\n", msg.message),
+            },
+        );
+    }
+    fn handle_read_eof(&mut self, ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>) {
+        // first leave itself from state, otherwise, it may still receive message from broadcast,
+        // which may cause data racing.
+        if let Some(peer_addr) = self.peer_addr {
+            let mut s = self.state.borrow_mut();
+            s.leave(&peer_addr);
+        }
+        ctx.fire_close();
+    }
+    fn poll_timeout(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        _eto: &mut Instant,
+    ) {
+        //last handler, no need to fire_poll_timeout
+    }
+
+    fn poll_write(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+    ) -> Option<Self::Wout> {
+        ctx.fire_poll_write()
     }
 }
 
@@ -188,32 +191,21 @@ fn main() -> anyhow::Result<()> {
         let state = Rc::new(RefCell::new(Shared::new()));
 
         let mut bootstrap = BootstrapTcpServer::new();
-        bootstrap.pipeline(Box::new(
-            move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
+        bootstrap.pipeline(Box::new(move || {
+            let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
-                let pipeline_wr = Rc::downgrade(&pipeline);
-                let peer = writer.peer_addr().unwrap();
-                {
-                    let mut s = state.borrow_mut();
-                    s.join(peer, pipeline_wr);
-                }
+            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+            ));
+            let string_codec_handler = TaggedStringCodec::new();
+            let pipeline_wr = Rc::downgrade(&pipeline);
+            let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
 
-                let async_transport_handler = AsyncTransport::new(writer);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-
-                let chat_handler = ChatHandler::new(peer, state.clone());
-
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(chat_handler);
-                pipeline.update()
-            },
-        ));
+            pipeline.add_back(line_based_frame_decoder_handler);
+            pipeline.add_back(string_codec_handler);
+            pipeline.add_back(chat_handler);
+            pipeline.update()
+        }));
 
         bootstrap.bind(format!("{}:{}", host, port)).await.unwrap();
 

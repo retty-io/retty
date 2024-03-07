@@ -45,15 +45,13 @@ impl<W: 'static> BootstrapUdp<W> {
 
     async fn connect(
         &mut self,
-        peer_addr: Option<SocketAddr>,
-    ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
+        _peer_addr: Option<SocketAddr>,
+    ) -> Result<Rc<dyn OutboundPipeline<TaggedBytesMut, W>>, Error> {
         let socket = self.socket.take().unwrap();
         let local_addr = socket.local_addr()?;
 
         let pipeline_factory_fn = Rc::clone(self.boostrap.pipeline_factory_fn.as_ref().unwrap());
-        let (sender, mut receiver) = channel();
-        let pipeline =
-            (pipeline_factory_fn)(AsyncTransportWrite::new(sender, local_addr, peer_addr));
+        let pipeline = (pipeline_factory_fn)();
         let pipeline_wr = Rc::clone(&pipeline);
 
         let (close_tx, mut close_rx) = async_broadcast::broadcast(1);
@@ -97,7 +95,7 @@ impl<W: 'static> BootstrapUdp<W> {
             pipeline.transport_active();
             loop {
                 // prioritize socket.write than socket.read
-                while let Ok(msg) = receiver.try_recv() {
+                while let Some(msg) = pipeline.poll_transmit() {
                     let transmit = Transmit {
                         destination: msg.transport.peer_addr,
                         ecn: msg.transport.ecn,
@@ -137,34 +135,11 @@ impl<W: 'static> BootstrapUdp<W> {
                     _ = timeout => {
                         pipeline.handle_timeout(Instant::now());
                     }
-                    opt = receiver.recv() => {
-                        if let Some(msg) = opt {
-                            let transmit = Transmit {
-                                destination: msg.transport.peer_addr,
-                                ecn: msg.transport.ecn,
-                                contents: msg.message.to_vec(),
-                                segment_size: None,
-                                src_ip: Some(msg.transport.local_addr.ip()),
-                            };
-                            match socket.send(&capabilities, &[transmit]).await {
-                                Ok(_) => {
-                                    trace!("socket write {} bytes", msg.message.len());
-                                }
-                                Err(err) => {
-                                    warn!("socket write error {}", err);
-                                    break;
-                                }
-                            }
-                        } else {
-                            warn!("pipeline recv error");
-                            break;
-                        }
-                    }
                     res = socket.recv(&mut iovs, &mut metas) => {
                         match res {
                             Ok(n) => {
                                 if n == 0 {
-                                    pipeline.read_eof();
+                                    pipeline.handle_read_eof();
                                     break;
                                 }
 

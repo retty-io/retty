@@ -69,22 +69,16 @@ impl<W: 'static> BootstrapTcp<W> {
                     }
                     res = listener.accept() => {
                         match res {
-                            Ok((socket, peer_addr)) => {
+                            Ok((socket, _peer_addr)) => {
                                 // A new task is spawned for each inbound socket. The socket is
                                 // moved to the new task and processed there.
-                                let (sender, receiver) = channel();
-                                let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite::new(
-                                    sender,
-                                        local_addr,
-                                        Some(peer_addr),
-                                ));
+                                let pipeline_rd = (pipeline_factory_fn)();
                                 let child_close_rx = close_rx.clone();
                                 let child_worker = child_wg.worker();
                                 spawn_local(async move {
                                     let _ = Self::process_pipeline(socket,
                                                                    max_payload_size,
                                                                    pipeline_rd,
-                                                                   receiver,
                                                                    child_close_rx,
                                                                    child_worker).await;
                                 }).detach();
@@ -107,10 +101,8 @@ impl<W: 'static> BootstrapTcp<W> {
     async fn connect<A: AsyncToSocketAddrs>(
         &self,
         addr: A,
-    ) -> Result<Rc<dyn OutboundPipeline<W>>, Error> {
+    ) -> Result<Rc<dyn OutboundPipeline<TaggedBytesMut, W>>, Error> {
         let socket = TcpStream::connect(addr).await?;
-        let local_addr = socket.local_addr()?;
-        let peer_addr = socket.peer_addr()?;
         let pipeline_factory_fn = Rc::clone(self.boostrap.pipeline_factory_fn.as_ref().unwrap());
 
         let (close_tx, close_rx) = async_broadcast::broadcast(1);
@@ -129,25 +121,13 @@ impl<W: 'static> BootstrapTcp<W> {
             worker
         };
 
-        let (sender, receiver) = channel();
-        let pipeline_rd = (pipeline_factory_fn)(AsyncTransportWrite::new(
-            sender,
-            local_addr,
-            Some(peer_addr),
-        ));
+        let pipeline_rd = (pipeline_factory_fn)();
         let pipeline_wr = Rc::clone(&pipeline_rd);
         let max_payload_size = self.boostrap.max_payload_size;
 
         spawn_local(async move {
-            let _ = Self::process_pipeline(
-                socket,
-                max_payload_size,
-                pipeline_rd,
-                receiver,
-                close_rx,
-                worker,
-            )
-            .await;
+            let _ = Self::process_pipeline(socket, max_payload_size, pipeline_rd, close_rx, worker)
+                .await;
         })
         .detach();
 
@@ -158,7 +138,6 @@ impl<W: 'static> BootstrapTcp<W> {
         mut socket: TcpStream,
         max_payload_size: usize,
         pipeline: Rc<dyn InboundPipeline<TaggedBytesMut>>,
-        mut receiver: LocalReceiver<TaggedBytesMut>,
         mut close_rx: async_broadcast::Receiver<()>,
         worker: Worker,
     ) -> Result<(), Error> {
@@ -172,7 +151,7 @@ impl<W: 'static> BootstrapTcp<W> {
         pipeline.transport_active();
         loop {
             // prioritize socket.write than socket.read
-            while let Ok(transmit) = receiver.try_recv() {
+            while let Some(transmit) = pipeline.poll_transmit() {
                 match socket.write(&transmit.message).await {
                     Ok(n) => {
                         trace!("socket write {} bytes", n);
@@ -205,27 +184,11 @@ impl<W: 'static> BootstrapTcp<W> {
                 _ = timeout => {
                     pipeline.handle_timeout(Instant::now());
                 }
-                opt = receiver.recv() => {
-                    if let Some(transmit) = opt {
-                        match socket.write(&transmit.message).await {
-                            Ok(n) => {
-                                trace!("socket write {} bytes", n);
-                            }
-                            Err(err) => {
-                                warn!("socket write error {}", err);
-                                break;
-                            }
-                        }
-                    } else {
-                        warn!("pipeline recv error");
-                        break;
-                    }
-                }
                 res = socket.read(&mut buf) => {
                     match res {
                         Ok(n) => {
                             if n == 0 {
-                                pipeline.read_eof();
+                                pipeline.handle_read_eof();
                                 break;
                             }
 

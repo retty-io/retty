@@ -5,20 +5,17 @@ use std::{
 };
 
 use retty::bootstrap::BootstrapUdpServer;
-use retty::channel::{
-    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, OutboundPipeline,
-    Pipeline,
-};
+use retty::channel::{Context, Handler, OutboundPipeline, Pipeline};
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
+use retty::transport::{TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
-    peers: HashMap<SocketAddr, Weak<dyn OutboundPipeline<TaggedString>>>,
+    peers: HashMap<SocketAddr, Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>>,
 }
 
 impl Shared {
@@ -33,7 +30,11 @@ impl Shared {
         self.peers.contains_key(peer)
     }
 
-    fn join(&mut self, peer: SocketAddr, pipeline: Weak<dyn OutboundPipeline<TaggedString>>) {
+    fn join(
+        &mut self,
+        peer: SocketAddr,
+        pipeline: Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>,
+    ) {
         println!("{} joined", peer);
         self.peers.insert(peer, pipeline);
     }
@@ -59,30 +60,35 @@ impl Shared {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-struct ChatDecoder {
-    state: Rc<RefCell<Shared>>,
-    pipeline: Weak<dyn OutboundPipeline<TaggedString>>,
-}
-struct ChatEncoder;
 struct ChatHandler {
-    decoder: ChatDecoder,
-    encoder: ChatEncoder,
+    state: Rc<RefCell<Shared>>,
+    pipeline: Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>,
 }
 
 impl ChatHandler {
-    fn new(state: Rc<RefCell<Shared>>, pipeline: Weak<dyn OutboundPipeline<TaggedString>>) -> Self {
-        ChatHandler {
-            decoder: ChatDecoder { state, pipeline },
-            encoder: ChatEncoder,
-        }
+    fn new(
+        state: Rc<RefCell<Shared>>,
+        pipeline: Weak<dyn OutboundPipeline<TaggedBytesMut, TaggedString>>,
+    ) -> Self {
+        ChatHandler { state, pipeline }
     }
 }
 
-impl InboundHandler for ChatDecoder {
+impl Handler for ChatHandler {
     type Rin = TaggedString;
     type Rout = Self::Rin;
+    type Win = TaggedString;
+    type Wout = Self::Win;
 
-    fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
+    fn name(&self) -> &str {
+        "ChatHandler"
+    }
+
+    fn handle_read(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        msg: Self::Rin,
+    ) {
         let peer_addr = msg.transport.peer_addr;
         println!(
             "received: {} from {:?} to {}",
@@ -110,37 +116,19 @@ impl InboundHandler for ChatDecoder {
             );
         }
     }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
+    fn poll_timeout(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        _eto: &mut Instant,
+    ) {
         //last handler, no need to fire_poll_timeout
     }
-}
 
-impl OutboundHandler for ChatEncoder {
-    type Win = TaggedString;
-    type Wout = Self::Win;
-
-    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-        ctx.fire_write(msg);
-    }
-}
-
-impl Handler for ChatHandler {
-    type Rin = TaggedString;
-    type Rout = Self::Rin;
-    type Win = TaggedString;
-    type Wout = Self::Win;
-
-    fn name(&self) -> &str {
-        "ChatHandler"
-    }
-
-    fn split(
-        self,
-    ) -> (
-        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
-        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
-    ) {
-        (Box::new(self.decoder), Box::new(self.encoder))
+    fn poll_write(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+    ) -> Option<Self::Wout> {
+        ctx.fire_poll_write()
     }
 }
 
@@ -192,25 +180,21 @@ fn main() -> anyhow::Result<()> {
         let state = Rc::new(RefCell::new(Shared::new()));
 
         let mut bootstrap = BootstrapUdpServer::new();
-        bootstrap.pipeline(Box::new(
-            move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
+        bootstrap.pipeline(Box::new(move || {
+            let pipeline: Rc<Pipeline<TaggedBytesMut, TaggedString>> = Rc::new(Pipeline::new());
 
-                let async_transport_handler = AsyncTransport::new(writer);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let pipeline_wr = Rc::downgrade(&pipeline);
-                let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
+            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+            ));
+            let string_codec_handler = TaggedStringCodec::new();
+            let pipeline_wr = Rc::downgrade(&pipeline);
+            let chat_handler = ChatHandler::new(state.clone(), pipeline_wr);
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(chat_handler);
-                pipeline.update()
-            },
-        ));
+            pipeline.add_back(line_based_frame_decoder_handler);
+            pipeline.add_back(string_codec_handler);
+            pipeline.add_back(chat_handler);
+            pipeline.update()
+        }));
 
         bootstrap.bind(format!("{}:{}", host, port)).await.unwrap();
 

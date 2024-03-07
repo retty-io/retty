@@ -4,13 +4,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Instant;
 
-mod async_transport;
-
-pub use self::async_transport::AsyncTransport;
 pub use ::async_transport::EcnCodepoint;
-
-/// Re-export local_sync::mpsc::unbounded::Tx as LocalSender
-pub use local_sync::mpsc::unbounded::Tx as LocalSender;
 
 /// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -51,45 +45,5 @@ impl Default for TaggedBytesMut {
             transport: TransportContext::default(),
             message: BytesMut::default(),
         }
-    }
-}
-
-/// Write half of an asynchronous transport
-#[derive(Clone)]
-pub struct AsyncTransportWrite<R> {
-    sender: LocalSender<R>,
-    local_addr: SocketAddr,
-    peer_addr: Option<SocketAddr>,
-}
-
-impl<R> AsyncTransportWrite<R> {
-    /// Creates a new AsyncTransportWrite
-    pub fn new(
-        sender: LocalSender<R>,
-        local_addr: SocketAddr,
-        peer_addr: Option<SocketAddr>,
-    ) -> Self {
-        Self {
-            sender,
-            local_addr,
-            peer_addr,
-        }
-    }
-
-    /// Returns local address
-    pub fn local_addr(&self) -> SocketAddr {
-        self.local_addr
-    }
-
-    /// Returns peer address
-    pub fn peer_addr(&self) -> Option<SocketAddr> {
-        self.peer_addr
-    }
-
-    /// Writes a message
-    pub fn write(&self, msg: R) -> Result<(), std::io::Error> {
-        self.sender.send(msg).map_err(|err| {
-            std::io::Error::new(std::io::ErrorKind::BrokenPipe, format!("{:?}", err))
-        })
     }
 }

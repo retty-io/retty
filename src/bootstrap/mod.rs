@@ -2,7 +2,6 @@
 
 use bytes::BytesMut;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use local_sync::mpsc::{unbounded::channel, unbounded::Rx as LocalReceiver};
 use log::{trace, warn};
 use smol::{net::AsyncToSocketAddrs, Timer};
 use std::{
@@ -16,7 +15,7 @@ use waitgroup::{WaitGroup, Worker};
 
 use crate::channel::{InboundPipeline, OutboundPipeline, Pipeline};
 use crate::executor::spawn_local;
-use crate::transport::{AsyncTransportWrite, TaggedBytesMut, TransportContext};
+use crate::transport::{TaggedBytesMut, TransportContext};
 
 mod bootstrap_tcp;
 mod bootstrap_udp;
@@ -29,7 +28,7 @@ pub use bootstrap_udp::{
 };
 
 /// Creates a new [Pipeline]
-pub type PipelineFactoryFn<R, W> = Box<dyn (Fn(AsyncTransportWrite<R>) -> Rc<Pipeline<R, W>>)>;
+pub type PipelineFactoryFn<R, W> = Box<dyn (Fn() -> Rc<Pipeline<R, W>>)>;
 
 const MAX_DURATION_IN_SECS: u64 = 86400; // 1 day
 

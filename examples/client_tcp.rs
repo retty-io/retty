@@ -3,63 +3,20 @@ use futures::StreamExt;
 use std::{error::Error, io::Write, net::SocketAddr, str::FromStr, time::Instant};
 
 use retty::bootstrap::BootstrapTcpClient;
-use retty::channel::{
-    Handler, InboundContext, InboundHandler, OutboundContext, OutboundHandler, Pipeline,
-};
+use retty::channel::{Context, Handler, Pipeline};
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
     string_codec::{TaggedString, TaggedStringCodec},
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::{AsyncTransport, AsyncTransportWrite, TaggedBytesMut, TransportContext};
+use retty::transport::{TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-struct EchoDecoder;
-struct EchoEncoder;
-struct EchoHandler {
-    decoder: EchoDecoder,
-    encoder: EchoEncoder,
-}
+struct EchoHandler;
 
 impl EchoHandler {
     fn new() -> Self {
-        EchoHandler {
-            decoder: EchoDecoder,
-            encoder: EchoEncoder,
-        }
-    }
-}
-
-impl InboundHandler for EchoDecoder {
-    type Rin = TaggedString;
-    type Rout = Self::Rin;
-
-    fn read(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, msg: Self::Rin) {
-        println!(
-            "received back: {} from {:?}",
-            msg.message, msg.transport.peer_addr
-        );
-    }
-    fn read_exception(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>, err: Box<dyn Error>) {
-        println!("received exception: {}", err);
-        ctx.fire_close();
-    }
-    fn read_eof(&mut self, ctx: &InboundContext<Self::Rin, Self::Rout>) {
-        println!("EOF received :(");
-        ctx.fire_close();
-    }
-    fn poll_timeout(&mut self, _ctx: &InboundContext<Self::Rin, Self::Rout>, _eto: &mut Instant) {
-        //last handler, no need to fire_poll_timeout
-    }
-}
-
-impl OutboundHandler for EchoEncoder {
-    type Win = TaggedString;
-    type Wout = Self::Win;
-
-    fn write(&mut self, ctx: &OutboundContext<Self::Win, Self::Wout>, msg: Self::Win) {
-        ctx.fire_write(msg);
+        Self {}
     }
 }
 
@@ -73,13 +30,41 @@ impl Handler for EchoHandler {
         "EchoHandler"
     }
 
-    fn split(
-        self,
-    ) -> (
-        Box<dyn InboundHandler<Rin = Self::Rin, Rout = Self::Rout>>,
-        Box<dyn OutboundHandler<Win = Self::Win, Wout = Self::Wout>>,
+    fn handle_read(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        msg: Self::Rin,
     ) {
-        (Box::new(self.decoder), Box::new(self.encoder))
+        println!(
+            "received back: {} from {:?}",
+            msg.message, msg.transport.peer_addr
+        );
+    }
+    fn handle_exception(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        err: Box<dyn Error>,
+    ) {
+        println!("received exception: {}", err);
+        ctx.fire_close();
+    }
+    fn handle_read_eof(&mut self, ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>) {
+        println!("EOF received :(");
+        ctx.fire_close();
+    }
+    fn poll_timeout(
+        &mut self,
+        _ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+        _eto: &mut Instant,
+    ) {
+        //last handler, no need to fire_poll_timeout
+    }
+
+    fn poll_write(
+        &mut self,
+        ctx: &Context<Self::Rin, Self::Rout, Self::Win, Self::Wout>,
+    ) -> Option<Self::Wout> {
+        ctx.fire_poll_write()
     }
 }
 
@@ -131,24 +116,20 @@ fn main() -> anyhow::Result<()> {
 
     LocalExecutorBuilder::default().run(async move {
         let mut bootstrap = BootstrapTcpClient::new();
-        bootstrap.pipeline(Box::new(
-            move |writer: AsyncTransportWrite<TaggedBytesMut>| {
-                let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
+        bootstrap.pipeline(Box::new(move || {
+            let pipeline: Pipeline<TaggedBytesMut, TaggedString> = Pipeline::new();
 
-                let async_transport_handler = AsyncTransport::new(writer);
-                let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
-                    LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
-                ));
-                let string_codec_handler = TaggedStringCodec::new();
-                let echo_handler = EchoHandler::new();
+            let line_based_frame_decoder_handler = TaggedByteToMessageCodec::new(Box::new(
+                LineBasedFrameDecoder::new(8192, true, TerminatorType::BOTH),
+            ));
+            let string_codec_handler = TaggedStringCodec::new();
+            let echo_handler = EchoHandler::new();
 
-                pipeline.add_back(async_transport_handler);
-                pipeline.add_back(line_based_frame_decoder_handler);
-                pipeline.add_back(string_codec_handler);
-                pipeline.add_back(echo_handler);
-                pipeline.finalize()
-            },
-        ));
+            pipeline.add_back(line_based_frame_decoder_handler);
+            pipeline.add_back(string_codec_handler);
+            pipeline.add_back(echo_handler);
+            pipeline.finalize()
+        }));
 
         let pipeline = bootstrap.connect(transport.peer_addr).await.unwrap();
 
