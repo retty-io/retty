@@ -229,6 +229,7 @@ mod tests {
         handler.join().unwrap();
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_echo_tcp() {
         LocalExecutorBuilder::default().run(async {

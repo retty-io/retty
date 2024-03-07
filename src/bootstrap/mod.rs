@@ -1,9 +1,10 @@
 //! The helpful bootstrap APIs which enable an easy implementation of typical client side and server side pipeline initialization.
 
+use async_net::AsyncToSocketAddrs;
 use bytes::BytesMut;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
 use log::{trace, warn};
-use smol::{net::AsyncToSocketAddrs, Timer};
+use smol::Timer;
 use std::{
     cell::RefCell,
     io::Error,

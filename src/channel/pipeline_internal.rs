@@ -7,7 +7,7 @@ use crate::channel::{
     Context,
 };
 
-const RESERVED_RETTY_PIPELINE_HANDLE_NAME: &'static str = "ReservedRettyPipelineHandlerName";
+const RESERVED_RETTY_PIPELINE_HANDLE_NAME: &str = "ReservedRettyPipelineHandlerName";
 
 pub(crate) struct PipelineInternal<R, W> {
     names: Vec<String>,
