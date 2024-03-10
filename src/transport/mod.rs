@@ -6,6 +6,16 @@ use std::time::Instant;
 
 pub use ::async_transport::EcnCodepoint;
 
+/// Protocol type: UDP or TCP
+#[derive(Default, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Protocol {
+    /// UDP
+    #[default]
+    UDP,
+    /// TCP
+    TCP,
+}
+
 /// Transport Context with local address and optional peer address
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TransportContext {
@@ -15,6 +25,8 @@ pub struct TransportContext {
     pub peer_addr: SocketAddr,
     /// Explicit congestion notification bits to set on the packet
     pub ecn: Option<EcnCodepoint>,
+    /// Type of protocol
+    pub protocol: Protocol,
 }
 
 impl Default for TransportContext {
@@ -23,6 +35,7 @@ impl Default for TransportContext {
             local_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
             peer_addr: SocketAddr::from_str("0.0.0.0:0").unwrap(),
             ecn: None,
+            protocol: Protocol::UDP,
         }
     }
 }

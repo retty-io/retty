@@ -1,4 +1,5 @@
 use super::*;
+use crate::transport::Protocol;
 use async_transport::{AsyncUdpSocket, Capabilities, RecvMeta, Transmit, UdpSocket, BATCH_SIZE};
 use std::mem::MaybeUninit;
 
@@ -154,6 +155,7 @@ impl<W: 'static> BootstrapUdp<W> {
                                                     local_addr,
                                                     peer_addr: meta.addr,
                                                     ecn: meta.ecn,
+                                                    protocol: Protocol::UDP,
                                                 },
                                                 message,
                                             });

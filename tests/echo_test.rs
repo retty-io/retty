@@ -20,7 +20,7 @@ mod tests {
         string_codec::{TaggedString, TaggedStringCodec},
     };
     use retty::executor::{spawn_local, yield_local, LocalExecutorBuilder};
-    use retty::transport::{EcnCodepoint, TaggedBytesMut, TransportContext};
+    use retty::transport::{EcnCodepoint, Protocol, TaggedBytesMut, TransportContext};
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     struct EchoHandler {
@@ -191,6 +191,7 @@ mod tests {
                                 local_addr: client_addr,
                                 peer_addr: server_addr,
                                 ecn: EcnCodepoint::from_bits(1),
+                                protocol: Protocol::UDP,
                             },
                             message: format!("{}\r\n", i),
                         });
@@ -202,6 +203,7 @@ mod tests {
                             local_addr: client_addr,
                             peer_addr: server_addr,
                             ecn: EcnCodepoint::from_bits(1),
+                            protocol: Protocol::UDP,
                         },
                         message: format!("bye\r\n"),
                     });
@@ -304,6 +306,7 @@ mod tests {
                             local_addr: client_addr,
                             peer_addr: server_addr,
                             ecn: None,
+                            protocol: Protocol::TCP,
                         },
                         message: format!("{}\r\n", i),
                     });
@@ -315,6 +318,7 @@ mod tests {
                         local_addr: client_addr,
                         peer_addr: server_addr,
                         ecn: None,
+                        protocol: Protocol::TCP,
                     },
                     message: format!("bye\r\n"),
                 });

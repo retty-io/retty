@@ -1,4 +1,5 @@
 use super::*;
+use crate::transport::Protocol;
 use smol::{
     net::{AsyncToSocketAddrs, TcpListener, TcpStream},
     Timer,
@@ -199,6 +200,7 @@ impl<W: 'static> BootstrapTcp<W> {
                                         local_addr,
                                         peer_addr,
                                         ecn: None,
+                                        protocol: Protocol::TCP,
                                     },
                                     message: BytesMut::from(&buf[..n]),
                                 });

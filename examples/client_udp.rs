@@ -9,7 +9,7 @@ use retty::codec::{
     string_codec::{TaggedString, TaggedStringCodec},
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::{TaggedBytesMut, TransportContext};
+use retty::transport::{Protocol, TaggedBytesMut, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct EchoHandler;
@@ -100,6 +100,7 @@ fn main() -> anyhow::Result<()> {
         local_addr: SocketAddr::from_str("0.0.0.0:0")?,
         peer_addr: SocketAddr::from_str(&format!("{}:{}", host, port))?,
         ecn: None,
+        protocol: Protocol::UDP,
     };
 
     LocalExecutorBuilder::default().run(async move {
