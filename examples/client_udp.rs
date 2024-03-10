@@ -6,10 +6,10 @@ use retty::bootstrap::BootstrapUdpClient;
 use retty::channel::{Context, Handler, Pipeline};
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
-    string_codec::{TaggedString, TaggedStringCodec},
+    string_codec::TaggedStringCodec,
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::{Protocol, TaggedBytesMut, TransportContext};
+use retty::transport::{Protocol, TaggedBytesMut, TaggedString, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct EchoHandler;

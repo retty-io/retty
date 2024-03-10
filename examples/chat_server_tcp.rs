@@ -8,10 +8,10 @@ use retty::bootstrap::BootstrapTcpServer;
 use retty::channel::{Context, Handler, OutboundPipeline, Pipeline};
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
-    string_codec::{TaggedString, TaggedStringCodec},
+    string_codec::TaggedStringCodec,
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::{TaggedBytesMut, TransportContext};
+use retty::transport::{TaggedBytesMut, TaggedString, TransportContext};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct Shared {
@@ -49,10 +49,17 @@ impl Shared {
         print!("broadcast message: {}", msg.message);
         for (peer, pipeline) in self.peers.iter() {
             if *peer != sender {
-                let mut msg = msg.clone();
-                msg.transport.peer_addr = *peer;
                 if let Some(pipeline) = pipeline.upgrade() {
-                    let _ = pipeline.write(msg);
+                    let _ = pipeline.write(TaggedString {
+                        now: msg.now,
+                        transport: TransportContext {
+                            local_addr: msg.transport.local_addr,
+                            peer_addr: *peer,
+                            ecn: msg.transport.ecn,
+                            protocol: msg.transport.protocol,
+                        },
+                        message: msg.message.clone(),
+                    });
                 }
             }
         }

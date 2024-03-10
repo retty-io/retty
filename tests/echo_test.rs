@@ -17,10 +17,12 @@ mod tests {
         byte_to_message_decoder::{
             LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType,
         },
-        string_codec::{TaggedString, TaggedStringCodec},
+        string_codec::TaggedStringCodec,
     };
     use retty::executor::{spawn_local, yield_local, LocalExecutorBuilder};
-    use retty::transport::{EcnCodepoint, Protocol, TaggedBytesMut, TransportContext};
+    use retty::transport::{
+        EcnCodepoint, Protocol, TaggedBytesMut, TaggedString, TransportContext,
+    };
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     struct EchoHandler {

@@ -4,7 +4,7 @@ use bytes::{BufMut, BytesMut};
 use std::time::Instant;
 
 use crate::channel::{Context, Handler};
-use crate::transport::{TaggedBytesMut, TransportContext};
+use crate::transport::{TaggedBytesMut, TaggedString};
 
 /// A tagged StringCodec handler that reads with input of TaggedBytesMut and output of TaggedString,
 /// or writes with input of TaggedString and output of TaggedBytesMut
@@ -20,27 +20,6 @@ impl TaggedStringCodec {
     /// Creates a new TaggedStringCodec handler
     pub fn new() -> Self {
         Self {}
-    }
-}
-
-/// A tagged String with [TransportContext]
-#[derive(Clone)]
-pub struct TaggedString {
-    /// Received/Sent time
-    pub now: Instant,
-    /// A transport context with [local_addr](TransportContext::local_addr) and [peer_addr](TransportContext::peer_addr)
-    pub transport: TransportContext,
-    /// Message body with String type
-    pub message: String,
-}
-
-impl Default for TaggedString {
-    fn default() -> Self {
-        Self {
-            now: Instant::now(),
-            transport: TransportContext::default(),
-            message: String::new(),
-        }
     }
 }
 

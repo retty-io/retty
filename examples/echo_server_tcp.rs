@@ -6,10 +6,10 @@ use retty::bootstrap::BootstrapTcpServer;
 use retty::channel::{Context, Handler, Pipeline};
 use retty::codec::{
     byte_to_message_decoder::{LineBasedFrameDecoder, TaggedByteToMessageCodec, TerminatorType},
-    string_codec::{TaggedString, TaggedStringCodec},
+    string_codec::TaggedStringCodec,
 };
 use retty::executor::LocalExecutorBuilder;
-use retty::transport::TaggedBytesMut;
+use retty::transport::{TaggedBytesMut, TaggedString};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct EchoHandler {
