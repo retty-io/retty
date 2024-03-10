@@ -8,13 +8,13 @@ use std::{error::Error, time::Instant};
 
 /// Handles both inbound and outbound events
 pub trait Handler {
-    /// Associated input message type for [InboundHandler::read]
+    /// Associated read input message type
     type Rin: 'static;
-    /// Associated output message type for [InboundHandler::read]
+    /// Associated read output message type
     type Rout: 'static;
-    /// Associated input message type for [OutboundHandler::write]
+    /// Associated write input message type
     type Win: 'static;
-    /// Associated output message type for [OutboundHandler::write]
+    /// Associated write output message type for
     type Wout: 'static;
 
     /// Returns handler name
