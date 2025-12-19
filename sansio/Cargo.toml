@@ -1,0 +1,15 @@
+[package]
+name = "sansio"
+version = "0.7.0"
+authors = ["Rain Liu <y@liu.mx>"]
+edition = "2024"
+description = "sansio — an IO-free Rust networking framework that makes it easy to build protocols, application clients/servers."
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/sansio"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/sansio"
+keywords = ["sansio", "networking", "protocols"]
+categories = ["network-programming"]
+
+[dependencies]
+log = "0.4.28"

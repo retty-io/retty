@@ -1,0 +1,17 @@
+[package]
+name = "sansio-codec"
+version = "0.7.0"
+authors = ["Rain Liu <y@liu.mx>"]
+edition = "2024"
+description = "Protocol codecs for sansio: frame decoders, string codecs, and transport abstractions"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/sansio-codec"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/sansio"
+keywords = ["sansio", "codec"]
+categories = ["asynchronous", "network-programming"]
+
+[dependencies]
+sansio = { path = "../sansio", version = "0.7.0" }
+sansio-transport = { path = "../sansio-transport", version = "0.7.0" }
+bytes = "1.11.0"

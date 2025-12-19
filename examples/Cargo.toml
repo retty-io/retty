@@ -1,0 +1,54 @@
+[package]
+name = "examples"
+version = "0.0.0"
+authors = ["Rain Liu <y@liu.mx>"]
+edition = "2024"
+description = "Examples for the sansio ecosystem"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/webrtc-rs/sansio"
+publish = false
+
+[dependencies]
+# Sansio crates
+sansio = { path = "../sansio", version = "0.7.0" }
+sansio-bootstrap = { path = "../sansio-bootstrap", version = "0.7.0" }
+sansio-codec = { path = "../sansio-codec", version = "0.7.0" }
+sansio-executor = { path = "../sansio-executor", version = "0.7.0" }
+sansio-transport = { path = "../sansio-transport", version = "0.7.0" }
+
+# Other dependencies
+bytes = "1.11.0"
+chrono = "0.4.42"
+env_logger = "0.11.8"
+clap = { version = "4.5.53", features = ["derive"] }
+anyhow = "1.0.100"
+ctrlc = "3.5.1"
+futures = "0.3.30"
+crossbeam-channel = "0.5.15"
+wg = { version = "0.9.2", features = ["future"] }
+log = "0.4.28"
+tokio = { version = "1.48.0", features = ["net", "time", "io-util", "sync", "macros"] }
+
+[[example]]
+name = "chat_client_udp"
+path = "examples/chat_client_udp.rs"
+
+[[example]]
+name = "chat_server_udp_raw"
+path = "examples/chat_server_udp_raw.rs"
+
+[[example]]
+name = "chat_server_udp_bootstrap"
+path = "examples/chat_server_udp_bootstrap.rs"
+
+[[example]]
+name = "chat_client_tcp"
+path = "examples/chat_client_tcp.rs"
+
+[[example]]
+name = "chat_server_tcp_raw"
+path = "examples/chat_server_tcp_raw.rs"
+
+[[example]]
+name = "chat_server_tcp_bootstrap"
+path = "examples/chat_server_tcp_bootstrap.rs"

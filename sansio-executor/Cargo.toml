@@ -1,0 +1,17 @@
+[package]
+name = "sansio-executor"
+version = "0.7.0"
+authors = ["Rain Liu <y@liu.mx>"]
+edition = "2024"
+description = "sansio executor"
+license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/sansio-executor"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/sansio"
+keywords = ["sansio", "executor", "async", "tokio"]
+categories = ["asynchronous", "network-programming"]
+
+[dependencies]
+scoped-tls = "1.0.1"
+core_affinity = "0.8.3"
+tokio = { version = "1.48.0", features = ["rt", "sync", "macros"] }

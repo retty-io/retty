@@ -1,58 +1,10 @@
-[package]
-name = "retty"
-version = "0.29.0"
-authors = ["Rusty Rain <y@liu.mx>"]
-edition = "2021"
-description = "Retty — an asynchronous Rust networking framework that makes it easy to build protocols, application clients/servers."
-license = "MIT/Apache-2.0"
-documentation = "https://docs.rs/retty"
-repository = "https://github.com/retty-io/retty"
-homepage = "https://retty.io"
-keywords = ["networking", "protocols"]
-categories = ["network-programming", "asynchronous"]
-
-[dependencies]
-bytes = "1.5.0"
-log = "0.4.21"
-waitgroup = "0.1.2"
-smol = "2.0.0"
-async-net = "2.0.0"
-scoped-tls = "1.0.1"
-async-broadcast = "0.7.0"
-futures-lite = "2.2.0"
-tokio = { version = "1.36.0", default-features = false, features = ["macros"] }
-async-transport = { version = "0.5.0", default-features = false, features = ["runtime-smol"] }
-core_affinity = "0.8.1"
-
-[dev-dependencies]
-chrono = "0.4.35"
-env_logger = "0.11.3"
-clap = { version = "4.5.2", features = ["derive"] }
-anyhow = "1.0.80"
-ctrlc = "3.4.2"
-futures = "0.3.30"
-local-sync = "0.1.1"
-
-[[example]]
-name = "chat_server_tcp"
-path = "examples/chat_server_tcp.rs"
-
-[[example]]
-name = "chat_server_udp"
-path = "examples/chat_server_udp.rs"
-
-[[example]]
-name = "client_tcp"
-path = "examples/client_tcp.rs"
-
-[[example]]
-name = "client_udp"
-path = "examples/client_udp.rs"
-
-[[example]]
-name = "echo_server_tcp"
-path = "examples/echo_server_tcp.rs"
-
-[[example]]
-name = "echo_server_udp"
-path = "examples/echo_server_udp.rs"
+[workspace]
+resolver = "2"
+members = [
+    "sansio",
+    "sansio-bootstrap",
+    "sansio-codec",
+    "sansio-executor",
+    "sansio-transport",
+    "examples",
+]
